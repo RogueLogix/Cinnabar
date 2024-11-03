@@ -1,0 +1,14 @@
+{
+  "required": true,
+  "minVersion": "0.8.5",
+  "package": "dev.logix.cinnabar.mixin.mixins",
+  "compatibilityLevel": "JAVA_21",
+  "refmap": "cinnabar.refmap.json",
+  "mixins": [
+  ],
+  "client": [
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}
