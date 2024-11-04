@@ -4,6 +4,8 @@ import com.mojang.blaze3d.platform.DisplayData;
 import com.mojang.blaze3d.platform.ScreenManager;
 import com.mojang.blaze3d.platform.Window;
 import com.mojang.blaze3d.platform.WindowEventHandler;
+import dev.logix.cinnabar.Cinnabar;
+import dev.logix.cinnabar.internal.CinnabarRenderer;
 import net.neoforged.fml.loading.ImmediateWindowHandler;
 import org.jetbrains.annotations.Nullable;
 
@@ -12,6 +14,12 @@ import static org.lwjgl.glfw.GLFW.*;
 public class CinnabarWindow extends Window {
     public CinnabarWindow(WindowEventHandler eventHandler, ScreenManager screenManager, DisplayData displayData, @Nullable String preferredFullscreenVideoMode, String title) {
         super(eventHandler, screenManager, displayData, preferredFullscreenVideoMode, title);
+    }
+    
+    @Override
+    public void close() {
+        super.close();
+        CinnabarRenderer.destroy();
     }
     
     // called from mixin redirection in super constructor

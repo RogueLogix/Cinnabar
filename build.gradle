@@ -96,7 +96,9 @@ configurations {
 
 dependencies {
     implementation platform("org.lwjgl:lwjgl-bom:$lwjglVersion")
-    implementation "org.lwjgl:lwjgl-vulkan"
+
+    jarJar(implementation("org.lwjgl:lwjgl-vulkan"))
+    additionalRuntimeClasspath("org.lwjgl:lwjgl-vulkan")
 }
 
 // This block of code expands all declared replace properties in the specified resource targets.

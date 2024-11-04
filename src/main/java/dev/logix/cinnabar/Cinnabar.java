@@ -1,5 +1,6 @@
 package dev.logix.cinnabar;
 
+import dev.logix.cinnabar.internal.vulkan.VulkanCore;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.loading.FMLEnvironment;
