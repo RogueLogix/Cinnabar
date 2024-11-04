@@ -1,12 +1,14 @@
 {
   "required": true,
   "minVersion": "0.8.5",
-  "package": "dev.logix.cinnabar.mixin.mixins",
+  "package": "dev.logix.cinnabar.internal.mixin.mixins",
   "compatibilityLevel": "JAVA_21",
   "refmap": "cinnabar.refmap.json",
   "mixins": [
   ],
   "client": [
+    "blaze3d.platform.WindowMixin",
+    "minecraft.MinecraftMixin"
   ],
   "injectors": {
     "defaultRequire": 1
