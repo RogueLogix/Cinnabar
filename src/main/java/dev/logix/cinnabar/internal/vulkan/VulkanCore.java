@@ -2,27 +2,33 @@ package dev.logix.cinnabar.internal.vulkan;
 
 import dev.logix.cinnabar.Cinnabar;
 import it.unimi.dsi.fastutil.objects.ReferenceArrayList;
+import net.roguelogix.phosphophyllite.util.NonnullDefault;
 import net.roguelogix.phosphophyllite.util.Pair;
+import org.jetbrains.annotations.Nullable;
 import org.lwjgl.system.MemoryStack;
-import org.lwjgl.system.NonnullDefault;
 import org.lwjgl.vulkan.*;
 
 import static dev.logix.cinnabar.Cinnabar.LOGGER;
 import static dev.logix.cinnabar.internal.vulkan.exceptions.VkException.throwFromCode;
+import static org.lwjgl.glfw.GLFWVulkan.glfwGetPhysicalDevicePresentationSupport;
 import static org.lwjgl.glfw.GLFWVulkan.glfwGetRequiredInstanceExtensions;
 import static org.lwjgl.vulkan.EXTDebugUtils.*;
 import static org.lwjgl.vulkan.VK10.*;
+import static org.lwjgl.vulkan.VK11.vkGetPhysicalDeviceProperties2;
+import static org.lwjgl.vulkan.VK11.vkGetPhysicalDeviceQueueFamilyProperties2;
 import static org.lwjgl.vulkan.VK13.VK_API_VERSION_1_3;
 
 @NonnullDefault
 public class VulkanCore implements Destroyable {
     public final VkInstance vkInstance;
     private final long debugCallback;
+    public final VkPhysicalDevice vkPhysicalDevice;
     
     public VulkanCore() {
         final var instanceAndDebugCallback = createVkInstance();
         vkInstance = instanceAndDebugCallback.first();
         debugCallback = instanceAndDebugCallback.second();
+        vkPhysicalDevice = selectPhysicalDevice();
     }
     
     @Override
@@ -53,8 +59,9 @@ public class VulkanCore implements Destroyable {
             createInfo.sType(VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO);
             createInfo.set(VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO, 0, 0, appInfo, null, null);
             
+            @Nullable
             VkDebugUtilsMessengerCreateInfoEXT debugCreateInfo = null;
-            if (Cinnabar.CONFIG.EnableValidationLayers) {
+            if (Cinnabar.CONFIG.EnableValidationLayers || Cinnabar.CONFIG.Debug) {
                 LOGGER.info("Vulkan validation layers requested");
                 boolean hasKHRValidation = false;
                 try (var ignored = stack.push()) {
@@ -102,7 +109,7 @@ public class VulkanCore implements Destroyable {
                 }
             }
             
-            final var glfwExtensions = glfwGetRequiredInstanceExtensions();
+            @Nullable final var glfwExtensions = glfwGetRequiredInstanceExtensions();
             if (glfwExtensions == null) {
                 throw new IllegalStateException("GLFW unable to present VK image");
             }
@@ -132,6 +139,79 @@ public class VulkanCore implements Destroyable {
             }
             
             return new Pair<>(vkInstance, debugCallback);
+        }
+    }
+    
+    private VkPhysicalDevice selectPhysicalDevice() {
+        try (var stack = MemoryStack.stackPush()) {
+            final var physicalDeviceCountPtr = stack.callocInt(1);
+            vkEnumeratePhysicalDevices(vkInstance, physicalDeviceCountPtr, null);
+            final var physicalDeviceCount = physicalDeviceCountPtr.get(0);
+            final var physicalDevices = stack.callocPointer(physicalDeviceCount);
+            vkEnumeratePhysicalDevices(vkInstance, physicalDeviceCountPtr, physicalDevices);
+            
+            final var queueFamilyCountPtr = stack.callocInt(1);
+            final var currentPhysicalDeviceProperties = VkPhysicalDeviceProperties2.calloc(stack).sType$Default();
+            final var selectedPhysicalDeviceProperties = VkPhysicalDeviceProperties2.calloc(stack).sType$Default();
+            @Nullable
+            VkPhysicalDevice selectedPhysicalDevice = null;
+            for (int i = 0; i < physicalDeviceCount; i++) {
+                final var physicalDevicePtr = physicalDevices.get(i);
+                final var physicalDevice = new VkPhysicalDevice(physicalDevicePtr, vkInstance);
+                
+                vkGetPhysicalDeviceQueueFamilyProperties2(physicalDevice, queueFamilyCountPtr, null);
+                final var queueFamilyCount = queueFamilyCountPtr.get(0);
+                final var queueFamilyProperties2 = VkQueueFamilyProperties2.calloc(queueFamilyCount, stack).sType$Default();
+                vkGetPhysicalDeviceQueueFamilyProperties2(physicalDevice, queueFamilyCountPtr, queueFamilyProperties2);
+                for (int j = 0; j < queueFamilyCount; j++) {
+                    if (!glfwGetPhysicalDevicePresentationSupport(vkInstance, physicalDevice, 0)) {
+                        continue;
+                    }
+                    final var queueFamilyProperties = queueFamilyProperties2.queueFamilyProperties();
+                    final var requiredFlags = VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_TRANSFER_BIT;
+                    if ((queueFamilyProperties.queueFlags() & requiredFlags) != requiredFlags) {
+                        continue;
+                    }
+                    // this physical device will work, but might be suboptimal (ie: actually the CPU)
+                    // if the currently selected device is better (ie: discrete vs integrated), dont use this one
+                    if (selectedPhysicalDevice != null) {
+                        vkGetPhysicalDeviceProperties2(physicalDevice, currentPhysicalDeviceProperties);
+                        vkGetPhysicalDeviceProperties2(selectedPhysicalDevice, selectedPhysicalDeviceProperties);
+                        final var currentDeviceType = currentPhysicalDeviceProperties.properties().deviceType();
+                        final var selectedDeviceType = selectedPhysicalDeviceProperties.properties().deviceType();
+                        if (selectedDeviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU) {
+                            // if the currently selected device is a discrete card, it _will_ be selected
+                            // usually, this is the primary card in a system, if there are multiple
+                            return selectedPhysicalDevice;
+                        }
+                        if (selectedDeviceType == VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU || selectedDeviceType == VK_PHYSICAL_DEVICE_TYPE_VIRTUAL_GPU) {
+                            if (currentDeviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU) {
+                                // once again, return first discrete card
+                                return physicalDevice;
+                            }
+                        }
+                        if (currentDeviceType == VK_PHYSICAL_DEVICE_TYPE_OTHER) {
+                            // if we have any other device selected, skip other devices
+                            continue;
+                        }
+                        if (currentDeviceType == VK_PHYSICAL_DEVICE_TYPE_CPU) {
+                            // if we have any other device selected, skip CPU devices
+                            continue;
+                        }
+                        if (selectedDeviceType == VK_PHYSICAL_DEVICE_TYPE_VIRTUAL_GPU) {
+                            if (currentDeviceType == VK_PHYSICAL_DEVICE_TYPE_VIRTUAL_GPU) {
+                                // prefer vGPUs over iGPUs
+                                continue;
+                            }
+                        }
+                    }
+                    selectedPhysicalDevice = physicalDevice;
+                }
+            }
+            if (selectedPhysicalDevice != null) {
+                return selectedPhysicalDevice;
+            }
+            throw new IllegalStateException("Unable to find compatible Vulkan device");
         }
     }
 }

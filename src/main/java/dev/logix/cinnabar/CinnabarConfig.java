@@ -1,9 +1,11 @@
 package dev.logix.cinnabar;
 
 import net.roguelogix.phosphophyllite.config.ConfigValue;
+import net.roguelogix.phosphophyllite.util.NonnullDefault;
 
 import static org.lwjgl.vulkan.EXTDebugUtils.*;
 
+@NonnullDefault
 public class CinnabarConfig {
     
     @ConfigValue
@@ -16,6 +18,7 @@ public class CinnabarConfig {
         EnableValidationLayers = false;
     }
     
+    @NonnullDefault
     public enum VkDebugMessageSeverities {
         ERROR(VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT),
         WARNING(VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT),
@@ -30,6 +33,7 @@ public class CinnabarConfig {
         }
     }
     
+    @NonnullDefault
     public enum VkDebugMessageTypes {
         GENERAL(VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT),
         VALIDATION(VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT),
