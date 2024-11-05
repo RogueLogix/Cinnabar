@@ -27,11 +27,12 @@ public class SpecObjectNode extends SpecNode {
     public final List<SpecNode> subNodeList;
     
     private static final Class<ResourceLocation> RESOURCE_LOCATION_CLASS;
+    
     static {
         Class<ResourceLocation> foundClass = null;
         try {
             foundClass = ResourceLocation.class;
-        } catch (NoClassDefFoundError ignored){
+        } catch (NoClassDefFoundError ignored) {
         }
         RESOURCE_LOCATION_CLASS = foundClass;
     }
@@ -160,7 +161,7 @@ public class SpecObjectNode extends SpecNode {
         final var subNodes = new ObjectArrayList<SpecNode>();
         
         final var objectClazz = object.getClass();
-        if(!objectClazz.isAnnotationPresent(NonnullDefault.class)){
+        if (!objectClazz.isAnnotationPresent(NonnullDefault.class)) {
             Cinnabar.LOGGER.warn("Config object class {} not annotated with NonnullDefault, while not required this is recommended", objectClazz.getName());
         }
         

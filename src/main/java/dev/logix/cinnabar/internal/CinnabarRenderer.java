@@ -1,6 +1,7 @@
 package dev.logix.cinnabar.internal;
 
 import dev.logix.cinnabar.internal.vulkan.VulkanCore;
+import org.lwjgl.vulkan.VkPhysicalDeviceLimits;
 
 import static dev.logix.cinnabar.Cinnabar.LOGGER;
 
@@ -16,5 +17,9 @@ public class CinnabarRenderer {
     
     public static void destroy() {
         VK_CORE.destroy();
+    }
+    
+    public static VkPhysicalDeviceLimits limits() {
+        return VK_CORE.limits;
     }
 }
