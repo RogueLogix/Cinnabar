@@ -1,6 +1,6 @@
 package net.roguelogix.phosphophyllite.config.spec;
 
-import dev.logix.cinnabar.Cinnabar;
+import graphics.cinnabar.Cinnabar;
 import it.unimi.dsi.fastutil.objects.ObjectArrayList;
 import net.minecraft.resources.ResourceLocation;
 import net.roguelogix.phosphophyllite.config.ConfigType;

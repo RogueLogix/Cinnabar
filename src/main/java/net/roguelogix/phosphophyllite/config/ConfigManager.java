@@ -38,7 +38,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static dev.logix.cinnabar.Cinnabar.MOD_ID;
+import static graphics.cinnabar.Cinnabar.MOD_ID;
 
 @NonnullDefault
 public class ConfigManager {

@@ -1,7 +1,7 @@
 {
   "required": true,
   "minVersion": "0.8.5",
-  "package": "dev.logix.cinnabar.internal.mixin.mixins",
+  "package": "graphics.cinnabar.internal.mixin.mixins",
   "compatibilityLevel": "JAVA_21",
   "refmap": "cinnabar.refmap.json",
   "mixins": [
