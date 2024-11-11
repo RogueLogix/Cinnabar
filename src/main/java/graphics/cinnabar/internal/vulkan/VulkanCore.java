@@ -1,8 +1,9 @@
 package graphics.cinnabar.internal.vulkan;
 
 import graphics.cinnabar.Cinnabar;
-import it.unimi.dsi.fastutil.ints.Int2ReferenceArrayMap;
 import it.unimi.dsi.fastutil.ints.IntArrayList;
+import it.unimi.dsi.fastutil.ints.IntReferenceImmutablePair;
+import it.unimi.dsi.fastutil.ints.IntReferencePair;
 import it.unimi.dsi.fastutil.objects.ReferenceArrayList;
 import net.roguelogix.phosphophyllite.util.NonnullDefault;
 import net.roguelogix.phosphophyllite.util.Pair;
@@ -17,17 +18,16 @@ import static graphics.cinnabar.internal.vulkan.exceptions.VkException.throwFrom
 import static org.lwjgl.glfw.GLFWVulkan.glfwGetPhysicalDevicePresentationSupport;
 import static org.lwjgl.glfw.GLFWVulkan.glfwGetRequiredInstanceExtensions;
 import static org.lwjgl.vulkan.EXTDebugUtils.*;
+import static org.lwjgl.vulkan.EXTExternalMemoryHost.VK_EXTERNAL_MEMORY_HANDLE_TYPE_HOST_ALLOCATION_BIT_EXT;
 import static org.lwjgl.vulkan.EXTExternalMemoryHost.VK_EXT_EXTERNAL_MEMORY_HOST_EXTENSION_NAME;
 import static org.lwjgl.vulkan.KHRSwapchain.VK_KHR_SWAPCHAIN_EXTENSION_NAME;
 import static org.lwjgl.vulkan.VK10.*;
-import static org.lwjgl.vulkan.VK11.vkGetPhysicalDeviceProperties2;
-import static org.lwjgl.vulkan.VK11.vkGetPhysicalDeviceQueueFamilyProperties2;
+import static org.lwjgl.vulkan.VK11.*;
 import static org.lwjgl.vulkan.VK13.VK_API_VERSION_1_3;
 
 @NonnullDefault
 public class VulkanCore implements Destroyable {
     private static final List<String> requiredDeviceExtensions = List.of(VK_KHR_SWAPCHAIN_EXTENSION_NAME, VK_EXT_EXTERNAL_MEMORY_HOST_EXTENSION_NAME);
-    
     
     public final VkInstance vkInstance;
     private final long debugCallback;
@@ -35,6 +35,18 @@ public class VulkanCore implements Destroyable {
     public final VkDevice vkLogicalDevice;
     private final VkPhysicalDeviceProperties2 properties2;
     public final VkPhysicalDeviceLimits limits;
+    public final VkPhysicalDeviceExternalMemoryHostPropertiesEXT externalMemoryHostProperties;
+    public final int hostPtrMemoryTypeBits;
+    
+    public final VkQueue graphicsQueue;
+    public final int graphicsQueueFamily;
+    @Nullable
+    public final VkQueue computeQueue;
+    public final int comptueQueueFamily;
+    @Nullable
+    public final VkQueue transferQueue;
+    public final int transferQueueFamily;
+    
     
     public VulkanCore() {
         final var instanceAndDebugCallback = createVkInstance();
@@ -44,18 +56,50 @@ public class VulkanCore implements Destroyable {
         try {
             final var deviceAndQueues = createLogicalDeviceAndQueues(vkPhysicalDevice);
             vkLogicalDevice = deviceAndQueues.first();
+            final var queues = deviceAndQueues.right();
+            graphicsQueue = queues.getFirst().second();
+            graphicsQueueFamily = queues.getFirst().firstInt();
+            computeQueue = queues.get(1).second();
+            comptueQueueFamily = queues.get(1).firstInt();
+            transferQueue = queues.get(2).second();
+            transferQueueFamily = queues.get(2).firstInt();
         } catch (Exception e) {
             vkDestroyDebugUtilsMessengerEXT(vkInstance, debugCallback, null);
             vkDestroyInstance(vkInstance, null);
             throw e;
         }
+        
         properties2 = VkPhysicalDeviceProperties2.calloc().sType$Default();
         limits = properties2.properties().limits();
+        externalMemoryHostProperties = VkPhysicalDeviceExternalMemoryHostPropertiesEXT.calloc().sType$Default();
+        properties2.pNext(externalMemoryHostProperties);
         vkGetPhysicalDeviceProperties2(vkPhysicalDevice, properties2);
+        // uint32 in C++, 2^32 - 1
+        if (limits.maxMemoryAllocationCount() != -1) {
+            destroy();
+            throw new IllegalStateException("VK device must allow unlimited allocations");
+        }
+        
+        int memoryFlags = 0;
+        try (var stack = MemoryStack.stackPush()) {
+            final var properties = VkPhysicalDeviceMemoryProperties2.calloc(stack).sType$Default();
+            vkGetPhysicalDeviceMemoryProperties2(vkLogicalDevice.getPhysicalDevice(), properties);
+            final var memoryProperties = properties.memoryProperties();
+            for (int i = 0; i < memoryProperties.memoryTypeCount(); i++) {
+                memoryProperties.memoryTypes().position(i);
+                final var propertyFlags = memoryProperties.memoryTypes().propertyFlags();
+                final var requiredFlags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+                if ((propertyFlags & requiredFlags) == requiredFlags) {
+                    memoryFlags |= 1 << i;
+                }
+            }
+        }
+        hostPtrMemoryTypeBits = memoryFlags;
     }
     
     @Override
     public void destroy() {
+        externalMemoryHostProperties.free();
         properties2.free();
         vkDestroyDevice(vkLogicalDevice, null);
         vkDestroyDebugUtilsMessengerEXT(vkInstance, debugCallback, null);
@@ -179,11 +223,37 @@ public class VulkanCore implements Destroyable {
             final var queueFamilyCountPtr = stack.callocInt(1);
             final var currentPhysicalDeviceProperties = VkPhysicalDeviceProperties2.calloc(stack).sType$Default();
             final var selectedPhysicalDeviceProperties = VkPhysicalDeviceProperties2.calloc(stack).sType$Default();
+            final var properties2 = VkPhysicalDeviceProperties2.calloc().sType$Default();
+            final var limits = properties2.properties().limits();
+            final var externalBufferInfo = VkPhysicalDeviceExternalBufferInfo.calloc(stack).sType$Default();
+            // host buffers will never get used as anything except transfer src
+            externalBufferInfo.usage(VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
+            externalBufferInfo.handleType(VK_EXTERNAL_MEMORY_HANDLE_TYPE_HOST_ALLOCATION_BIT_EXT);
+            final var externalBufferPropertiesPtr = VkExternalBufferProperties.calloc(stack).sType$Default();
+            final var externalBufferProperties = externalBufferPropertiesPtr.externalMemoryProperties();
             @Nullable
             VkPhysicalDevice selectedPhysicalDevice = null;
             for (int i = 0; i < physicalDeviceCount; i++) {
                 final var physicalDevicePtr = physicalDevices.get(i);
                 final var physicalDevice = new VkPhysicalDevice(physicalDevicePtr, instance);
+                
+                vkGetPhysicalDeviceProperties2(physicalDevice, properties2);
+                // uint32 in C++, 2^32 - 1
+                if (limits.maxMemoryAllocationCount() != -1) {
+                    LOGGER.info("Skipping device, not enough allocations available");
+                    continue;
+                }
+                
+                
+                vkGetPhysicalDeviceExternalBufferProperties(physicalDevice, externalBufferInfo, externalBufferPropertiesPtr);
+                if ((externalBufferProperties.externalMemoryFeatures() & VK_EXTERNAL_MEMORY_FEATURE_IMPORTABLE_BIT) == 0) {
+                    LOGGER.info("Skipping device, unable to import host memory for transfer src");
+                    continue;
+                }
+                if ((externalBufferProperties.externalMemoryFeatures() & VK_EXTERNAL_MEMORY_FEATURE_DEDICATED_ONLY_BIT) != 0) {
+                    LOGGER.info("Skipping device, dedicated allocation required for imported host memory");
+                    continue;
+                }
                 
                 vkGetPhysicalDeviceQueueFamilyProperties2(physicalDevice, queueFamilyCountPtr, null);
                 final var queueFamilyCount = queueFamilyCountPtr.get(0);
@@ -196,6 +266,8 @@ public class VulkanCore implements Destroyable {
                         continue;
                     }
                     final var queueFamilyProperties = queueFamilyProperties2.queueFamilyProperties();
+                    // there being a graphics queue implies that there is a common graphics + compute queue
+                    // and both graphics and compute queues are implicit transfer queues as well
                     if ((queueFamilyProperties.queueFlags() & VK_QUEUE_GRAPHICS_BIT) != 0) {
                         hasGraphicsQueue = true;
                     }
@@ -244,8 +316,15 @@ public class VulkanCore implements Destroyable {
         }
     }
     
-    private static Pair<VkDevice, Int2ReferenceArrayMap<List<VkQueue>>> createLogicalDeviceAndQueues(VkPhysicalDevice physicalDevice) {
+    private static Pair<VkDevice, List<IntReferencePair<VkQueue>>> createLogicalDeviceAndQueues(VkPhysicalDevice physicalDevice) {
         try (var stack = MemoryStack.stackPush()) {
+            
+            int graphicsQueueFamily = 0;
+            int graphicsQueueIndex = 0;
+            int computeQueueFamily = -1;
+            int computeQueueIndex = 0;
+            int transferQueueFamily = -1;
+            int transferQueueIndex = 0;
             final var queueFamilies = new IntArrayList();
             final var queueCounts = new IntArrayList();
             
@@ -255,6 +334,18 @@ public class VulkanCore implements Destroyable {
             //       AMD has 4 compute and 3 transfer queues, besides the universal one
             //       Intel has dedicated compute and dedicated transfer queue, on windows, but only the universal on linux
             //       Qualcomm only has the one family in the first place, but three queues
+            //
+            //       up to 3 queues will be used
+            //       main graphics as a graphics+compute queue, this is required by the spec for any graphics capable device
+            //       async compute queue, as just compute required (less bits preferred)
+            //       async transfer queue, as just transfer required (less bits preferred)
+            //       on Intel/Linux, these will all map to the same queue
+            //       on Intel/Windows, compute and transfer may be there own queues (and families), depends on underlying GPU
+            //       on AMD, graphics will be the universal, compute will be an ACE, and transfer will be the DMA unit (or ACE if DMA unavailable)
+            //       on Nvidia, graphics and compute will both be universal queues, and transfer will be dedicated transfer
+            //       on Qualcomm/Windows, all three will be independent queues, but the same family
+            //       theoretically could use more for async compute/transfer, but theres no need really
+            
             queueFamilies.add(0);
             queueCounts.add(1);
             
@@ -317,6 +408,7 @@ public class VulkanCore implements Destroyable {
             physicalDeviceFeatures12.shaderUniformTexelBufferArrayNonUniformIndexing(true);
             physicalDeviceFeatures12.storageBuffer8BitAccess(true);
             physicalDeviceFeatures12.storagePushConstant8(true); // low support, 65%
+            physicalDeviceFeatures12.timelineSemaphore(true);
             physicalDeviceFeatures12.uniformAndStorageBuffer8BitAccess(true);
             physicalDeviceFeatures12.uniformBufferStandardLayout(true); // low support, 80%
             physicalDeviceFeatures12.vulkanMemoryModel(true);
@@ -355,16 +447,23 @@ public class VulkanCore implements Destroyable {
             LOGGER.info("VkDevice created");
             
             final var logicalDevice = new VkDevice(pointerPointer.get(0), physicalDevice, deviceCreateInfo);
-            final var queues = new Int2ReferenceArrayMap<List<VkQueue>>();
-            for (int i = 0; i < queueFamilies.size(); i++) {
-                final var queueFamilyIndex = queueFamilies.getInt(i);
-                final var queueCount = queueCounts.getInt(i);
-                final var familyQueues = new ReferenceArrayList<VkQueue>();
-                for (int j = 0; j < queueCount; j++) {
-                    vkGetDeviceQueue(logicalDevice, queueFamilyIndex, j, pointerPointer);
-                    familyQueues.add(new VkQueue(pointerPointer.get(0), logicalDevice));
-                }
-                queues.put(queueFamilyIndex, familyQueues);
+            final var queues = new ReferenceArrayList<IntReferencePair<VkQueue>>();
+            vkGetDeviceQueue(logicalDevice, graphicsQueueFamily, graphicsQueueIndex, pointerPointer);
+            queues.add(new IntReferenceImmutablePair<>(graphicsQueueFamily, new VkQueue(pointerPointer.get(0), logicalDevice)));
+            if (computeQueueFamily != -1) {
+                vkGetDeviceQueue(logicalDevice, computeQueueFamily, computeQueueIndex, pointerPointer);
+                queues.add(new IntReferenceImmutablePair<>(computeQueueFamily, new VkQueue(pointerPointer.get(0), logicalDevice)));
+            } else {
+                // no compute queue? alias graphics queue
+                queues.add(queues.get(0));
+            }
+            if (transferQueueFamily != -1) {
+                vkGetDeviceQueue(logicalDevice, transferQueueFamily, transferQueueIndex, pointerPointer);
+                queues.add(new IntReferenceImmutablePair<>(transferQueueFamily, new VkQueue(pointerPointer.get(0), logicalDevice)));
+            } else {
+                // no transfer queue? alias compute queue
+                // note: may be the graphics queue
+                queues.add(queues.get(1));
             }
             return new Pair<>(logicalDevice, queues);
         }

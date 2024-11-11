@@ -6,10 +6,12 @@ import com.mojang.blaze3d.platform.Window;
 import com.mojang.blaze3d.platform.WindowEventHandler;
 import graphics.cinnabar.internal.CinnabarRenderer;
 import net.neoforged.fml.loading.ImmediateWindowHandler;
+import net.roguelogix.phosphophyllite.util.NonnullDefault;
 import org.jetbrains.annotations.Nullable;
 
 import static org.lwjgl.glfw.GLFW.*;
 
+@NonnullDefault
 public class CinnabarWindow extends Window {
     public CinnabarWindow(WindowEventHandler eventHandler, ScreenManager screenManager, DisplayData displayData, @Nullable String preferredFullscreenVideoMode, String title) {
         super(eventHandler, screenManager, displayData, preferredFullscreenVideoMode, title);

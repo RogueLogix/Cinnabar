@@ -7,11 +7,14 @@
   "mixins": [
   ],
   "client": [
+    "blaze3d.pipeline.MainTargetMixin",
+    "blaze3d.pipeline.TextureTargetMixin",
     "blaze3d.platform.WindowMixin",
     "blaze3d.systems.RenderSystemMixin",
     "minecraft.MinecraftMixin"
   ],
   "injectors": {
     "defaultRequire": 1
-  }
+  },
+  "plugin": "graphics.cinnabar.internal.mixin.MixinPlugin"
 }

@@ -4,6 +4,7 @@ import it.unimi.dsi.fastutil.longs.Long2ObjectMap;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.objects.ObjectArraySet;
 import it.unimi.dsi.fastutil.objects.ObjectIntImmutablePair;
+import net.roguelogix.phosphophyllite.util.NonnullDefault;
 
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
@@ -11,6 +12,7 @@ import static graphics.cinnabar.internal.CinnabarDebug.DEBUG;
 import static org.lwjgl.vulkan.VK10.VK_ACCESS_MEMORY_READ_BIT;
 import static org.lwjgl.vulkan.VK10.VK_ACCESS_MEMORY_WRITE_BIT;
 
+@NonnullDefault
 public class LeakDetection {
     
     private static class MemoryLeak extends Exception {

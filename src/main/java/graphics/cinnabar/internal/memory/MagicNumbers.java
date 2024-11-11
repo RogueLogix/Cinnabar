@@ -1,6 +1,10 @@
 package graphics.cinnabar.internal.memory;
 
 public class MagicNumbers {
+    public static final long KiB = 1024;
+    public static final long MiB = KiB * 1024;
+    public static final long GiB = MiB * 1024;
+    
     public static final int VERTEX_BYTE_SIZE = 32;
     public static final int FLOAT_BYTE_SIZE = 4;
     public static final int DOUBLE_BYTE_SIZE = 8;
