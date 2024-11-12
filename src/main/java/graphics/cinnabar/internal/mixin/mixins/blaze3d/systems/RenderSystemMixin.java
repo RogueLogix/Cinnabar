@@ -2,11 +2,14 @@ package graphics.cinnabar.internal.mixin.mixins.blaze3d.systems;
 
 import com.mojang.blaze3d.platform.GlStateManager;
 import com.mojang.blaze3d.systems.RenderSystem;
+import graphics.cinnabar.internal.extensions.minecraft.renderer.texture.CinnabarAbstractTexture;
 import graphics.cinnabar.internal.mixin.helpers.blaze3d.systems.RenderSystemMixinHelper;
 import org.joml.Matrix4f;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Overwrite;
 import org.spongepowered.asm.mixin.Shadow;
+
+import static org.lwjgl.opengl.GL13C.GL_TEXTURE0;
 
 @Mixin(RenderSystem.class)
 public class RenderSystemMixin {
@@ -41,6 +44,11 @@ public class RenderSystemMixin {
         modelViewMatrix.identity();
         textureMatrix.identity();
 //        GlStateManager._viewport(x, y, width, height);
+    }
+    
+    @Overwrite
+    public static void activeTexture(int texture) {
+        CinnabarAbstractTexture.active(texture - GL_TEXTURE0);
     }
     
 }
