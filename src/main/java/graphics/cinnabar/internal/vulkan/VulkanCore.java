@@ -85,14 +85,18 @@ public class VulkanCore implements Destroyable {
             final var properties = VkPhysicalDeviceMemoryProperties2.calloc(stack).sType$Default();
             vkGetPhysicalDeviceMemoryProperties2(vkLogicalDevice.getPhysicalDevice(), properties);
             final var memoryProperties = properties.memoryProperties();
+            final var types = memoryProperties.memoryTypes();
             for (int i = 0; i < memoryProperties.memoryTypeCount(); i++) {
-                memoryProperties.memoryTypes().position(i);
-                final var propertyFlags = memoryProperties.memoryTypes().propertyFlags();
+                types.position(i);
+                final var propertyFlags = types.propertyFlags();
                 final var requiredFlags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
                 if ((propertyFlags & requiredFlags) == requiredFlags) {
                     memoryFlags |= 1 << i;
                 }
             }
+        }
+        if (memoryFlags == 0) {
+            throw new IllegalStateException();
         }
         hostPtrMemoryTypeBits = memoryFlags;
     }

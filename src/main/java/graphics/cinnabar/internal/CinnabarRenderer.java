@@ -8,6 +8,7 @@ import org.lwjgl.vulkan.VkDevice;
 import org.lwjgl.vulkan.VkPhysicalDeviceLimits;
 
 import static graphics.cinnabar.Cinnabar.LOGGER;
+import static org.lwjgl.vulkan.VK10.vkDeviceWaitIdle;
 
 
 public class CinnabarRenderer {
@@ -19,6 +20,13 @@ public class CinnabarRenderer {
     
     public static VkDevice device() {
         return VK_CORE.vkLogicalDevice;
+    }
+    
+    public static void waitIdle() {
+        // will early out if there is nothing to submit
+        queueHelper.submit(true);
+        // technically, everything is done already, but wait anyway
+        vkDeviceWaitIdle(device());
     }
     
     public static VkPhysicalDeviceLimits limits() {
@@ -35,6 +43,7 @@ public class CinnabarRenderer {
     
     // TODO: configurable sizes?
     public static final GPUMemoryAllocator GPUMemoryAllocator = new GPUMemoryAllocator(MagicNumbers.MiB * 256, MagicNumbers.KiB * 4);
+    
     public static final VulkanQueueHelper queueHelper = new VulkanQueueHelper(2, VK_CORE.graphicsQueue, VK_CORE.graphicsQueueFamily, VK_CORE.computeQueue, VK_CORE.comptueQueueFamily, VK_CORE.transferQueue, VK_CORE.transferQueueFamily);
     
     public static void create() {

@@ -11,22 +11,37 @@ import static org.lwjgl.vulkan.EXTExternalMemoryHost.VK_EXTERNAL_MEMORY_HANDLE_T
 import static org.lwjgl.vulkan.EXTExternalMemoryHost.vkGetMemoryHostPointerPropertiesEXT;
 import static org.lwjgl.vulkan.VK10.*;
 
-public record CPUMemoryVkBuffer(long bufferHandle, PointerWrapper hostPtr, long vkImportedMemory) implements Destroyable {
+public record CPUMemoryVkBuffer(long bufferHandle, PointerWrapper hostPtr, long vkImportedMemory, boolean ownsHostAllocation) implements Destroyable {
     
     public static CPUMemoryVkBuffer alloc(long size) {
+        final var hostPtrAlignment = CinnabarRenderer.hostPtrAlignment();
+        final var roundedUpSize = (size + (hostPtrAlignment - 1)) & -hostPtrAlignment;
+        final var hostPtr = PointerWrapper.alloc(roundedUpSize, hostPtrAlignment);
+        return create(hostPtr, true);
+    }
+    
+    public static CPUMemoryVkBuffer create(long ptr, long size) {
+        return create(new PointerWrapper(ptr, size), false);
+    }
+    
+    public static CPUMemoryVkBuffer create(PointerWrapper hostPtr, boolean ownsHostAllocation) {
         final var device = CinnabarRenderer.device();
+        
+        if ((hostPtr.pointer() & (CinnabarRenderer.hostPtrAlignment() - 1)) != 0) {
+            throw new IllegalArgumentException("Imported pointer must be aligned to hostPtrAlignment");
+        }
+        if ((hostPtr.size() & (CinnabarRenderer.hostPtrAlignment() - 1)) != 0) {
+            throw new IllegalArgumentException("Imported pointer size must be multiple of hostPtrAlignment");
+        }
         
         try (final var stack = MemoryStack.stackPush()) {
             
             final var handlePtr = stack.mallocLong(1);
-            final var hostPtrAlignment = CinnabarRenderer.hostPtrAlignment();
-            final var roundedUpSize = (size + (hostPtrAlignment - 1)) & -hostPtrAlignment;
-            
             final var bufferCreateInfo = VkBufferCreateInfo.calloc(stack).sType$Default();
             final var externalBufferCreateInfo = VkExternalMemoryBufferCreateInfo.calloc(stack).sType$Default();
             bufferCreateInfo.pNext(externalBufferCreateInfo);
             
-            bufferCreateInfo.size(roundedUpSize);
+            bufferCreateInfo.size(hostPtr.size());
             bufferCreateInfo.usage(VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
             bufferCreateInfo.sharingMode(VK_SHARING_MODE_EXCLUSIVE);
             externalBufferCreateInfo.handleTypes(VK_EXTERNAL_MEMORY_HANDLE_TYPE_HOST_ALLOCATION_BIT_EXT);
@@ -37,7 +52,7 @@ public record CPUMemoryVkBuffer(long bufferHandle, PointerWrapper hostPtr, long 
             final var memoryRequirements = VkMemoryRequirements.calloc(stack);
             vkGetBufferMemoryRequirements(device, bufferHandle, memoryRequirements);
             
-            final var hostPtr = PointerWrapper.alloc(roundedUpSize, hostPtrAlignment);
+            
             final var properties = VkMemoryHostPointerPropertiesEXT.calloc(stack).sType$Default();
             vkGetMemoryHostPointerPropertiesEXT(CinnabarRenderer.device(), VK_EXTERNAL_MEMORY_HANDLE_TYPE_HOST_ALLOCATION_BIT_EXT, hostPtr.pointer(), properties);
             
@@ -47,7 +62,7 @@ public record CPUMemoryVkBuffer(long bufferHandle, PointerWrapper hostPtr, long 
             
             final var allocInfo = VkMemoryAllocateInfo.calloc(stack).sType$Default();
             allocInfo.pNext(importInfo);
-            allocInfo.allocationSize(roundedUpSize);
+            allocInfo.allocationSize(hostPtr.size());
             
             allocInfo.memoryTypeIndex(-1);
             for (int i = 0; i < 32; i++) {
@@ -78,7 +93,7 @@ public record CPUMemoryVkBuffer(long bufferHandle, PointerWrapper hostPtr, long 
             
             vkBindBufferMemory(device, bufferHandle, memoryHandle, 0);
             
-            return new CPUMemoryVkBuffer(memoryHandle, hostPtr, bufferHandle);
+            return new CPUMemoryVkBuffer(bufferHandle, hostPtr, memoryHandle, ownsHostAllocation);
         }
     }
     
@@ -88,6 +103,8 @@ public record CPUMemoryVkBuffer(long bufferHandle, PointerWrapper hostPtr, long 
         
         vkDestroyBuffer(device, bufferHandle, null);
         vkFreeMemory(device, vkImportedMemory, null);
-        hostPtr.free();
+        if (ownsHostAllocation) {
+            hostPtr.free();
+        }
     }
 }

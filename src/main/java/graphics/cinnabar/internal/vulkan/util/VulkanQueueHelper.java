@@ -115,12 +115,12 @@ public class VulkanQueueHelper implements Destroyable {
         }
         
         private void submit() {
-            // for fencing the reset
-            lastSubmitWaitValues[currentSubmit] = signalImplicit(VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
-            switchToState(QueueState.WAITING);
             if (submitInfos.position() == 0) {
                 return;
             }
+            // for fencing the reset
+            lastSubmitWaitValues[currentSubmit] = signalImplicit(VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
+            switchToState(QueueState.WAITING);
             // the last switchToState will have added an extra (empty) submit
             submitInfos.limit(submitInfos.position() - 1);
             submitInfos.position(0);
