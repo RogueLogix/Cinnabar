@@ -270,9 +270,11 @@ public class VulkanCore implements Destroyable {
                         continue;
                     }
                     final var queueFamilyProperties = queueFamilyProperties2.queueFamilyProperties();
-                    // there being a graphics queue implies that there is a common graphics + compute queue
-                    // and both graphics and compute queues are implicit transfer queues as well
-                    if ((queueFamilyProperties.queueFlags() & VK_QUEUE_GRAPHICS_BIT) != 0) {
+                    // look for the spec guaranteed combined graphics/compute queue
+                    // both graphics and compute queues are implicit transfer queues
+                    // graphics queue must also support present (all do in reality)
+                    final var graphicsQueueBits = VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT;
+                    if ((queueFamilyProperties.queueFlags() & graphicsQueueBits) == graphicsQueueBits && glfwGetPhysicalDevicePresentationSupport(instance, physicalDevice, j)) {
                         hasGraphicsQueue = true;
                     }
                     if ((queueFamilyProperties.queueFlags() & VK_QUEUE_GRAPHICS_BIT) != 0) {

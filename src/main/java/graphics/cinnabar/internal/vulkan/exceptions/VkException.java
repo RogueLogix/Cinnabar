@@ -1,5 +1,6 @@
 package graphics.cinnabar.internal.vulkan.exceptions;
 
+import static org.lwjgl.vulkan.KHRSwapchain.VK_SUBOPTIMAL_KHR;
 import static org.lwjgl.vulkan.VK10.*;
 import static org.lwjgl.vulkan.VK11.VK_ERROR_INVALID_EXTERNAL_HANDLE;
 import static org.lwjgl.vulkan.VK11.VK_ERROR_OUT_OF_POOL_MEMORY;
@@ -14,7 +15,7 @@ public class VkException extends RuntimeException {
     
     public static void throwFromCode(int code) {
         switch (code) {
-            case VK_SUCCESS, VK_NOT_READY, VK_TIMEOUT, VK_EVENT_SET, VK_EVENT_RESET, VK_INCOMPLETE -> {
+            case VK_SUCCESS, VK_NOT_READY, VK_TIMEOUT, VK_EVENT_SET, VK_EVENT_RESET, VK_INCOMPLETE, VK_SUBOPTIMAL_KHR-> {
                 // these are all sucesss codes, so, dont do anything
             }
             case VK_ERROR_OUT_OF_HOST_MEMORY -> throw new OutOfMemoryError();

@@ -16,9 +16,9 @@ public class MagicNumbers {
     public static final int SwapchainColorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
     
     public static final int[] VSyncPresentModeOrder = new int[]{
-            VK_PRESENT_MODE_MAILBOX_KHR,
-            VK_PRESENT_MODE_FIFO_RELAXED_KHR,
-            VK_PRESENT_MODE_FIFO_KHR
+            VK_PRESENT_MODE_MAILBOX_KHR, // triple buffering, should add a toggle for this
+            VK_PRESENT_MODE_FIFO_RELAXED_KHR, // preferred if supported in case sync is just missed
+            VK_PRESENT_MODE_FIFO_KHR // guaranteed by spec
     };
     
     public static final int[] NoSyncPresentModeOrder = new int[]{
