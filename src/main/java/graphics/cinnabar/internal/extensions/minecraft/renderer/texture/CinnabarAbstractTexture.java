@@ -89,9 +89,7 @@ public abstract class CinnabarAbstractTexture extends AbstractTexture {
             memoryAllocation = CinnabarRenderer.GPUMemoryAllocator.alloc(memoryRequirements);
             vkBindImageMemory(device, imageHandle, memoryAllocation.memoryHandle(), memoryAllocation.range().offset());
         }
-        
-        final var commandBuffer = CinnabarRenderer.queueHelper.getImplicitCommandBuffer(VulkanQueueHelper.QueueType.MAIN_GRAPHICS);
-        recordTransition(commandBuffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 0, VK_ACCESS_SHADER_READ_BIT, 0, mipLevels);
+        // no need to do a transition yet, upload will take care of that
     }
     
     private void destroy() {
@@ -127,8 +125,10 @@ public abstract class CinnabarAbstractTexture extends AbstractTexture {
         subResource.baseArrayLayer(0);
         subResource.layerCount(1);
         
+        // this is done on the main graphics queue as can be called nearly every frame, as a non-async operation
         final var commandBuffer = CinnabarRenderer.queueHelper.getImplicitCommandBuffer(VulkanQueueHelper.QueueType.MAIN_GRAPHICS);
-        recordTransition(commandBuffer, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_ACCESS_SHADER_READ_BIT, VK_ACCESS_TRANSFER_WRITE_BIT, level, 1);
+        // TOP_OF_PIPE is fine because there will be frame to frame queue drains
+        recordTransition(commandBuffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 0, VK_ACCESS_TRANSFER_WRITE_BIT, level, 1);
         vkCmdCopyBufferToImage(commandBuffer, cpuMemoryVkBuffer.bufferHandle(), imageHandle, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, vkBufferImageCopy);
         recordTransition(commandBuffer, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, level, 1);
     }
