@@ -4,6 +4,9 @@ import com.mojang.blaze3d.platform.GlStateManager;
 import com.mojang.blaze3d.systems.RenderSystem;
 import graphics.cinnabar.internal.extensions.minecraft.renderer.texture.CinnabarAbstractTexture;
 import graphics.cinnabar.internal.mixin.helpers.blaze3d.systems.RenderSystemMixinHelper;
+import graphics.cinnabar.internal.statemachine.CinnabarBlendState;
+import graphics.cinnabar.internal.statemachine.CinnabarFramebufferState;
+import graphics.cinnabar.internal.statemachine.CinnabarGeneralState;
 import org.joml.Matrix4f;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Overwrite;
@@ -49,6 +52,63 @@ public class RenderSystemMixin {
     @Overwrite
     public static void activeTexture(int texture) {
         CinnabarAbstractTexture.active(texture - GL_TEXTURE0);
+    }
+    
+    @Overwrite
+    public static void clear(int bits, boolean clearError) {
+        CinnabarFramebufferState.clear(bits);
+    }
+    
+    @Overwrite
+    public static void enableCull() {
+        CinnabarGeneralState.cull = true;
+    }
+    
+    @Overwrite
+    public static void disableCull() {
+        CinnabarGeneralState.cull = false;
+    }
+    
+    @Overwrite
+    public static void viewport(int x, int y, int width, int height) {
+        CinnabarFramebufferState.setViewport(x, y, width, height);
+    }
+    
+    @Overwrite
+    public static void depthMask(boolean enabled) {
+        CinnabarGeneralState.depthWrite = enabled;
+    }
+    
+    @Overwrite
+    public static void enableBlend() {
+        CinnabarBlendState.setEnabled(true);
+    }
+    
+    @Overwrite
+    public static void disableBlend() {
+        CinnabarBlendState.setEnabled(false);
+    }
+    
+    @Overwrite
+    public static void blendFunc(int srcFactor, int dstFactor) {
+        CinnabarBlendState.setBlendFactors(srcFactor, dstFactor, srcFactor, dstFactor);
+    }
+    
+    @Overwrite
+    public static void blendFunc(GlStateManager.SourceFactor srcFactor, GlStateManager.DestFactor dstFactor) {
+        CinnabarBlendState.setBlendFactors(srcFactor.value, srcFactor.value, srcFactor.value, dstFactor.value);
+        
+    }
+    
+    @Overwrite
+    public static void blendFuncSeparate(GlStateManager.SourceFactor srcFactor, GlStateManager.DestFactor dstFactor, GlStateManager.SourceFactor srcAlpha, GlStateManager.DestFactor dstAlpha) {
+        CinnabarBlendState.setBlendFactors(srcFactor.value, dstFactor.value, srcAlpha.value, dstAlpha.value);
+        
+    }
+    
+    @Overwrite
+    public static void blendFuncSeparate(int srcFactor, int dstFactor, int srcAlpha, int dstAlpha) {
+        CinnabarBlendState.setBlendFactors(srcFactor, dstFactor, srcAlpha, dstAlpha);
     }
     
 }

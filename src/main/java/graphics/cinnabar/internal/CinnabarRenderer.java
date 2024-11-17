@@ -13,7 +13,6 @@ import org.lwjgl.vulkan.VkPhysicalDeviceLimits;
 import org.lwjgl.vulkan.VkQueue;
 
 import static graphics.cinnabar.Cinnabar.LOGGER;
-import static org.lwjgl.vulkan.VK10.vkDeviceWaitIdle;
 
 
 public class CinnabarRenderer {
@@ -37,7 +36,7 @@ public class CinnabarRenderer {
         return VK_CORE.vkLogicalDevice;
     }
     
-    public static VkQueue presentQueue() {
+    public static VkQueue graphicsQueue() {
         return VK_CORE.graphicsQueue;
     }
     

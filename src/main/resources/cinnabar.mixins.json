@@ -14,6 +14,7 @@
     "blaze3d.vertex.VertexBufferMixin",
     "blaze3d.systems.RenderSystemMixin",
     "minecraft.gui.font.FontTextureMixin",
+    "minecraft.gui.screens.LoadingOverlayMixin",
     "minecraft.renderer.GameRendererMixin",
     "minecraft.renderer.LevelRendererMixin",
     "minecraft.renderer.ShaderInstanceMixin",

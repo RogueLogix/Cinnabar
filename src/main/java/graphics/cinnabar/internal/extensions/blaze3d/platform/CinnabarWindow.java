@@ -8,6 +8,7 @@ import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.Tesselator;
 import graphics.cinnabar.internal.CinnabarRenderer;
 import graphics.cinnabar.internal.vulkan.MagicNumbers;
+import graphics.cinnabar.internal.vulkan.util.VulkanQueueHelper;
 import it.unimi.dsi.fastutil.longs.LongArrayList;
 import net.neoforged.fml.loading.ImmediateWindowHandler;
 import net.roguelogix.phosphophyllite.util.NonnullDefault;
@@ -22,6 +23,7 @@ import static graphics.cinnabar.internal.vulkan.MagicNumbers.VSyncPresentModeOrd
 import static graphics.cinnabar.internal.vulkan.exceptions.VkException.throwFromCode;
 import static org.lwjgl.glfw.GLFW.*;
 import static org.lwjgl.glfw.GLFWVulkan.glfwCreateWindowSurface;
+import static org.lwjgl.opengl.GL11C.GL_COLOR_BUFFER_BIT;
 import static org.lwjgl.vulkan.KHRSurface.*;
 import static org.lwjgl.vulkan.KHRSwapchain.*;
 import static org.lwjgl.vulkan.VK10.*;
@@ -41,6 +43,7 @@ public class CinnabarWindow extends Window {
     
     private final VkImageSubresourceRange imageSubresourceRange = VkImageSubresourceRange.calloc();
     private final VkImageMemoryBarrier.Buffer imageBarrier = VkImageMemoryBarrier.calloc(1);
+    private final VkClearColorValue clearColor = VkClearColorValue.calloc();
     
     
     public CinnabarWindow(WindowEventHandler eventHandler, ScreenManager screenManager, DisplayData displayData, @Nullable String preferredFullscreenVideoMode, String title) {
@@ -59,10 +62,24 @@ public class CinnabarWindow extends Window {
             vkAcquireNextImageKHR(device, swapchain, Long.MAX_VALUE, VK_NULL_HANDLE, frameAcquisitionFence, intPtr);
             currentSwapchainFrame = intPtr.get(0);
         }
+        
+        imageSubresourceRange.aspectMask(VK_IMAGE_ASPECT_COLOR_BIT);
+        imageSubresourceRange.baseMipLevel(0);
+        imageSubresourceRange.levelCount(1);
+        imageSubresourceRange.baseArrayLayer(0);
+        imageSubresourceRange.layerCount(1);
+        
+        imageBarrier.sType$Default();
+        imageBarrier.dstQueueFamilyIndex(VK_QUEUE_FAMILY_IGNORED);
+        imageBarrier.srcQueueFamilyIndex(VK_QUEUE_FAMILY_IGNORED);
+        imageBarrier.subresourceRange(imageSubresourceRange);
     }
     
     @Override
     public void close() {
+        clearColor.free();
+        imageBarrier.free();
+        imageSubresourceRange.free();
         super.close();
         CinnabarRenderer.destroy();
     }
@@ -207,7 +224,7 @@ public class CinnabarWindow extends Window {
             presentInfo.swapchainCount(1);
             presentInfo.pSwapchains(swapchainPtr);
             presentInfo.pImageIndices(imageIndexPtr);
-            throwFromCode(vkQueuePresentKHR(CinnabarRenderer.presentQueue(), presentInfo));
+            throwFromCode(vkQueuePresentKHR(CinnabarRenderer.graphicsQueue(), presentInfo));
             
             throwFromCode(vkWaitForFences(device, frameAcquisitionFence, true, Long.MAX_VALUE));
             throwFromCode(vkResetFences(device, frameAcquisitionFence));
@@ -221,5 +238,29 @@ public class CinnabarWindow extends Window {
             }
             currentSwapchainFrame = intPtr.get(0);
         }
+    }
+    
+    public void clear(int clearBits) {
+        if ((clearBits & GL_COLOR_BUFFER_BIT) == 0) {
+            return;
+        }
+        
+        final var commandBuffer = CinnabarRenderer.queueHelper.getImplicitCommandBuffer(VulkanQueueHelper.QueueType.MAIN_GRAPHICS);
+        
+        
+        imageBarrier.srcAccessMask(VK_ACCESS_TRANSFER_WRITE_BIT);
+        imageBarrier.dstAccessMask(VK_ACCESS_TRANSFER_WRITE_BIT);
+        imageBarrier.oldLayout(VK_IMAGE_LAYOUT_UNDEFINED);
+        imageBarrier.newLayout(VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+        imageBarrier.image(getImageForBlit());
+        
+        vkCmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, null, null, imageBarrier);
+        
+        vkCmdClearColorImage(commandBuffer, swapchainImages.getLong(currentSwapchainFrame), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, clearColor, imageSubresourceRange);
+        
+        imageBarrier.oldLayout(VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+        imageBarrier.newLayout(VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+        
+        vkCmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, null, null, imageBarrier);
     }
 }

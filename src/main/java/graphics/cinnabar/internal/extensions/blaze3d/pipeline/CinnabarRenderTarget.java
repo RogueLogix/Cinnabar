@@ -3,6 +3,7 @@ package graphics.cinnabar.internal.extensions.blaze3d.pipeline;
 import com.mojang.blaze3d.pipeline.RenderTarget;
 import com.mojang.blaze3d.systems.RenderSystem;
 import graphics.cinnabar.internal.CinnabarRenderer;
+import graphics.cinnabar.internal.statemachine.CinnabarFramebufferState;
 import graphics.cinnabar.internal.vulkan.memory.VulkanMemoryAllocation;
 import graphics.cinnabar.internal.vulkan.util.VulkanQueueHelper;
 import net.roguelogix.phosphophyllite.util.NonnullDefault;
@@ -30,6 +31,9 @@ public class CinnabarRenderTarget extends RenderTarget {
     @Nullable
     private VulkanMemoryAllocation depthImageAllocation;
     
+    private final VkRect2D renderArea = VkRect2D.calloc();
+    private final VkExtent2D renderExtent = renderArea.extent();
+    
     public CinnabarRenderTarget(boolean useDepth) {
         super(useDepth);
     }
@@ -49,6 +53,7 @@ public class CinnabarRenderTarget extends RenderTarget {
         RenderSystem.assertOnRenderThreadOrInit();
         this.width = width;
         this.height = height;
+        renderExtent.set(width, height);
         assert colorImageHandle == 0;
         assert colorImageViewHandle == 0;
         assert colorImageAllocation == null;
@@ -300,5 +305,25 @@ public class CinnabarRenderTarget extends RenderTarget {
         vkCmdEndRendering(commandBuffer);
         beginRendering(commandBuffer, true, false);
         vkCmdEndRendering(commandBuffer);
+    }
+    
+    public void bindWrite(boolean setViewport) {
+        CinnabarFramebufferState.bind(this);
+        // TODO viewport
+    }
+    
+    public void unbindWrite() {
+        CinnabarFramebufferState.bind(null);
+    }
+    
+    public VkRect2D renderArea() {
+        return renderArea;
+    }
+    
+    public void clearColor(float r, float g, float b, float a) {
+        clearChannels[0] = r;
+        clearChannels[1] = g;
+        clearChannels[2] = b;
+        clearChannels[3] = a;
     }
 }
