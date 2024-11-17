@@ -1,3 +1,5 @@
+import org.gradle.internal.os.OperatingSystem
+
 plugins {
     id 'java-library'
     id 'maven-publish'
@@ -10,12 +12,39 @@ tasks.named('wrapper', Wrapper).configure {
 
 project.ext.lwjglVersion = "3.3.3"
 
+switch (OperatingSystem.current()) {
+    case OperatingSystem.LINUX:
+        project.ext.lwjglNatives = "natives-linux"
+        def osArch = System.getProperty("os.arch")
+        if (osArch.startsWith("arm") || osArch.startsWith("aarch64")) {
+            project.ext.lwjglNatives += osArch.contains("64") || osArch.startsWith("armv8") ? "-arm64" : "-arm32"
+        } else if  (osArch.startsWith("ppc")) {
+            project.ext.lwjglNatives += "-ppc64le"
+        } else if  (osArch.startsWith("riscv")) {
+            project.ext.lwjglNatives += "-riscv64"
+        }
+        break
+    case OperatingSystem.MAC_OS:
+        project.ext.lwjglNatives = System.getProperty("os.arch").startsWith("aarch64") ? "natives-macos-arm64" : "natives-macos"
+        break
+    case OperatingSystem.WINDOWS:
+        def osArch = System.getProperty("os.arch")
+        project.ext.lwjglNatives = osArch.contains("64")
+                ? "natives-windows${osArch.startsWith("aarch64") ? "-arm64" : ""}"
+                : "natives-windows-x86"
+        break
+}
+
 version = mod_version
 group = mod_group_id
 
 repositories {
     mavenLocal()
     mavenCentral()
+    maven {
+        name = "TauMC"
+        url = "https://maven.taumc.org/releases"
+    }
 }
 
 base {
@@ -99,6 +128,13 @@ dependencies {
 
     jarJar(implementation("org.lwjgl:lwjgl-vulkan"))
     additionalRuntimeClasspath("org.lwjgl:lwjgl-vulkan")
+    jarJar(implementation("org.lwjgl:lwjgl-shaderc"))
+    additionalRuntimeClasspath("org.lwjgl:lwjgl-shaderc")
+    additionalRuntimeClasspath("org.lwjgl:lwjgl-shaderc::$lwjglNatives")
+
+    implementation("org.anarres:jcpp:1.4.14")
+    jarJar(implementation("org.taumc:glsl-transformation-lib:0.2.0-20.ge3cb096"))
+    additionalRuntimeClasspath("org.taumc:glsl-transformation-lib:0.2.0-20.ge3cb096")
 }
 
 // This block of code expands all declared replace properties in the specified resource targets.

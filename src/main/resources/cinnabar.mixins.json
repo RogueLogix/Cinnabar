@@ -14,7 +14,10 @@
     "blaze3d.vertex.VertexBufferMixin",
     "blaze3d.systems.RenderSystemMixin",
     "minecraft.gui.font.FontTextureMixin",
+    "minecraft.renderer.GameRendererMixin",
     "minecraft.renderer.LevelRendererMixin",
+    "minecraft.renderer.ShaderInstanceMixin",
+    "minecraft.renderer.UniformMixin",
     "minecraft.texture.AbstractTextureMixin",
     "minecraft.texture.DynamicTextureMixin",
     "minecraft.MinecraftMixin"
