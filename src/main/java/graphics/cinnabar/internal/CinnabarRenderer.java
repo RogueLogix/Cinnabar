@@ -1,5 +1,6 @@
 package graphics.cinnabar.internal;
 
+import graphics.cinnabar.api.threading.Queues;
 import graphics.cinnabar.internal.memory.MagicNumbers;
 import graphics.cinnabar.internal.vulkan.VulkanCore;
 import graphics.cinnabar.internal.vulkan.memory.GPUMemoryAllocator;
@@ -60,6 +61,9 @@ public class CinnabarRenderer {
     }
     
     public static void destroy() {
+        queueHelper.destroy();
+        GPUMemoryAllocator.destroy();
         VK_CORE.destroy();
+        Queues.backgroundThreads.destroy();
     }
 }
