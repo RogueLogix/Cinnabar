@@ -12,6 +12,7 @@
     "blaze3d.platform.NativeImageMixin",
     "blaze3d.platform.WindowMixin",
     "blaze3d.vertex.VertexBufferMixin",
+    "blaze3d.vertex.VertexFormatMixin",
     "blaze3d.systems.RenderSystemMixin",
     "minecraft.gui.font.FontTextureMixin",
     "minecraft.gui.screens.LoadingOverlayMixin",
