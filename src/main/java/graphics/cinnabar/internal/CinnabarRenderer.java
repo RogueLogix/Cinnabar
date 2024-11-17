@@ -15,6 +15,9 @@ import static org.lwjgl.vulkan.VK10.vkDeviceWaitIdle;
 
 
 public class CinnabarRenderer {
+    // there can be multiple submits per frame, but there will always be at least one submit per frame
+    public static final int SUBMITS_IN_FLIGHT = 2;
+    
     static {
         LOGGER.info("Initializing Vulkan");
     }
@@ -55,7 +58,7 @@ public class CinnabarRenderer {
     
     public static final GPUMemoryAllocator GPUMemoryAllocator = new GPUMemoryAllocator(MagicNumbers.MiB * 256, MagicNumbers.KiB * 4);
     
-    public static final VulkanQueueHelper queueHelper = new VulkanQueueHelper(2, VK_CORE.graphicsQueue, VK_CORE.graphicsQueueFamily, VK_CORE.computeQueue, VK_CORE.comptueQueueFamily, VK_CORE.transferQueue, VK_CORE.transferQueueFamily);
+    public static final VulkanQueueHelper queueHelper = new VulkanQueueHelper(SUBMITS_IN_FLIGHT, VK_CORE.graphicsQueue, VK_CORE.graphicsQueueFamily, VK_CORE.computeQueue, VK_CORE.comptueQueueFamily, VK_CORE.transferQueue, VK_CORE.transferQueueFamily);
     
     public static void create() {
     }

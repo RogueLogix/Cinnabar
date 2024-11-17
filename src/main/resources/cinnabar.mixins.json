@@ -11,8 +11,10 @@
     "blaze3d.pipeline.TextureTargetMixin",
     "blaze3d.platform.NativeImageMixin",
     "blaze3d.platform.WindowMixin",
+    "blaze3d.vertex.VertexBufferMixin",
     "blaze3d.systems.RenderSystemMixin",
     "minecraft.gui.font.FontTextureMixin",
+    "minecraft.renderer.LevelRendererMixin",
     "minecraft.texture.AbstractTextureMixin",
     "minecraft.texture.DynamicTextureMixin",
     "minecraft.MinecraftMixin"

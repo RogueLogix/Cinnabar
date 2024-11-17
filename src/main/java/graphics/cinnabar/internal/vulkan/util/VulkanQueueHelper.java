@@ -14,17 +14,20 @@ import org.lwjgl.vulkan.*;
 
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicLong;
 
 import static graphics.cinnabar.internal.vulkan.exceptions.VkException.throwFromCode;
 import static org.lwjgl.vulkan.VK10.*;
-import static org.lwjgl.vulkan.VK12.VK_SEMAPHORE_TYPE_TIMELINE;
-import static org.lwjgl.vulkan.VK12.vkWaitSemaphores;
+import static org.lwjgl.vulkan.VK12.*;
 import static org.lwjgl.vulkan.VK13.vkCmdPipelineBarrier2;
 import static org.lwjgl.vulkan.VK13.vkQueueSubmit2;
 
 /**
  * Because async work may be on the same queue as main graphics/compute,
  * any signaling operations for async work must be enqueued before the respective wait operation on the main graphics queue
+ * <p>
+ * TODO: make thread safe
+ * TODO: submit locking, to allow recording on a different thread
  */
 @NonnullDefault
 public class VulkanQueueHelper implements Destroyable {
@@ -33,7 +36,6 @@ public class VulkanQueueHelper implements Destroyable {
     
     private final int submitsInFlight;
     private int currentSubmit = 0;
-    private int nextFrame = 0;
     
     private final GrowingMemoryStack stack = new GrowingMemoryStack();
     private final MemoryStack lwjglStack = MemoryStack.create();
@@ -69,7 +71,9 @@ public class VulkanQueueHelper implements Destroyable {
         private final VkCommandBufferBeginInfo beginInfo = VkCommandBufferBeginInfo.calloc();
         
         private final long implicitSyncSemaphore;
+        private final AtomicLong implicitSyncSemaphoreLastWaitValue = new AtomicLong(0);
         private long implicitSyncSemaphoreValue = 0;
+        private long implicitSyncSemaphoreMask = 0;
         private final long[] lastSubmitWaitValues = new long[3];
         
         private Builder(VkQueue queue, int queueFamily) {
@@ -104,13 +108,7 @@ public class VulkanQueueHelper implements Destroyable {
         
         private void reset() {
             assert queueState == QueueState.WAITING;
-            try (final var stack = lwjglStack.push()) {
-                final var waitInfo = VkSemaphoreWaitInfo.calloc(stack).sType$Default();
-                waitInfo.semaphoreCount(1);
-                waitInfo.pSemaphores(stack.longs(implicitSyncSemaphore));
-                waitInfo.pValues(stack.longs(lastSubmitWaitValues[currentSubmit]));
-                throwFromCode(vkWaitSemaphores(device, waitInfo, -1));
-            }
+            clientWaitImplicit(lastSubmitWaitValues[currentSubmit]);
             commandPools.get(currentSubmit).reset();
         }
         
@@ -177,6 +175,43 @@ public class VulkanQueueHelper implements Destroyable {
             queueState = newState;
         }
         
+        public boolean clientImplicitSignaled(long value) {
+            // TODO: maybe remove this, technically this is valid for other threads to do
+            if (value > implicitSyncSemaphoreValue) {
+                throw new IllegalStateException("Attempting to wait for future value");
+            }
+            try (final var stack = MemoryStack.stackPush()) {
+                final var valuePtr = stack.longs(0);
+                vkGetSemaphoreCounterValue(device, implicitSyncSemaphore, valuePtr);
+                return valuePtr.get(0) >= value;
+            }
+        }
+        
+        public void clientWaitImplicit(long value) {
+            // TODO: maybe remove this, technically this is valid for other threads to do
+            if (value > implicitSyncSemaphoreValue) {
+                throw new IllegalStateException("Attempting to wait for future value");
+            }
+            try (final var stack = MemoryStack.stackPush()) {
+                final var waitInfo = VkSemaphoreWaitInfo.calloc(stack).sType$Default();
+                final var semaphorePtr = stack.longs(implicitSyncSemaphore);
+                final var valuePtr = stack.longs(value);
+                waitInfo.semaphoreCount(1);
+                waitInfo.pSemaphores(semaphorePtr);
+                waitInfo.pValues(valuePtr);
+                vkWaitSemaphores(device, waitInfo, -1);
+                // client wait is explicitly allowed from multiple threads
+                var lastWaitValue = implicitSyncSemaphoreLastWaitValue.get();
+                while (lastWaitValue < value) {
+                    lastWaitValue = implicitSyncSemaphoreLastWaitValue.compareAndExchange(lastWaitValue, value);
+                }
+            }
+        }
+        
+        public void waitImplicit(long value, long stageMask) {
+            waitSemaphore(implicitSyncSemaphore, value, stageMask);
+        }
+        
         private void waitSemaphore(long semaphore, long value, long stageMask) {
             switchToState(QueueState.WAITING);
             submitSemaphores.add(semaphore);
@@ -209,9 +244,16 @@ public class VulkanQueueHelper implements Destroyable {
             currentCommandBuffer = null;
         }
         
+        public long nextSignalImplicit(long stageMask) {
+            // appends the stage mask to the next implicit signal
+            implicitSyncSemaphoreMask |= stageMask;
+            return implicitSyncSemaphore + 1;
+        }
+        
         private long signalImplicit(long stageMask) {
             implicitSyncSemaphoreValue++;
-            signalSemaphore(implicitSyncSemaphore, implicitSyncSemaphoreValue, stageMask);
+            signalSemaphore(implicitSyncSemaphore, implicitSyncSemaphoreValue, stageMask | implicitSyncSemaphoreMask);
+            implicitSyncSemaphoreMask = 0;
             return implicitSyncSemaphore;
         }
         
@@ -225,8 +267,8 @@ public class VulkanQueueHelper implements Destroyable {
     
     private final Builder[] queueBuilders = new Builder[3];
     
-    public VulkanQueueHelper(int framesInFlight, VkQueue graphicsQueue, int graphicsQueueFamily, @Nullable VkQueue computeQueue, int computeQueueFamily, @Nullable VkQueue transferQueue, int transferQueueFamily) {
-        this.submitsInFlight = framesInFlight;
+    public VulkanQueueHelper(int submitsInFlight, VkQueue graphicsQueue, int graphicsQueueFamily, @Nullable VkQueue computeQueue, int computeQueueFamily, @Nullable VkQueue transferQueue, int transferQueueFamily) {
+        this.submitsInFlight = submitsInFlight;
         queueBuilders[0] = new Builder(graphicsQueue, graphicsQueueFamily);
         if (computeQueue != null && computeQueue != graphicsQueue) {
             queueBuilders[1] = new Builder(computeQueue, computeQueueFamily);
@@ -282,6 +324,38 @@ public class VulkanQueueHelper implements Destroyable {
         }
     }
     
+    public boolean clientImplicitSignaled(QueueType queueType, long value) {
+        if (value == 0) {
+            return true;
+        }
+        return queueBuilders[queueType.ordinal()].clientImplicitSignaled(value);
+    }
+    
+    public void clientWaitImplicit(QueueType queueType, long value) {
+        if (value == 0) {
+            return;
+        }
+        queueBuilders[queueType.ordinal()].clientWaitImplicit(value);
+    }
+    
+    public void clientSubmitAndWaitImplicit(QueueType queueType, long value) {
+        if (value == 0) {
+            return;
+        }
+        final var builder = queueBuilders[queueType.ordinal()];
+        // if already signaled, early out
+        // only guaranteed that everything needed to get to that value will be submitted
+        if (builder.clientImplicitSignaled(value)) {
+            return;
+        }
+        submit();
+        builder.clientWaitImplicit(value);
+    }
+    
+    public void waitImplicit(QueueType queueType, long value, long stageMask) {
+        queueBuilders[queueType.ordinal()].waitImplicit(value, stageMask);
+    }
+    
     public void waitSemaphore(QueueType queueType, long semaphore, long value, long stageMask) {
         queueBuilders[queueType.ordinal()].waitSemaphore(semaphore, value, stageMask);
     }
@@ -296,6 +370,23 @@ public class VulkanQueueHelper implements Destroyable {
     
     private void finishActiveCommandBuffer(QueueType queueType) {
         queueBuilders[queueType.ordinal()].finishActiveBuffer();
+    }
+    
+    /**
+     * Inserts a signal with this value in the command stream sometime between now and when the next submit happens
+     * useful for CPU side fencing on buffer usage finished, ie: end of frame fencing
+     * IMPL DETAIL: this will be done when the next submit is created for the given queue type, or the next implicit signal happens, this is guaranteed to happen before submit returns
+     *
+     * @param queueType: queue to signal from
+     * @param stageMask: stage mask for this signal
+     * @return timeline value to wait for this signal
+     */
+    public long nextSignalImplicit(QueueType queueType, long stageMask) {
+        return queueBuilders[queueType.ordinal()].nextSignalImplicit(stageMask);
+    }
+    
+    public long signalImplicit(QueueType queueType, long stageMask) {
+        return queueBuilders[queueType.ordinal()].signalImplicit(stageMask);
     }
     
     public void signalSemaphore(QueueType queueType, long semaphore, long value, long stageMask) {
