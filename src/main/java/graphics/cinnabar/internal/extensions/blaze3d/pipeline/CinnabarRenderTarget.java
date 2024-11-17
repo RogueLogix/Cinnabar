@@ -47,6 +47,8 @@ public class CinnabarRenderTarget extends RenderTarget {
     @Override
     public void createBuffers(int width, int height, boolean clearError) {
         RenderSystem.assertOnRenderThreadOrInit();
+        this.width = width;
+        this.height = height;
         assert colorImageHandle == 0;
         assert colorImageViewHandle == 0;
         assert colorImageAllocation == null;
