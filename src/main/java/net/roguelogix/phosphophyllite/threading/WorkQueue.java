@@ -1,5 +1,6 @@
 package net.roguelogix.phosphophyllite.threading;
 
+import graphics.cinnabar.internal.util.threading.ResizingRingBuffer;
 import net.minecraft.CrashReport;
 import net.minecraft.client.Minecraft;
 import net.roguelogix.phosphophyllite.util.NonnullDefault;
@@ -17,7 +18,7 @@ import java.util.function.IntConsumer;
 @NonnullDefault
 @ThreadSafety.ItDepends
 public class WorkQueue {
-    private final RingBuffer<Object> queue;
+    private final ResizingRingBuffer<Object> queue;
     
     private final ArrayList<DequeueThread> dequeueThreads = new ArrayList<>();
     
@@ -49,15 +50,15 @@ public class WorkQueue {
         // triggers the classloading here instead of the finalizer
         //noinspection RedundantOperationOnEmptyContainer
         dequeueThreads.forEach(DequeueThread::finish);
-        queue = RingBuffer.create(Object.class, !singleProducer, !singleConsumer);
+        queue = new ResizingRingBuffer<>(0);
     }
     
     private class DequeueThread implements Runnable {
-        private final WeakReference<RingBuffer<Object>> queue;
+        private final WeakReference<ResizingRingBuffer<Object>> queue;
         private final AtomicBoolean stop = new AtomicBoolean(false);
         private final int threadID;
         
-        public DequeueThread(RingBuffer<Object> queue, @Nullable String name, int threadID) {
+        public DequeueThread(ResizingRingBuffer<Object> queue, @Nullable String name, int threadID) {
             this.queue = new WeakReference<>(queue);
             this.threadID = threadID;
             final var thread = new Thread(this);
@@ -140,7 +141,7 @@ public class WorkQueue {
         private final Event waitEvent = new Event();
         private final Object work;
         
-        WorkItem(final RingBuffer<Object> queue, final Object work, final Event[] waitEvents) {
+        WorkItem(final ResizingRingBuffer<Object> queue, final Object work, final Event[] waitEvents) {
             this.work = work;
             if (waitEvents.length == 0) {
                 queue.put(work);

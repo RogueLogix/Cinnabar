@@ -26,7 +26,7 @@ public @interface ThreadSafety {
     
     // functions annotated with this can not only be called by any thread, and multiple at the same time
     // see usage for argument requirements when doing so, simultaneous calls with identical arguments may not be allowed
-    // lock group specifies that while this function may be called multiple times at the same time, it may *not* be called at the same time as any other function in the specified group
+    // lock group specifies that while this function may be called multiple times at the same time, it may *not* be called at the same time as any other non-many function in the specified group
     // default of -1 specifies no such requirement
     @interface Many {
         String lockGroups() default "";
