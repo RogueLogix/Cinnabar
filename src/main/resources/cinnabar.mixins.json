@@ -22,6 +22,7 @@
     "minecraft.texture.AbstractTextureMixin",
     "minecraft.texture.DynamicTextureMixin",
     "minecraft.texture.SimpleTextureMixin",
+    "minecraft.texture.TextureAtlasMixin",
     "minecraft.MinecraftMixin"
   ],
   "injectors": {
