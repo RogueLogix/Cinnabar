@@ -299,6 +299,9 @@ public class VulkanQueueHelper implements Destroyable {
     }
     
     public void submit(boolean wait) {
+        if(Thread.currentThread().threadId() != 1){
+            throw new IllegalStateException();
+        }
         queueBuilders[0].finishActiveBuffer();
         queueBuilders[0].submit();
         if (queueBuilders[0] != queueBuilders[1]) {

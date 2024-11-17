@@ -75,8 +75,8 @@ public class NativeImageMixin {
         // have to wait idle though, in case this is actively being used in an upload
         // native images are rarely destroyed though
         if (cpuMemoryVkBuffer != null) {
-            CinnabarRenderer.waitIdle(); // TODO: fence the last frame this was used in an upload instead
-            cpuMemoryVkBuffer.destroy();
+            // this can be called from another thread, so, just add it to the destroy queue
+            CinnabarRenderer.queueDestroyEndOfGPUSubmit(cpuMemoryVkBuffer);
         }
         cpuMemoryVkBuffer = null;
     }

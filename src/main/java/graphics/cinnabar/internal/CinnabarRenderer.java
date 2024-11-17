@@ -2,6 +2,8 @@ package graphics.cinnabar.internal;
 
 import graphics.cinnabar.api.threading.Queues;
 import graphics.cinnabar.internal.memory.MagicNumbers;
+import graphics.cinnabar.internal.util.threading.ResizingRingBuffer;
+import graphics.cinnabar.internal.vulkan.Destroyable;
 import graphics.cinnabar.internal.vulkan.VulkanCore;
 import graphics.cinnabar.internal.vulkan.memory.GPUMemoryAllocator;
 import graphics.cinnabar.internal.vulkan.util.VulkanQueueHelper;
@@ -18,9 +20,12 @@ public class CinnabarRenderer {
     // there can be multiple submits per frame, but there will always be at least one submit per frame
     public static final int SUBMITS_IN_FLIGHT = 2;
     
+    private static final ResizingRingBuffer<Destroyable> destroyQueue = new ResizingRingBuffer<>(0);
+    
     static {
         LOGGER.info("Initializing Vulkan");
     }
+    
     // MUST be created first, the other constructors will pull device statically, assuming it exists
     private static final VulkanCore VK_CORE = new VulkanCore();
     
@@ -39,8 +44,6 @@ public class CinnabarRenderer {
     public static void waitIdle() {
         // will early out if there is nothing to submit
         queueHelper.submit(true);
-        // technically, everything is done already, but wait anyway
-        vkDeviceWaitIdle(device());
     }
     
     public static VkPhysicalDeviceLimits limits() {
@@ -68,5 +71,10 @@ public class CinnabarRenderer {
         GPUMemoryAllocator.destroy();
         VK_CORE.destroy();
         Queues.backgroundThreads.destroy();
+    }
+    
+    public static void queueDestroyEndOfGPUSubmit(Destroyable destroyable) {
+        // TODO: destroy these correctly
+        destroyQueue.put(destroyable);
     }
 }

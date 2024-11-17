@@ -1,5 +1,6 @@
 package graphics.cinnabar.api.threading;
 
+import graphics.cinnabar.internal.util.threading.ResizingRingBuffer;
 import net.roguelogix.phosphophyllite.util.API;
 
 @API

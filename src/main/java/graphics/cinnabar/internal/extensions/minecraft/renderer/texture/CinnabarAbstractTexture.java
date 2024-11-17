@@ -40,6 +40,7 @@ public abstract class CinnabarAbstractTexture extends AbstractTexture {
     @Nullable
     private VulkanMemoryAllocation memoryAllocation;
     
+    private int width, height;
     private int mipLevels = -1;
     
     private VkBufferImageCopy.Buffer vkBufferImageCopy = VkBufferImageCopy.calloc(1);
@@ -64,7 +65,10 @@ public abstract class CinnabarAbstractTexture extends AbstractTexture {
         
         imageFormat = vkFormat;
         mipLevels = maxMipLevel + 1;
+        this.width = width;
+        this.height = height;
         
+        bind();
         try (final var stack = MemoryStack.stackPush()) {
             final var imageCreateInfo = VkImageCreateInfo.calloc(stack).sType$Default();
             imageCreateInfo.imageType(VK_IMAGE_TYPE_2D);

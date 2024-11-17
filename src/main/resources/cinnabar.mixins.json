@@ -20,6 +20,7 @@
     "minecraft.renderer.UniformMixin",
     "minecraft.texture.AbstractTextureMixin",
     "minecraft.texture.DynamicTextureMixin",
+    "minecraft.texture.SimpleTextureMixin",
     "minecraft.MinecraftMixin"
   ],
   "injectors": {
