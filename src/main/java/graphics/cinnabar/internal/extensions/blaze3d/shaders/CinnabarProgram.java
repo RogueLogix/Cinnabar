@@ -71,11 +71,16 @@ public class CinnabarProgram extends Program {
             preProcessedShaderSource.append(processedShaderSource);
             preProcessedShaderSource.append("\n");
         }
-        final var versionRemovedPreprocessedSource = preProcessedShaderSource.toString().replace("#", "//#");
+        final var versionRemovedPreprocessedSource = preProcessedShaderSource.toString().replace("#version", "//#version");
         
-        
-        GLSLLexer lexer = new GLSLLexer(CharStreams.fromReader(new CppReader(new Preprocessor(new StringLexerSource(versionRemovedPreprocessedSource)))));
-        GLSLParser parser = new GLSLParser(new CommonTokenStream(lexer));
+        GLSLParser parser;
+        try {
+            //#define BULLSHIT_TO_MAKE_ANTARES_HAPPY
+            GLSLLexer lexer = new GLSLLexer(CharStreams.fromReader(new CppReader(new Preprocessor(new StringLexerSource(versionRemovedPreprocessedSource, true)))));
+            parser = new GLSLParser(new CommonTokenStream(lexer));
+        } catch (Exception e){
+            throw e;
+        }
         
         parser.setBuildParseTree(true);
         var translationUnit = parser.translation_unit();
@@ -94,28 +99,27 @@ public class CinnabarProgram extends Program {
                 transformer.injectVariable(elementDeclaration);
             }
         } else {
-            final var inputs = Arrays.stream(versionRemovedPreprocessedSource.split("\n")).filter(a -> a.startsWith("in")).toList();
+            final var inputs = Arrays.stream(versionRemovedPreprocessedSource.split("\n")).filter(a -> a.startsWith("flat in") || a.startsWith("in")).toList();
             for (int i = 0; i < inputs.size(); i++) {
                 final var inputLine = inputs.get(i);
                 final var nameStartIndex = inputLine.lastIndexOf(' ');
                 final var variableName = inputLine.substring(nameStartIndex + 1, inputLine.length() - 1);
                 transformer.removeVariable(variableName);
                 final var variableType = inputLine.substring(inputLine.lastIndexOf(' ', nameStartIndex - 1) + 1, nameStartIndex);
-                final var elementDeclarationFormat = "layout (location = %d) in %s %s;";
-                final var elementDeclaration = String.format(elementDeclarationFormat, i, variableType, variableName);
+                final var elementDeclarationFormat = "layout (location = %d) %s";
+                final var elementDeclaration = String.format(elementDeclarationFormat, i, inputLine);
                 transformer.injectVariable(elementDeclaration);
             }
         }
         
-        final var inputs = Arrays.stream(versionRemovedPreprocessedSource.split("\n")).filter(a -> a.startsWith("out")).toList();
+        final var inputs = Arrays.stream(versionRemovedPreprocessedSource.split("\n")).filter(a -> a.startsWith("flat out") || a.startsWith("out")).toList();
         for (int i = 0; i < inputs.size(); i++) {
             final var inputLine = inputs.get(i);
             final var nameStartIndex = inputLine.lastIndexOf(' ');
             final var variableName = inputLine.substring(nameStartIndex + 1, inputLine.length() - 1);
             transformer.removeVariable(variableName);
-            final var variableType = inputLine.substring(inputLine.lastIndexOf(' ', nameStartIndex - 1) + 1, nameStartIndex);
-            final var elementDeclarationFormat = "layout (location = %d) out %s %s;";
-            final var elementDeclaration = String.format(elementDeclarationFormat, i, variableType, variableName);
+            final var elementDeclarationFormat = "layout (location = %d) %s";
+            final var elementDeclaration = String.format(elementDeclarationFormat, i, inputLine);
             transformer.injectVariable(elementDeclaration);
         }
         
@@ -162,11 +166,13 @@ public class CinnabarProgram extends Program {
             samplerIndex++;
         }
         
+        transformer.replaceExpression("gl_VertexID", "gl_VertexIndex");
+        
         
         final var builder = new StringBuilder();
         builder.append("#version 460\n");
         getFormattedShader(translationUnit, builder);
-        final var postTransformShaderSource = builder.toString();
+        final var postTransformShaderSource = builder.toString().replace("\nuniform sampler2D", "\n//uniform sampler2D");
         
         final var compileResult = shaderc_compile_into_spv(SHADERC_COMPILER, postTransformShaderSource, type == Type.VERTEX ? shaderc_vertex_shader : shaderc_fragment_shader, name, "main", SHADERC_COMPILER_OPTIONS);
         final var compileStatus = shaderc_result_get_compilation_status(compileResult);
