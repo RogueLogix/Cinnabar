@@ -6,6 +6,7 @@ import graphics.cinnabar.internal.exceptions.NotImplemented;
 import graphics.cinnabar.internal.vulkan.memory.CPUMemoryVkBuffer;
 import graphics.cinnabar.internal.vulkan.memory.VulkanMemoryAllocation;
 import graphics.cinnabar.internal.vulkan.util.VulkanQueueHelper;
+import graphics.cinnabar.internal.vulkan.util.VulkanSampler;
 import net.minecraft.client.renderer.texture.AbstractTexture;
 import net.roguelogix.phosphophyllite.util.NonnullDefault;
 import org.jetbrains.annotations.Nullable;
@@ -20,12 +21,21 @@ import static org.lwjgl.vulkan.VK10.*;
 
 @NonnullDefault
 public abstract class CinnabarAbstractTexture extends AbstractTexture {
-    
     private static int activeBindPoint = 0;
+    
     private static CinnabarAbstractTexture[] currentBound = new CinnabarAbstractTexture[12];
+    
+    
+    public static int activeBindPoint() {
+        return activeBindPoint;
+    }
     
     public static void active(int id) {
         activeBindPoint = id;
+    }
+    
+    public static void bind(AbstractTexture texture, int index) {
+        currentBound[index] = (CinnabarAbstractTexture) texture;
     }
     
     @Nullable
@@ -33,14 +43,20 @@ public abstract class CinnabarAbstractTexture extends AbstractTexture {
         return currentBound[activeBindPoint];
     }
     
-    private final VkDevice device = CinnabarRenderer.device();
+    @Nullable
+    public static CinnabarAbstractTexture bound(int index) {
+        return currentBound[index];
+    }
     
+    private final VkDevice device = CinnabarRenderer.device();
     private long imageHandle;
+    private long imageViewHandle;
     private int imageFormat;
+    
     @Nullable
     private VulkanMemoryAllocation memoryAllocation;
-    
     private int width, height;
+    
     private int mipLevels = -1;
     
     private VkBufferImageCopy.Buffer vkBufferImageCopy = VkBufferImageCopy.calloc(1);
@@ -93,6 +109,25 @@ public abstract class CinnabarAbstractTexture extends AbstractTexture {
             memoryAllocation = CinnabarRenderer.GPUMemoryAllocator.alloc(memoryRequirements);
             vkBindImageMemory(device, imageHandle, memoryAllocation.memoryHandle(), memoryAllocation.range().offset());
         }
+        
+        try (final var stack = MemoryStack.stackPush()) {
+            final var imageViewCreateInfo = VkImageViewCreateInfo.calloc(stack).sType$Default();
+            imageViewCreateInfo.image(imageHandle);
+            imageViewCreateInfo.viewType(VK_IMAGE_VIEW_TYPE_2D);
+            imageViewCreateInfo.format(imageFormat);
+            imageViewCreateInfo.components().set(VK_COMPONENT_SWIZZLE_R, VK_COMPONENT_SWIZZLE_G, VK_COMPONENT_SWIZZLE_B, VK_COMPONENT_SWIZZLE_A);
+            final var subresourceRange = imageViewCreateInfo.subresourceRange();
+            subresourceRange.aspectMask(VK_IMAGE_ASPECT_COLOR_BIT);
+            subresourceRange.baseMipLevel(0);
+            subresourceRange.levelCount(mipLevels);
+            subresourceRange.baseArrayLayer(0);
+            subresourceRange.layerCount(1);
+            
+            final var longPtr = stack.callocLong(1);
+            
+            vkCreateImageView(device, imageViewCreateInfo, null, longPtr);
+            imageViewHandle = longPtr.get(0);
+        }
         // no need to do a transition yet, upload will take care of that
     }
     
@@ -104,6 +139,14 @@ public abstract class CinnabarAbstractTexture extends AbstractTexture {
             CinnabarRenderer.GPUMemoryAllocator.free(memoryAllocation);
         }
         vkBufferImageCopy.free();
+    }
+    
+    public long handle() {
+        return imageHandle;
+    }
+    
+    public long viewHandle() {
+        return imageViewHandle;
     }
     
     public void recordUpload(NativeImage nativeImage, CPUMemoryVkBuffer cpuMemoryVkBuffer, int level, int xOffset, int yOffset, int unpackSkipPixels, int unpackSkipRows, int width, int height, boolean blur, boolean clamp, boolean mipmap) {

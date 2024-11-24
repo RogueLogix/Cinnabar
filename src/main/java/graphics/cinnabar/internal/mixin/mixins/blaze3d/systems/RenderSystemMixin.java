@@ -2,17 +2,24 @@ package graphics.cinnabar.internal.mixin.mixins.blaze3d.systems;
 
 import com.mojang.blaze3d.platform.GlStateManager;
 import com.mojang.blaze3d.systems.RenderSystem;
+import graphics.cinnabar.internal.exceptions.NotImplemented;
 import graphics.cinnabar.internal.extensions.minecraft.renderer.texture.CinnabarAbstractTexture;
 import graphics.cinnabar.internal.mixin.helpers.blaze3d.systems.RenderSystemMixinHelper;
 import graphics.cinnabar.internal.statemachine.CinnabarBlendState;
 import graphics.cinnabar.internal.statemachine.CinnabarFramebufferState;
 import graphics.cinnabar.internal.statemachine.CinnabarGeneralState;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.renderer.texture.AbstractTexture;
+import net.minecraft.client.renderer.texture.TextureManager;
+import net.minecraft.resources.ResourceLocation;
 import org.joml.Matrix4f;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Overwrite;
 import org.spongepowered.asm.mixin.Shadow;
 
+import static org.lwjgl.opengl.GL11C.*;
 import static org.lwjgl.opengl.GL13C.GL_TEXTURE0;
+import static org.lwjgl.vulkan.VK10.*;
 
 @Mixin(RenderSystem.class)
 public class RenderSystemMixin {
@@ -52,6 +59,20 @@ public class RenderSystemMixin {
     @Overwrite
     public static void activeTexture(int texture) {
         CinnabarAbstractTexture.active(texture - GL_TEXTURE0);
+    }
+    
+    @Overwrite
+    public static void _setShaderTexture(int shaderTexture, ResourceLocation textureId) {
+        if (shaderTexture >= 0 && shaderTexture < 12) {
+            TextureManager texturemanager = Minecraft.getInstance().getTextureManager();
+            AbstractTexture abstracttexture = texturemanager.getTexture(textureId);
+            CinnabarAbstractTexture.bind(abstracttexture, shaderTexture);
+        }
+    }
+    
+    @Overwrite
+    public static void bindTexture(int texture) {
+        throw new NotImplemented();
     }
     
     @Overwrite
@@ -109,6 +130,35 @@ public class RenderSystemMixin {
     @Overwrite
     public static void blendFuncSeparate(int srcFactor, int dstFactor, int srcAlpha, int dstAlpha) {
         CinnabarBlendState.setBlendFactors(srcFactor, dstFactor, srcAlpha, dstAlpha);
+    }
+    
+    @Overwrite
+    public static void disableDepthTest() {
+        CinnabarGeneralState.depthTest = false;
+    }
+    
+    @Overwrite
+    public static void enableDepthTest() {
+        CinnabarGeneralState.depthTest = true;
+    }
+    
+    private static int depthFuncRemapper(int glFunc) {
+        return switch (glFunc){
+            case GL_NEVER -> VK_COMPARE_OP_NEVER;
+            case GL_LESS -> VK_COMPARE_OP_LESS;
+            case GL_EQUAL -> VK_COMPARE_OP_EQUAL;
+            case GL_LEQUAL -> VK_COMPARE_OP_LESS_OR_EQUAL;
+            case GL_GREATER -> VK_COMPARE_OP_GREATER;
+            case GL_NOTEQUAL -> VK_COMPARE_OP_NOT_EQUAL;
+            case GL_GEQUAL -> VK_COMPARE_OP_GREATER_OR_EQUAL;
+            case GL_ALWAYS -> VK_COMPARE_OP_ALWAYS;
+            default -> throw new IllegalStateException("Unexpected value: " + glFunc);
+        };
+    }
+    
+    @Overwrite
+    public static void depthFunc(int depthFunc) {
+        CinnabarGeneralState.depthFunc = depthFuncRemapper(depthFunc);
     }
     
 }

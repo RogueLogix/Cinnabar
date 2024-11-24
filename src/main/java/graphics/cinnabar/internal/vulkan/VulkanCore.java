@@ -18,6 +18,8 @@ import static graphics.cinnabar.internal.vulkan.exceptions.VkException.throwFrom
 import static org.lwjgl.glfw.GLFWVulkan.glfwGetPhysicalDevicePresentationSupport;
 import static org.lwjgl.glfw.GLFWVulkan.glfwGetRequiredInstanceExtensions;
 import static org.lwjgl.vulkan.EXTDebugUtils.*;
+import static org.lwjgl.vulkan.EXTExtendedDynamicState2.VK_EXT_EXTENDED_DYNAMIC_STATE_2_EXTENSION_NAME;
+import static org.lwjgl.vulkan.EXTExtendedDynamicState3.VK_EXT_EXTENDED_DYNAMIC_STATE_3_EXTENSION_NAME;
 import static org.lwjgl.vulkan.EXTExternalMemoryHost.VK_EXTERNAL_MEMORY_HANDLE_TYPE_HOST_ALLOCATION_BIT_EXT;
 import static org.lwjgl.vulkan.EXTExternalMemoryHost.VK_EXT_EXTERNAL_MEMORY_HOST_EXTENSION_NAME;
 import static org.lwjgl.vulkan.KHRSwapchain.VK_KHR_SWAPCHAIN_EXTENSION_NAME;
@@ -27,7 +29,14 @@ import static org.lwjgl.vulkan.VK13.VK_API_VERSION_1_3;
 
 @NonnullDefault
 public class VulkanCore implements Destroyable {
-    private static final List<String> requiredDeviceExtensions = List.of(VK_KHR_SWAPCHAIN_EXTENSION_NAME, VK_EXT_EXTERNAL_MEMORY_HOST_EXTENSION_NAME);
+    private static final List<String> requiredDeviceExtensions = List.of(
+            VK_KHR_SWAPCHAIN_EXTENSION_NAME,
+            VK_EXT_EXTERNAL_MEMORY_HOST_EXTENSION_NAME,
+            // extended dynamic state is part of VK 1.3
+            // state_2 still has logic op being dynamic
+            VK_EXT_EXTENDED_DYNAMIC_STATE_2_EXTENSION_NAME,
+            VK_EXT_EXTENDED_DYNAMIC_STATE_3_EXTENSION_NAME
+    );
     
     public final VkInstance vkInstance;
     private final long debugCallback;
@@ -377,6 +386,8 @@ public class VulkanCore implements Destroyable {
             final var physicalDeviceFeatures11 = VkPhysicalDeviceVulkan11Features.calloc(stack).sType$Default();
             final var physicalDeviceFeatures12 = VkPhysicalDeviceVulkan12Features.calloc(stack).sType$Default();
             final var physicalDeviceFeatures13 = VkPhysicalDeviceVulkan13Features.calloc(stack).sType$Default();
+            final var extendedDynamicState2Features = VkPhysicalDeviceExtendedDynamicState2FeaturesEXT.calloc(stack).sType$Default();
+            final var extendedDynamicState3Features = VkPhysicalDeviceExtendedDynamicState3FeaturesEXT.calloc(stack).sType$Default();
             
             physicalDeviceFeatures10.drawIndirectFirstInstance(true);
             physicalDeviceFeatures10.fillModeNonSolid(true);
@@ -429,6 +440,13 @@ public class VulkanCore implements Destroyable {
             physicalDeviceFeatures13.subgroupSizeControl(true);
             physicalDeviceFeatures13.synchronization2(true);
             
+            extendedDynamicState2Features.extendedDynamicState2LogicOp(true);
+            
+            extendedDynamicState3Features.extendedDynamicState3LogicOpEnable(true);
+            extendedDynamicState3Features.extendedDynamicState3ColorBlendEnable(true);
+            extendedDynamicState3Features.extendedDynamicState3ColorBlendEquation(true);
+            extendedDynamicState3Features.extendedDynamicState3ColorWriteMask(true);
+            
             
             final var deviceCreateInfo = VkDeviceCreateInfo.calloc(stack).sType$Default();
             deviceCreateInfo.pQueueCreateInfos(queueCreateInfos);
@@ -437,6 +455,8 @@ public class VulkanCore implements Destroyable {
             deviceCreateInfo.pNext(physicalDeviceFeatures11);
             deviceCreateInfo.pNext(physicalDeviceFeatures12);
             deviceCreateInfo.pNext(physicalDeviceFeatures13);
+            deviceCreateInfo.pNext(extendedDynamicState2Features);
+            deviceCreateInfo.pNext(extendedDynamicState3Features);
             
             var extensions = stack.mallocPointer(requiredDeviceExtensions.size());
             for (int i = 0; i < requiredDeviceExtensions.size(); i++) {

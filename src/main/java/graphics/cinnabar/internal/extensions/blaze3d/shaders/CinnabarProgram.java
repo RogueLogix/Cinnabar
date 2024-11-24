@@ -119,28 +119,10 @@ public class CinnabarProgram extends Program {
             transformer.injectVariable(elementDeclaration);
         }
         
-        final var samplers = jsonObject.getAsJsonArray("samplers");
-        int samplerIndex = 0;
-        for (JsonElement sampler : samplers) {
-            if (!(sampler instanceof JsonObject samplerJsonObject)) {
-                continue;
-            }
-            final var samplerName = samplerJsonObject.getAsJsonPrimitive("name").getAsString();
-            if (!transformer.hasVariable(samplerName)) {
-                samplerIndex++;
-                continue;
-            }
-            transformer.removeVariable(samplerName);
-            final var elementDeclarationFormat = "layout (set = 0, binding = %d) uniform sampler2D %s;";
-            final var elementDeclaration = String.format(elementDeclarationFormat, samplerIndex, samplerName);
-            transformer.injectVariable(elementDeclaration);
-            samplerIndex++;
-        }
-        
         final var uniforms = jsonObject.getAsJsonArray("uniforms");
         if (!uniforms.isEmpty()) {
             final var UBOBuilder = new StringBuilder();
-            UBOBuilder.append("layout (set = 0, binding = 0) uniform UBO {\n");
+            UBOBuilder.append("layout (set = 0, binding = 0, std140) uniform UBO {\n");
             for (JsonElement uniform : uniforms) {
                 if (!(uniform instanceof JsonObject uniformJsonObject)) {
                     continue;
@@ -160,6 +142,24 @@ public class CinnabarProgram extends Program {
             }
             UBOBuilder.append("}; \n");
             transformer.injectVariable(UBOBuilder.toString());
+        }
+        
+        final var samplers = jsonObject.getAsJsonArray("samplers");
+        int samplerIndex = 0;
+        for (JsonElement sampler : samplers) {
+            if (!(sampler instanceof JsonObject samplerJsonObject)) {
+                continue;
+            }
+            final var samplerName = samplerJsonObject.getAsJsonPrimitive("name").getAsString();
+            if (!transformer.hasVariable(samplerName)) {
+                samplerIndex++;
+                continue;
+            }
+            transformer.removeVariable(samplerName);
+            final var elementDeclarationFormat = "layout (set = %d, binding = %d) uniform sampler2D %s;";
+            final var elementDeclaration = String.format(elementDeclarationFormat, uniforms.isEmpty() ? 0 : 1, samplerIndex, samplerName);
+            transformer.injectVariable(elementDeclaration);
+            samplerIndex++;
         }
         
         

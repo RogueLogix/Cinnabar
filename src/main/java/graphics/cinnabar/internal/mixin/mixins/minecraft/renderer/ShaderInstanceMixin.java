@@ -4,8 +4,10 @@ import com.google.gson.JsonObject;
 import com.mojang.blaze3d.preprocessor.GlslPreprocessor;
 import com.mojang.blaze3d.shaders.Program;
 import com.mojang.blaze3d.shaders.Shader;
+import com.mojang.blaze3d.shaders.Uniform;
 import com.mojang.blaze3d.vertex.VertexFormat;
 import graphics.cinnabar.internal.extensions.blaze3d.shaders.CinnabarProgram;
+import graphics.cinnabar.internal.extensions.blaze3d.shaders.CinnabarUniform;
 import graphics.cinnabar.internal.extensions.minecraft.renderer.CinnabarShaderInstance;
 import net.minecraft.client.renderer.ShaderInstance;
 import net.minecraft.resources.ResourceLocation;
@@ -56,7 +58,7 @@ public class ShaderInstanceMixin {
     )
     private static Program compileShader(Program.Type type, String name, InputStream shaderData, String sourceName, GlslPreprocessor preprocessor) throws IOException {
         assert lastShaderInstance != null;
-        return CinnabarProgram.compileShader(Objects.requireNonNull(((ShaderInstanceMixin) lastShaderInstance).jsonObject), ((ShaderInstance) lastShaderInstance).vertexFormat, type, name, shaderData, sourceName, preprocessor);
+        return CinnabarProgram.compileShader(Objects.requireNonNull(((ShaderInstanceMixin) lastShaderInstance).jsonObject), ((ShaderInstance) lastShaderInstance).getVertexFormat(), type, name, shaderData, sourceName, preprocessor);
     }
     
     @Redirect(method = "<init>(Lnet/minecraft/server/packs/resources/ResourceProvider;Lnet/minecraft/resources/ResourceLocation;Lcom/mojang/blaze3d/vertex/VertexFormat;)V", at = @At(value = "INVOKE", target = "Lcom/mojang/blaze3d/shaders/ProgramManager;createProgram()I"))
@@ -67,5 +69,10 @@ public class ShaderInstanceMixin {
     @Redirect(method = "<init>(Lnet/minecraft/server/packs/resources/ResourceProvider;Lnet/minecraft/resources/ResourceLocation;Lcom/mojang/blaze3d/vertex/VertexFormat;)V", at = @At(value = "INVOKE", target = "Lcom/mojang/blaze3d/shaders/ProgramManager;linkShader(Lcom/mojang/blaze3d/shaders/Shader;)V"))
     private void linkShader(Shader shader) {
     
+    }
+    
+    @Redirect(method = "parseUniformNode(Lcom/google/gson/JsonElement;)V", at = @At(value = "NEW", target = "(Ljava/lang/String;IILcom/mojang/blaze3d/shaders/Shader;)Lcom/mojang/blaze3d/shaders/Uniform;"))
+    private static Uniform createUniform(String name, int type, int count, Shader parent) {
+        return new CinnabarUniform(name, type, count, parent);
     }
 }

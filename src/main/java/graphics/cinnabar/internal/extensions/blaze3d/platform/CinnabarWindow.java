@@ -6,6 +6,7 @@ import com.mojang.blaze3d.platform.Window;
 import com.mojang.blaze3d.platform.WindowEventHandler;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.Tesselator;
+import graphics.cinnabar.Cinnabar;
 import graphics.cinnabar.internal.CinnabarRenderer;
 import graphics.cinnabar.internal.vulkan.MagicNumbers;
 import graphics.cinnabar.internal.vulkan.util.VulkanQueueHelper;
@@ -58,9 +59,7 @@ public class CinnabarWindow extends Window {
             vkCreateFence(device, VkFenceCreateInfo.calloc(stack).sType$Default(), null, longPtr);
             frameAcquisitionFence = longPtr.get(0);
             
-            final var intPtr = stack.callocInt(1);
-            vkAcquireNextImageKHR(device, swapchain, Long.MAX_VALUE, VK_NULL_HANDLE, frameAcquisitionFence, intPtr);
-            currentSwapchainFrame = intPtr.get(0);
+            present();
         }
         
         imageSubresourceRange.aspectMask(VK_IMAGE_ASPECT_COLOR_BIT);
@@ -107,7 +106,10 @@ public class CinnabarWindow extends Window {
     }
     
     private void recreateSwapchain() {
+        throwFromCode(vkWaitForFences(device, frameAcquisitionFence, true, Long.MAX_VALUE));
         createSwapchain(getWidth(), getHeight());
+        // re-acquire a swapchain image
+        present();
     }
     
     private void createSwapchain(int width, int height) {
@@ -191,6 +193,7 @@ public class CinnabarWindow extends Window {
                 swapchainImages.add(swapchainImagesPtr.get(i));
             }
         }
+        currentSwapchainFrame = -1;
     }
     
     @Override
@@ -212,29 +215,54 @@ public class CinnabarWindow extends Window {
     }
     
     public void present() {
+        
+        // TODO: binary semaphore for the present system
         try (final var stack = MemoryStack.stackPush()) {
+            
+            // present frame, if one is acquired
+            if(currentSwapchainFrame != -1) {
+                final var commandBuffer = CinnabarRenderer.queueHelper.getImplicitCommandBuffer(VulkanQueueHelper.QueueType.MAIN_GRAPHICS);
+                
+                imageBarrier.srcAccessMask(VK_ACCESS_TRANSFER_WRITE_BIT);
+                imageBarrier.dstAccessMask(0);
+                imageBarrier.oldLayout(VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+                imageBarrier.newLayout(VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+                imageBarrier.image(getImageForBlit());
+                
+                vkCmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 0, null, null, imageBarrier);
+                
+                CinnabarRenderer.waitIdle();
+                
+                // wait for last acquire
+                throwFromCode(vkWaitForFences(device, frameAcquisitionFence, true, Long.MAX_VALUE));
+                
+                final var swapchainPtr = stack.mallocLong(1);
+                swapchainPtr.put(0, swapchain);
+                final var imageIndexPtr = stack.mallocInt(1);
+                imageIndexPtr.put(0, currentSwapchainFrame);
+                final var presentInfo = VkPresentInfoKHR.calloc(stack);
+                presentInfo.sType(VK_STRUCTURE_TYPE_PRESENT_INFO_KHR);
+                presentInfo.swapchainCount(1);
+                presentInfo.pSwapchains(swapchainPtr);
+                presentInfo.pImageIndices(imageIndexPtr);
+                throwFromCode(vkQueuePresentKHR(CinnabarRenderer.graphicsQueue(), presentInfo));
+                currentSwapchainFrame = -1;
+            }
+            
+            // acquire next frame
             final var intPtr = stack.mallocInt(1);
+            intPtr.put(0, -1);
             
-            final var swapchainPtr = stack.mallocLong(1);
-            swapchainPtr.put(0, swapchain);
-            final var imageIndexPtr = stack.mallocInt(1);
-            imageIndexPtr.put(0, currentSwapchainFrame);
-            final var presentInfo = VkPresentInfoKHR.calloc(stack);
-            presentInfo.sType(VK_STRUCTURE_TYPE_PRESENT_INFO_KHR);
-            presentInfo.swapchainCount(1);
-            presentInfo.pSwapchains(swapchainPtr);
-            presentInfo.pImageIndices(imageIndexPtr);
-            throwFromCode(vkQueuePresentKHR(CinnabarRenderer.graphicsQueue(), presentInfo));
-            
-            throwFromCode(vkWaitForFences(device, frameAcquisitionFence, true, Long.MAX_VALUE));
             throwFromCode(vkResetFences(device, frameAcquisitionFence));
             int returnCode = vkAcquireNextImageKHR(device, swapchain, Long.MAX_VALUE, VK_NULL_HANDLE, frameAcquisitionFence, intPtr);
             if (returnCode != VK_SUCCESS) {
+                // acquire wasn't happy, rebuild the swapchain
+                // its probably a resolution change
                 throwFromCode(returnCode);
-                vkWaitForFences(device, frameAcquisitionFence, true, Long.MAX_VALUE);
-                vkResetFences(device, frameAcquisitionFence);
+                throwFromCode(vkWaitForFences(device, frameAcquisitionFence, true, Long.MAX_VALUE));
+                throwFromCode(vkResetFences(device, frameAcquisitionFence));
                 recreateSwapchain();
-                vkAcquireNextImageKHR(device, swapchain, Long.MAX_VALUE, VK_NULL_HANDLE, frameAcquisitionFence, intPtr);
+                throwFromCode(vkAcquireNextImageKHR(device, swapchain, Long.MAX_VALUE, VK_NULL_HANDLE, frameAcquisitionFence, intPtr));
             }
             currentSwapchainFrame = intPtr.get(0);
         }

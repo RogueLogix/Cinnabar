@@ -3,9 +3,11 @@ package graphics.cinnabar.internal.extensions.blaze3d.pipeline;
 import com.mojang.blaze3d.pipeline.RenderTarget;
 import com.mojang.blaze3d.systems.RenderSystem;
 import graphics.cinnabar.internal.CinnabarRenderer;
+import graphics.cinnabar.internal.extensions.blaze3d.platform.CinnabarWindow;
 import graphics.cinnabar.internal.statemachine.CinnabarFramebufferState;
 import graphics.cinnabar.internal.vulkan.memory.VulkanMemoryAllocation;
 import graphics.cinnabar.internal.vulkan.util.VulkanQueueHelper;
+import net.minecraft.client.Minecraft;
 import net.roguelogix.phosphophyllite.util.NonnullDefault;
 import org.jetbrains.annotations.Nullable;
 import org.lwjgl.system.MemoryStack;
@@ -277,7 +279,7 @@ public class CinnabarRenderTarget extends RenderTarget {
             renderingInfo.pColorAttachments(colorAttachments);
             
             final var depthAttachment = VkRenderingAttachmentInfo.calloc(stack).sType$Default();
-            depthAttachment.imageView(colorImageViewHandle);
+            depthAttachment.imageView(depthImageViewHandle);
             depthAttachment.imageLayout(VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
             depthAttachment.resolveMode(VK_RESOLVE_MODE_NONE);
             depthAttachment.loadOp(VK_ATTACHMENT_LOAD_OP_LOAD);
@@ -325,5 +327,79 @@ public class CinnabarRenderTarget extends RenderTarget {
         clearChannels[1] = g;
         clearChannels[2] = b;
         clearChannels[3] = a;
+    }
+    
+    @Override
+    public void blitToScreen(int width, int height, boolean disableBlend) {
+        try(final var stack = MemoryStack.stackPush()) {
+            final var commandBuffer = CinnabarRenderer.queueHelper.getImplicitCommandBuffer(VulkanQueueHelper.QueueType.MAIN_GRAPHICS);
+            
+            final var window = (CinnabarWindow)Minecraft.getInstance().getWindow();
+            
+            final var imageBarrier = VkImageMemoryBarrier.calloc(1).sType$Default();
+            imageBarrier.srcAccessMask(VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT);
+            imageBarrier.dstQueueFamilyIndex(VK_QUEUE_FAMILY_IGNORED);
+            imageBarrier.srcQueueFamilyIndex(VK_QUEUE_FAMILY_IGNORED);
+            final var imageSubresourceRange = VkImageSubresourceRange.calloc();
+            imageSubresourceRange.aspectMask(VK_IMAGE_ASPECT_COLOR_BIT);
+            imageSubresourceRange.baseMipLevel(0);
+            imageSubresourceRange.levelCount(1);
+            imageSubresourceRange.baseArrayLayer(0);
+            imageSubresourceRange.layerCount(1);
+            imageBarrier.subresourceRange(imageSubresourceRange);
+            
+            imageBarrier.dstAccessMask(VK_ACCESS_TRANSFER_READ_BIT);
+            imageBarrier.oldLayout(VK_IMAGE_LAYOUT_GENERAL);
+            imageBarrier.newLayout(VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+            imageBarrier.image(colorImageHandle);
+            vkCmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, null, null, imageBarrier);
+            
+            imageBarrier.dstAccessMask(VK_ACCESS_TRANSFER_WRITE_BIT);
+            imageBarrier.oldLayout(VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+            imageBarrier.newLayout(VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+            imageBarrier.image(window.getImageForBlit());
+            vkCmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, null, null, imageBarrier);
+            
+            final var srcOffsets = VkOffset3D.calloc(2, stack);
+            srcOffsets.x(0).y(0).z(0);
+            srcOffsets.position(1);
+            srcOffsets.x(width).y(height).z(1);
+            srcOffsets.position(0);
+            
+            final var dstOffsets = VkOffset3D.calloc(2, stack);
+            dstOffsets.x(0).y(0).z(0);
+            dstOffsets.position(1);
+            dstOffsets.x(window.swapchainExtent.x).y(window.swapchainExtent.y).z(1);
+            dstOffsets.position(0);
+            
+            final var imageSubresource = VkImageSubresourceLayers.calloc();
+            imageSubresource.aspectMask(VK_IMAGE_ASPECT_COLOR_BIT);
+            imageSubresource.mipLevel(0);
+            imageSubresource.baseArrayLayer(0);
+            imageSubresource.layerCount(1);
+            
+            final var blitRegion = VkImageBlit.calloc(1, stack);
+            blitRegion.srcSubresource(imageSubresource);
+            blitRegion.srcOffsets(srcOffsets);
+            blitRegion.dstSubresource(imageSubresource);
+            blitRegion.dstOffsets(dstOffsets);
+            
+            vkCmdBlitImage(commandBuffer, colorImageHandle, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, window.getImageForBlit(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, blitRegion, VK_FILTER_NEAREST);
+            
+            imageBarrier.newLayout(VK_IMAGE_LAYOUT_GENERAL);
+            imageBarrier.dstAccessMask(VK_ACCESS_TRANSFER_WRITE_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT);
+            
+            imageBarrier.oldLayout(VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+            imageBarrier.srcAccessMask(VK_ACCESS_TRANSFER_READ_BIT);
+            imageBarrier.image(colorImageHandle);
+            vkCmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT, 0, null, null, imageBarrier);
+            
+            imageBarrier.oldLayout(VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+            imageBarrier.newLayout(VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+            imageBarrier.srcAccessMask(VK_ACCESS_TRANSFER_WRITE_BIT);
+            imageBarrier.image(window.getImageForBlit());
+            vkCmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT, 0, null, null, imageBarrier);
+            
+        }
     }
 }

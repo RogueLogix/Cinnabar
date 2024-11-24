@@ -74,7 +74,7 @@ public class VulkanQueueHelper implements Destroyable {
         private final AtomicLong implicitSyncSemaphoreLastWaitValue = new AtomicLong(0);
         private long implicitSyncSemaphoreValue = 0;
         private long implicitSyncSemaphoreMask = 0;
-        private final long[] lastSubmitWaitValues = new long[3];
+        private final long[] lastSubmitWaitValues = new long[submitsInFlight];
         
         private Builder(VkQueue queue, int queueFamily) {
             this.queue = queue;
@@ -96,6 +96,7 @@ public class VulkanQueueHelper implements Destroyable {
                 throwFromCode(vkCreateSemaphore(device, createInfo, null, handleReturn));
                 implicitSyncSemaphore = handleReturn.get(0);
             }
+            submitInfos.sType$Default();
         }
         
         @Override
@@ -113,17 +114,20 @@ public class VulkanQueueHelper implements Destroyable {
         }
         
         private void submit() {
-            if (submitInfos.position() == 0) {
+            if (submitInfos.position() == 0 && implicitSyncSemaphoreMask == 0 && queueState == QueueState.WAITING) {
                 return;
             }
             // for fencing the reset
             lastSubmitWaitValues[currentSubmit] = signalImplicit(VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
             switchToState(QueueState.WAITING);
             // the last switchToState will have added an extra (empty) submit
-            submitInfos.limit(submitInfos.position() - 1);
+            submitInfos.limit(submitInfos.position());
             submitInfos.position(0);
             throwFromCode(vkQueueSubmit2(queue, submitInfos, 0));
             submitInfos.limit(submitInfos.capacity());
+            // clear out and setup first submit for next frame
+            LibCString.nmemset(submitInfos.address(), 0, VkSubmitInfo2.SIZEOF);
+            submitInfos.sType$Default();
             currentCommandBuffer = null;
         }
         
@@ -144,22 +148,22 @@ public class VulkanQueueHelper implements Destroyable {
                     cbSubmitInfos.commandBuffer(commandBuffers.get(i));
                 }
                 commandBuffers.clear();
+                currentCommandBuffer = null;
             } else {
                 // currently queueing semaphore operations
                 // structs are the same regardless
-                final var semaphoreSubmitInfos = stack.semaphoreSubmitInfo(commandBuffers.size());
+                final var semaphoreSubmitInfos = stack.semaphoreSubmitInfo(submitSemaphores.size());
                 if (queueState == QueueState.WAITING) {
                     submitInfos.pWaitSemaphoreInfos(semaphoreSubmitInfos);
                 } else {
                     submitInfos.pSignalSemaphoreInfos(semaphoreSubmitInfos);
                 }
-                for (int i = 0; i < commandBuffers.size(); i++) {
+                for (int i = 0; i < submitSemaphores.size(); i++) {
                     semaphoreSubmitInfos.position(i);
                     semaphoreSubmitInfos.sType$Default();
                     semaphoreSubmitInfos.semaphore(submitSemaphores.getLong(i));
                     semaphoreSubmitInfos.value(submitSemaphoreValues.getLong(i));
                     semaphoreSubmitInfos.stageMask(submitSemaphoreStages.getLong(i));
-                    submitInfos.pWaitSemaphoreInfos(semaphoreSubmitInfos);
                 }
                 submitSemaphores.clear();
                 submitSemaphoreValues.clear();
@@ -176,10 +180,6 @@ public class VulkanQueueHelper implements Destroyable {
         }
         
         public boolean clientImplicitSignaled(long value) {
-            // TODO: maybe remove this, technically this is valid for other threads to do
-            if (value > implicitSyncSemaphoreValue) {
-                throw new IllegalStateException("Attempting to wait for future value");
-            }
             try (final var stack = MemoryStack.stackPush()) {
                 final var valuePtr = stack.longs(0);
                 vkGetSemaphoreCounterValue(device, implicitSyncSemaphore, valuePtr);
@@ -247,14 +247,14 @@ public class VulkanQueueHelper implements Destroyable {
         public long nextSignalImplicit(long stageMask) {
             // appends the stage mask to the next implicit signal
             implicitSyncSemaphoreMask |= stageMask;
-            return implicitSyncSemaphore + 1;
+            return implicitSyncSemaphoreValue + 1;
         }
         
         private long signalImplicit(long stageMask) {
             implicitSyncSemaphoreValue++;
             signalSemaphore(implicitSyncSemaphore, implicitSyncSemaphoreValue, stageMask | implicitSyncSemaphoreMask);
             implicitSyncSemaphoreMask = 0;
-            return implicitSyncSemaphore;
+            return implicitSyncSemaphoreValue;
         }
         
         private void signalSemaphore(long semaphore, long value, long stageMask) {
@@ -317,7 +317,6 @@ public class VulkanQueueHelper implements Destroyable {
             currentSubmit %= submitsInFlight;
         }
         stack.reset();
-        // TODO: fence wait for previous submit at this index
         queueBuilders[0].reset();
         if (queueBuilders[0] != queueBuilders[1]) {
             queueBuilders[1].reset();
@@ -413,7 +412,7 @@ public class VulkanQueueHelper implements Destroyable {
             // they are actually the same queue, so just insert a barrier instead
             try (final var stack = lwjglStack.push()) {
                 // TODO: buffer/image memory barriers?
-                final var memoryBarrier = VkMemoryBarrier2.calloc(1, stack);
+                final var memoryBarrier = VkMemoryBarrier2.calloc(1, stack).sType$Default();
                 memoryBarrier.srcStageMask(srcStageMask);
                 memoryBarrier.srcAccessMask(srcAccessMask);
                 memoryBarrier.dstStageMask(dstStageMask);
