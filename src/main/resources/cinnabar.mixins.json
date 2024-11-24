@@ -9,6 +9,7 @@
   "client": [
     "blaze3d.pipeline.MainTargetMixin",
     "blaze3d.pipeline.TextureTargetMixin",
+    "blaze3d.platform.GlUtilMixin",
     "blaze3d.platform.NativeImageMixin",
     "blaze3d.platform.WindowMixin",
     "blaze3d.vertex.VertexBufferMixin",
@@ -16,15 +17,18 @@
     "blaze3d.systems.RenderSystemMixin",
     "minecraft.gui.font.FontTextureMixin",
     "minecraft.gui.screens.LoadingOverlayMixin",
+    "minecraft.renderer.EffectInstanceMixin",
     "minecraft.renderer.GameRendererMixin",
     "minecraft.renderer.LevelRendererMixin",
+    "minecraft.renderer.PostPassMixin",
     "minecraft.renderer.ShaderInstanceMixin",
     "minecraft.renderer.UniformMixin",
     "minecraft.texture.AbstractTextureMixin",
     "minecraft.texture.DynamicTextureMixin",
     "minecraft.texture.SimpleTextureMixin",
     "minecraft.texture.TextureAtlasMixin",
-    "minecraft.MinecraftMixin"
+    "minecraft.MinecraftMixin",
+    "neo.ClientEventsMixin"
   ],
   "injectors": {
     "defaultRequire": 1

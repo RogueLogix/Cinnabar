@@ -1,10 +1,8 @@
 package graphics.cinnabar.internal.extensions.minecraft.renderer;
 
 import com.mojang.blaze3d.shaders.Uniform;
-import com.mojang.blaze3d.vertex.VertexFormat;
+import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import com.mojang.blaze3d.vertex.VertexFormatElement;
-import graphics.cinnabar.Cinnabar;
-import graphics.cinnabar.internal.CinnabarDebug;
 import graphics.cinnabar.internal.CinnabarRenderer;
 import graphics.cinnabar.internal.exceptions.NotImplemented;
 import graphics.cinnabar.internal.extensions.blaze3d.shaders.CinnabarProgram;
@@ -15,9 +13,7 @@ import graphics.cinnabar.internal.vulkan.MagicNumbers;
 import graphics.cinnabar.internal.vulkan.memory.VulkanBuffer;
 import graphics.cinnabar.internal.vulkan.util.CinnabarDescriptorSets;
 import graphics.cinnabar.internal.vulkan.util.VulkanSampler;
-import net.minecraft.client.renderer.ShaderInstance;
-import net.minecraft.client.renderer.texture.AbstractTexture;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.client.renderer.EffectInstance;
 import net.minecraft.server.packs.resources.ResourceProvider;
 import net.roguelogix.phosphophyllite.util.Util;
 import org.jetbrains.annotations.Nullable;
@@ -26,13 +22,12 @@ import org.lwjgl.vulkan.*;
 
 import java.io.IOException;
 
-import static graphics.cinnabar.Cinnabar.CINNABAR_LOG;
 import static graphics.cinnabar.internal.vulkan.exceptions.VkException.throwFromCode;
 import static org.lwjgl.vulkan.EXTExtendedDynamicState2.VK_DYNAMIC_STATE_LOGIC_OP_EXT;
 import static org.lwjgl.vulkan.EXTExtendedDynamicState3.*;
 import static org.lwjgl.vulkan.VK13.*;
 
-public class CinnabarShaderInstance extends ShaderInstance {
+public class CinnabarEffectInstance extends EffectInstance {
     
     private CinnabarProgram vertexProgram;
     private CinnabarProgram fragmentProgram;
@@ -50,14 +45,10 @@ public class CinnabarShaderInstance extends ShaderInstance {
     private final long UBODescriptorSet;
     private final long SamplerDescriptorSet;
     
-    public CinnabarShaderInstance(ResourceProvider resourceProvider, ResourceLocation shaderLocation, VertexFormat vertexFormat) throws IOException {
-        super(resourceProvider, shaderLocation, vertexFormat);
+    public CinnabarEffectInstance(ResourceProvider resourceProvider, String name) throws IOException {
+        super(resourceProvider, name);
         this.vertexProgram = (CinnabarProgram) getVertexProgram();
         this.fragmentProgram = (CinnabarProgram) getFragmentProgram();
-        
-        if (CinnabarDebug.DEBUG){
-            CINNABAR_LOG.debug("Creating pipeline: {}", shaderLocation.toString());
-        }
         
         final var device = CinnabarRenderer.device();
         
@@ -185,6 +176,9 @@ public class CinnabarShaderInstance extends ShaderInstance {
             shaderStages.pName(mainUTF8);
             shaderStages.position(0);
             
+            // Post passes always use position
+            final var vertexFormat = DefaultVertexFormat.POSITION;
+            
             // there is always exactly one vertex buffer
             final var bufferBindings = VkVertexInputBindingDescription.calloc(1, stack);
             bufferBindings.binding(0);
@@ -307,12 +301,9 @@ public class CinnabarShaderInstance extends ShaderInstance {
             
             throwFromCode(vkCreateGraphicsPipelines(device, 0, pipelineCreateInfos, null, longPtr));
             pipeline = longPtr.get(0);
-            
         }
-        
-        if (CinnabarDebug.DEBUG){
-            CINNABAR_LOG.debug("Created pipeline: {}", shaderLocation.toString());
-        }
+        vertexProgram.attachToEffect(this);
+        fragmentProgram.attachToEffect(this);
     }
     
     @Override
@@ -332,6 +323,7 @@ public class CinnabarShaderInstance extends ShaderInstance {
         vkDestroyDescriptorSetLayout(device, SamplerDescriptorSetLayout, null);
         vkDestroyPipeline(device, pipeline, null);
         vkDestroyPipelineLayout(device, pipelineLayout, null);
+        
     }
     
     @Override

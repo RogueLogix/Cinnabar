@@ -2,6 +2,10 @@ package graphics.cinnabar.internal.vulkan.memory;
 
 import graphics.cinnabar.internal.CinnabarRenderer;
 import graphics.cinnabar.internal.vulkan.Destroyable;
+import graphics.cinnabar.internal.vulkan.util.LiveHandles;
+import it.unimi.dsi.fastutil.longs.Long2ReferenceMap;
+import it.unimi.dsi.fastutil.longs.Long2ReferenceOpenHashMap;
+import org.jetbrains.annotations.Nullable;
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.vulkan.VkBufferCreateInfo;
 import org.lwjgl.vulkan.VkDevice;
@@ -37,12 +41,16 @@ public class VulkanBuffer implements Destroyable {
             bufferAllocation = CinnabarRenderer.GPUMemoryAllocator.alloc(memoryRequirements);
             
             vkBindBufferMemory(device, handle, bufferAllocation.memoryHandle(), bufferAllocation.range().offset());
+            
+            LiveHandles.create(handle);
         }
     }
     
     @Override
     public void destroy() {
         vkDestroyBuffer(device, handle, null);
-        CinnabarRenderer.GPUMemoryAllocator.free(bufferAllocation);
+        bufferAllocation.destroy();
+        LiveHandles.destroy(handle);
     }
+    
 }

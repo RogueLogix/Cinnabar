@@ -44,12 +44,12 @@ public class CinnabarSharedIndexBuffers {
                     for (int poly = 0; poly < polyCount; poly++) {
                         int baseIndex = poly * 6;
                         int baseVertex = poly * 4;
-                        intBuff.putInt(baseIndex, baseVertex);
-                        intBuff.putInt(baseIndex + 1, baseVertex + 1);
-                        intBuff.putInt(baseIndex + 2, baseVertex + 2);
-                        intBuff.putInt(baseIndex + 3, baseVertex + 2);
-                        intBuff.putInt(baseIndex + 4, baseVertex + 3);
-                        intBuff.putInt(baseIndex + 5, baseVertex);
+                        intBuff.putIntIdx(baseIndex, baseVertex);
+                        intBuff.putIntIdx(baseIndex + 1, baseVertex + 1);
+                        intBuff.putIntIdx(baseIndex + 2, baseVertex + 2);
+                        intBuff.putIntIdx(baseIndex + 3, baseVertex + 2);
+                        intBuff.putIntIdx(baseIndex + 4, baseVertex + 3);
+                        intBuff.putIntIdx(baseIndex + 5, baseVertex);
                     }
                     CinnabarRenderer.queueDestroyEndOfGPUSubmit(quadIndices);
                     quadIndices = upload(tempBuffer);
@@ -67,12 +67,12 @@ public class CinnabarSharedIndexBuffers {
                     for (int poly = 0; poly < polyCount; poly++) {
                         int baseIndex = poly * 6;
                         int baseVertex = poly * 4;
-                        intBuff.putInt(baseIndex, baseVertex);
-                        intBuff.putInt(baseIndex + 1, baseVertex + 1);
-                        intBuff.putInt(baseIndex + 2, baseVertex + 2);
-                        intBuff.putInt(baseIndex + 3, baseVertex + 3);
-                        intBuff.putInt(baseIndex + 4, baseVertex + 2);
-                        intBuff.putInt(baseIndex + 5, baseVertex + 1);
+                        intBuff.putIntIdx(baseIndex, baseVertex);
+                        intBuff.putIntIdx(baseIndex + 1, baseVertex + 1);
+                        intBuff.putIntIdx(baseIndex + 2, baseVertex + 2);
+                        intBuff.putIntIdx(baseIndex + 3, baseVertex + 3);
+                        intBuff.putIntIdx(baseIndex + 4, baseVertex + 2);
+                        intBuff.putIntIdx(baseIndex + 5, baseVertex + 1);
                     }
                     CinnabarRenderer.queueDestroyEndOfGPUSubmit(lineIndices);
                     lineIndices = upload(tempBuffer);
@@ -86,7 +86,7 @@ public class CinnabarSharedIndexBuffers {
                     CinnabarRenderer.queueDestroyEndOfGPUSubmit(tempBuffer);
                     final var intBuff = tempBuffer.hostPtr();
                     for (int i = 0; i < indexCount; i++) {
-                        intBuff.putInt(i, i);
+                        intBuff.putIntIdx(i, i);
                     }
                     CinnabarRenderer.queueDestroyEndOfGPUSubmit(sequentialIndices);
                     sequentialIndices = upload(tempBuffer);
@@ -94,5 +94,11 @@ public class CinnabarSharedIndexBuffers {
                 yield sequentialIndices;
             }
         };
+    }
+    
+    public static void destroy() {
+        quadIndices.destroy();
+        lineIndices.destroy();
+        sequentialIndices.destroy();
     }
 }

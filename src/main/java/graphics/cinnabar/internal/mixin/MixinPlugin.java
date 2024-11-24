@@ -21,6 +21,7 @@ public class MixinPlugin implements IMixinConfigPlugin {
     
     static {
         superclassReplacements.put("com/mojang/blaze3d/pipeline/RenderTarget", "graphics/cinnabar/internal/extensions/blaze3d/pipeline/CinnabarRenderTarget");
+        superclassReplacements.put("com/mojang/blaze3d/shaders/Program", "graphics/cinnabar/internal/extensions/blaze3d/shaders/CinnabarProgram");
         superclassReplacements.put("net/minecraft/client/renderer/texture/AbstractTexture", "graphics/cinnabar/internal/extensions/minecraft/renderer/texture/CinnabarAbstractTexture");
     }
     

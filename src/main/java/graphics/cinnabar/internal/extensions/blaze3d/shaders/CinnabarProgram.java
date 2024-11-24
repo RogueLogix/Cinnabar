@@ -3,11 +3,16 @@ package graphics.cinnabar.internal.extensions.blaze3d.shaders;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.mojang.blaze3d.preprocessor.GlslPreprocessor;
+import com.mojang.blaze3d.shaders.EffectProgram;
 import com.mojang.blaze3d.shaders.Program;
+import com.mojang.blaze3d.shaders.Shader;
 import com.mojang.blaze3d.vertex.VertexFormat;
 import com.mojang.blaze3d.vertex.VertexFormatElement;
+import graphics.cinnabar.Cinnabar;
+import graphics.cinnabar.internal.CinnabarDebug;
 import graphics.cinnabar.internal.CinnabarRenderer;
 import graphics.cinnabar.internal.exceptions.CompileFailure;
+import graphics.cinnabar.internal.vulkan.util.LiveHandles;
 import net.roguelogix.phosphophyllite.util.NonnullDefault;
 import org.anarres.cpp.CppReader;
 import org.anarres.cpp.Preprocessor;
@@ -31,13 +36,14 @@ import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Objects;
 
+import static graphics.cinnabar.Cinnabar.CINNABAR_LOG;
 import static graphics.cinnabar.internal.vulkan.exceptions.VkException.throwFromCode;
 import static org.lwjgl.util.shaderc.Shaderc.*;
 import static org.lwjgl.vulkan.VK10.vkCreateShaderModule;
 import static org.lwjgl.vulkan.VK10.vkDestroyShaderModule;
 
 @NonnullDefault
-public class CinnabarProgram extends Program {
+public class CinnabarProgram extends EffectProgram {
     
     private static final long SHADERC_COMPILER = shaderc_compiler_initialize();
     private static final long SHADERC_COMPILER_OPTIONS = shaderc_compile_options_initialize();
@@ -48,20 +54,37 @@ public class CinnabarProgram extends Program {
     }
     
     public final long handle;
+    private boolean closed = false;
     
     public CinnabarProgram(Type type, long handle, String name) {
         super(type, -1, name);
         this.handle = handle;
+        LiveHandles.create(this);
+    }
+    
+    @Override
+    public void attachToShader(Shader shader) {
     }
     
     @Override
     public void close() {
+        references--;
+        if(references > 0 || closed){
+            return;
+        }
+        closed = true;
+        LiveHandles.destroy(this);
         final var device = CinnabarRenderer.device();
         vkDestroyShaderModule(device, handle, null);
         super.type.getPrograms().remove(this.getName());
     }
     
     public static CinnabarProgram compileShader(JsonObject jsonObject, VertexFormat vertexFormat, Type type, String name, InputStream shaderData, String sourceName, GlslPreprocessor preprocessor) throws IOException {
+        
+        if (CinnabarDebug.DEBUG){
+            CINNABAR_LOG.debug("Compiling {} shader: {}", type.toString(), name);
+        }
+        
         final var device = CinnabarRenderer.device();
         
         final var rawShaderSource = IOUtils.toString(shaderData, StandardCharsets.UTF_8);
@@ -172,7 +195,14 @@ public class CinnabarProgram extends Program {
         final var builder = new StringBuilder();
         builder.append("#version 460\n");
         getFormattedShader(translationUnit, builder);
-        final var postTransformShaderSource = builder.toString().replace("\nuniform sampler2D", "\n//uniform sampler2D");
+        final var postTransformShaderSource = builder.toString().replace("\nuniform", "\n//uniform");
+        if(CinnabarDebug.DEBUG) {
+            for (String s : postTransformShaderSource.split("\n")) {
+                if (s.startsWith("//uniform")) {
+                    CINNABAR_LOG.warn("Removed unused uniform line \"{}\"", s.substring(2));
+                }
+            }
+        }
         
         final var compileResult = shaderc_compile_into_spv(SHADERC_COMPILER, postTransformShaderSource, type == Type.VERTEX ? shaderc_vertex_shader : shaderc_fragment_shader, name, "main", SHADERC_COMPILER_OPTIONS);
         final var compileStatus = shaderc_result_get_compilation_status(compileResult);
@@ -193,6 +223,10 @@ public class CinnabarProgram extends Program {
         }
         
         shaderc_result_release(compileResult);
+        
+        if (CinnabarDebug.DEBUG){
+            CINNABAR_LOG.debug("Compiled {} shader: {}", type.toString(), name);
+        }
         
         final var program = new CinnabarProgram(type, shaderHandle, name);
         type.getPrograms().put(name, program);

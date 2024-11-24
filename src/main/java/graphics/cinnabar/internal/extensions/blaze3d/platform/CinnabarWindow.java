@@ -79,7 +79,11 @@ public class CinnabarWindow extends Window {
         clearColor.free();
         imageBarrier.free();
         imageSubresourceRange.free();
-        super.close();
+        vkDeviceWaitIdle(CinnabarRenderer.device());
+        vkWaitForFences(CinnabarRenderer.device(), frameAcquisitionFence, true, -1);
+        vkDestroyFence(device, frameAcquisitionFence, null);
+        vkDestroySwapchainKHR(device, swapchain, null);
+        vkDestroySurfaceKHR(CinnabarRenderer.instance(), surface, null);
         CinnabarRenderer.destroy();
     }
     
@@ -182,7 +186,6 @@ public class CinnabarWindow extends Window {
             
             throwFromCode(vkCreateSwapchainKHR(device, createInfo, null, longPtr));
             vkDestroySwapchainKHR(device, swapchain, null);
-            ;
             swapchain = longPtr.get(0);
             vkGetSwapchainImagesKHR(device, swapchain, intPtr, null);
             final int swapchainImageCount = intPtr.get(0);

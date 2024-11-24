@@ -6,6 +6,7 @@ import graphics.cinnabar.internal.CinnabarRenderer;
 import graphics.cinnabar.internal.extensions.blaze3d.platform.CinnabarWindow;
 import graphics.cinnabar.internal.statemachine.CinnabarFramebufferState;
 import graphics.cinnabar.internal.vulkan.memory.VulkanMemoryAllocation;
+import graphics.cinnabar.internal.vulkan.util.LiveHandles;
 import graphics.cinnabar.internal.vulkan.util.VulkanQueueHelper;
 import net.minecraft.client.Minecraft;
 import net.roguelogix.phosphophyllite.util.NonnullDefault;
@@ -54,7 +55,9 @@ public class CinnabarRenderTarget extends RenderTarget {
     public void createBuffers(int width, int height, boolean clearError) {
         RenderSystem.assertOnRenderThreadOrInit();
         this.width = width;
+        this.viewWidth = width;
         this.height = height;
+        this.viewHeight = height;
         renderExtent.set(width, height);
         assert colorImageHandle == 0;
         assert colorImageViewHandle == 0;
@@ -90,6 +93,7 @@ public class CinnabarRenderTarget extends RenderTarget {
             
             throwFromCode(vkCreateImage(device, colorImageCreateInfo, null, longPtr));
             colorImageHandle = longPtr.get(0);
+            LiveHandles.create(colorImageHandle);
             
             final var depthImageCreateInfo = VkImageCreateInfo.calloc(stack).sType$Default();
             depthImageCreateInfo.imageType(VK_IMAGE_TYPE_2D);
@@ -106,6 +110,7 @@ public class CinnabarRenderTarget extends RenderTarget {
             
             throwFromCode(vkCreateImage(device, depthImageCreateInfo, null, longPtr));
             depthImageHandle = longPtr.get(0);
+            LiveHandles.create(depthImageHandle);
         }
         
         try (final var stack = MemoryStack.stackPush()) {
@@ -137,6 +142,7 @@ public class CinnabarRenderTarget extends RenderTarget {
             colorImageViewCreateInfo.image(colorImageHandle);
             throwFromCode(vkCreateImageView(device, colorImageViewCreateInfo, null, longPtr));
             colorImageViewHandle = longPtr.get(0);
+            LiveHandles.create(colorImageViewHandle);
             
             final var depthImageViewCreateInfo = VkImageViewCreateInfo.calloc(stack).sType$Default();
             depthImageViewCreateInfo.viewType(VK_IMAGE_VIEW_TYPE_2D);
@@ -152,6 +158,7 @@ public class CinnabarRenderTarget extends RenderTarget {
             depthImageViewCreateInfo.image(depthImageHandle);
             throwFromCode(vkCreateImageView(device, depthImageViewCreateInfo, null, longPtr));
             depthImageViewHandle = longPtr.get(0);
+            LiveHandles.create(depthImageViewHandle);
         }
     }
     
@@ -165,12 +172,18 @@ public class CinnabarRenderTarget extends RenderTarget {
         assert depthImageViewHandle != 0;
         assert depthImageAllocation != null;
         
+        vkDestroyImageView(device, depthImageViewHandle, null);
+        vkDestroyImageView(device, colorImageViewHandle, null);
         vkDestroyImage(device, depthImageHandle, null);
         vkDestroyImage(device, colorImageHandle, null);
+        LiveHandles.destroy(depthImageViewHandle);
+        LiveHandles.destroy(colorImageViewHandle);
+        LiveHandles.destroy(depthImageHandle);
+        LiveHandles.destroy(colorImageHandle);
         
-        CinnabarRenderer.GPUMemoryAllocator.free(colorImageAllocation);
+        colorImageAllocation.destroy();
         colorImageAllocation = null;
-        CinnabarRenderer.GPUMemoryAllocator.free(depthImageAllocation);
+        depthImageAllocation.destroy();
         depthImageAllocation = null;
         
         depthImageHandle = 0;
@@ -307,6 +320,11 @@ public class CinnabarRenderTarget extends RenderTarget {
         vkCmdEndRendering(commandBuffer);
         beginRendering(commandBuffer, true, false);
         vkCmdEndRendering(commandBuffer);
+    }
+    
+    @Override
+    public void setFilterMode(int filterMode) {
+        // TODO:
     }
     
     public void bindWrite(boolean setViewport) {

@@ -51,4 +51,11 @@ public class CinnabarDescriptorSets {
             return longPtr.get(0);
         }
     }
+    
+    public static void free(long set) {
+    }
+    
+    public static void destroy() {
+        vkDestroyDescriptorPool(CinnabarRenderer.device(), descriptorPool, null);
+    }
 }

@@ -3,9 +3,11 @@ package graphics.cinnabar.internal.vulkan.util;
 import graphics.cinnabar.internal.CinnabarRenderer;
 import graphics.cinnabar.internal.exceptions.NotImplemented;
 import graphics.cinnabar.internal.util.GrowingMemoryStack;
+import graphics.cinnabar.internal.util.threading.ResizingRingBuffer;
 import graphics.cinnabar.internal.vulkan.Destroyable;
 import it.unimi.dsi.fastutil.longs.LongArrayList;
 import it.unimi.dsi.fastutil.objects.ReferenceArrayList;
+import net.roguelogix.phosphophyllite.threading.ThreadSafety;
 import net.roguelogix.phosphophyllite.util.NonnullDefault;
 import org.jetbrains.annotations.Nullable;
 import org.lwjgl.system.MemoryStack;
@@ -34,11 +36,15 @@ public class VulkanQueueHelper implements Destroyable {
     
     private final VkDevice device = CinnabarRenderer.device();
     
+    private boolean valid = true;
+    
     private final int submitsInFlight;
     private int currentSubmit = 0;
     
     private final GrowingMemoryStack stack = new GrowingMemoryStack();
     private final MemoryStack lwjglStack = MemoryStack.create();
+    
+    private final ReferenceArrayList<ResizingRingBuffer<Destroyable>> endOfGPUSubmitDestroy = new ReferenceArrayList<>();
     
     public enum QueueType {
         MAIN_GRAPHICS,
@@ -83,6 +89,8 @@ public class VulkanQueueHelper implements Destroyable {
             this.commandPools = Collections.unmodifiableList(pools);
             for (int i = 0; i < submitsInFlight; i++) {
                 pools.add(new VulkanTransientCommandBufferPool(queueFamily));
+//                endOfGPUSubmitDestroy.add(Collections.synchronizedList(new ReferenceArrayList<>()));
+                endOfGPUSubmitDestroy.add(new ResizingRingBuffer<>());
             }
             beginInfo.sType$Default();
             beginInfo.flags(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
@@ -149,7 +157,7 @@ public class VulkanQueueHelper implements Destroyable {
                 }
                 commandBuffers.clear();
                 currentCommandBuffer = null;
-            } else {
+            } else if (!submitSemaphores.isEmpty()) {
                 // currently queueing semaphore operations
                 // structs are the same regardless
                 final var semaphoreSubmitInfos = stack.semaphoreSubmitInfo(submitSemaphores.size());
@@ -284,6 +292,7 @@ public class VulkanQueueHelper implements Destroyable {
     
     @Override
     public void destroy() {
+        valid = false;
         queueBuilders[0].destroy();
         if (queueBuilders[0] != queueBuilders[1]) {
             queueBuilders[1].destroy();
@@ -292,6 +301,17 @@ public class VulkanQueueHelper implements Destroyable {
             queueBuilders[2].destroy();
         }
         stack.destroy();
+        endOfGPUSubmitDestroy.forEach(ring -> {
+//            ring.forEach(Destroyable::destroy);
+            
+            @Nullable Destroyable toDestroy;
+            while (!ring.empty()) {
+                toDestroy = ring.poll();
+                if (toDestroy != null) {
+                    toDestroy.destroy();
+                }
+            }
+        });
     }
     
     public void submit() {
@@ -299,7 +319,7 @@ public class VulkanQueueHelper implements Destroyable {
     }
     
     public void submit(boolean wait) {
-        if(Thread.currentThread().threadId() != 1){
+        if (Thread.currentThread().threadId() != 1) {
             throw new IllegalStateException();
         }
         queueBuilders[0].finishActiveBuffer();
@@ -324,6 +344,32 @@ public class VulkanQueueHelper implements Destroyable {
         if (queueBuilders[1] != queueBuilders[2]) {
             queueBuilders[2].reset();
         }
+        final var ring = endOfGPUSubmitDestroy.get(currentSubmit);
+//        synchronized (ring) {
+//            ring.forEach(Destroyable::destroy);
+//            ring.clear();
+//        }
+        while (!ring.empty()) {
+            @Nullable final var toDestroy = ring.poll();
+            if (toDestroy != null) {
+                toDestroy.destroy();
+            }
+        }
+    }
+    
+    @ThreadSafety.Many
+    public void destroyEndOfSubmit(Destroyable destroyable) {
+        if(!valid){
+            throw new IllegalStateException();
+        }
+        final var ring = endOfGPUSubmitDestroy.get(currentSubmit);
+//        synchronized (ring) {
+////            if(ring.contains(destroyable)) {
+////                throw new IllegalArgumentException("Attempt to enqueue already-enqueued destroyable");
+////            }
+//            ring.add(destroyable);
+//        }
+        ring.put(destroyable);
     }
     
     public boolean clientImplicitSignaled(QueueType queueType, long value) {

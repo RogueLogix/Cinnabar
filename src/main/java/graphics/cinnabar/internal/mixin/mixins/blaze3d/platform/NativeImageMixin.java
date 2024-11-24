@@ -3,6 +3,7 @@ package graphics.cinnabar.internal.mixin.mixins.blaze3d.platform;
 import com.mojang.blaze3d.platform.NativeImage;
 import graphics.cinnabar.internal.CinnabarRenderer;
 import graphics.cinnabar.internal.extensions.minecraft.renderer.texture.CinnabarAbstractTexture;
+import graphics.cinnabar.internal.vulkan.Destroyable;
 import graphics.cinnabar.internal.vulkan.memory.CPUMemoryVkBuffer;
 import org.lwjgl.stb.STBImage;
 import org.lwjgl.system.MemoryUtil;
@@ -16,7 +17,7 @@ import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(NativeImage.class)
-public class NativeImageMixin {
+public abstract class NativeImageMixin implements AutoCloseable{
     @Shadow
     private boolean useStbFree;
     @Shadow
@@ -85,5 +86,12 @@ public class NativeImageMixin {
     private void _upload(int level, int xOffset, int yOffset, int unpackSkipPixels, int unpackSkipRows, int width, int height, boolean blur, boolean clamp, boolean mipmap, boolean autoClose) {
         //noinspection DataFlowIssue
         CinnabarAbstractTexture.currentActiveBound().recordUpload((NativeImage) (Object) this, cpuMemoryVkBuffer, level, xOffset, yOffset, unpackSkipPixels, unpackSkipRows, width, height, blur, clamp, mipmap);
+        if(autoClose){
+            try {
+                this.close();
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+        }
     }
 }

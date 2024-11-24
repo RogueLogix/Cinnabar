@@ -144,6 +144,7 @@ public class CounterQueue implements Destroyable {
                 threads[i].join();
             }
         } catch (InterruptedException e) {
+            System.err.println("INTERRUPTED SHUTTING DOWN WORKER THREADS");
             throw new RuntimeException(e);
         }
     }
@@ -169,11 +170,13 @@ public class CounterQueue implements Destroyable {
         }
         try {
             if (count == 1) {
-                waitCondition.notify();
+                waitCondition.signal();
             } else {
-                waitCondition.notifyAll();
+                waitCondition.signalAll();
             }
-        } finally {
+        } catch (IllegalMonitorStateException e) {
+            e.printStackTrace();
+        }finally {
             waitingLock.unlock();
         }
     }

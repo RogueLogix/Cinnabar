@@ -30,6 +30,7 @@ public class Cinnabar {
     public static final CinnabarConfig CONFIG = new CinnabarConfig();
     
     public static final Logger LOGGER = LogManager.getLogger();
+    public static final Logger CINNABAR_LOG = LOGGER;
     
     static {
         try {

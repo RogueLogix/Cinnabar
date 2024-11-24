@@ -13,10 +13,10 @@ import java.io.InputStream;
 
 @Mixin(Program.class)
 public class ProgramMixin {
-    @Redirect(method = "compileShader", at = @At(value = "NEW", target = "(Lcom/mojang/blaze3d/shaders/Program$Type;ILjava/lang/String;)Lcom/mojang/blaze3d/shaders/Program;"))
-    private Program cinnabar$newProgram(Program.Type type, int id, String name) {
-        return new CinnabarProgram(type, id, name);
-    }
+//    @Redirect(method = "compileShader", at = @At(value = "NEW", target = "(Lcom/mojang/blaze3d/shaders/Program$Type;ILjava/lang/String;)Lcom/mojang/blaze3d/shaders/Program;"))
+//    private Program cinnabar$newProgram(Program.Type type, int id, String name) {
+//        return new CinnabarProgram(type, id, name);
+//    }
     
 //    @Overwrite
 //    private static int compileShaderInternal(Program.Type type, String name, InputStream shaderData, String sourceName, GlslPreprocessor preprocessor) throws IOException {

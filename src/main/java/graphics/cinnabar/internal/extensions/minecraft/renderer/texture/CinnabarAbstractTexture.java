@@ -5,6 +5,7 @@ import graphics.cinnabar.internal.CinnabarRenderer;
 import graphics.cinnabar.internal.exceptions.NotImplemented;
 import graphics.cinnabar.internal.vulkan.memory.CPUMemoryVkBuffer;
 import graphics.cinnabar.internal.vulkan.memory.VulkanMemoryAllocation;
+import graphics.cinnabar.internal.vulkan.util.LiveHandles;
 import graphics.cinnabar.internal.vulkan.util.VulkanQueueHelper;
 import graphics.cinnabar.internal.vulkan.util.VulkanSampler;
 import net.minecraft.client.renderer.texture.AbstractTexture;
@@ -59,6 +60,7 @@ public abstract class CinnabarAbstractTexture extends AbstractTexture {
     
     private int mipLevels = -1;
     
+    @Nullable
     private VkBufferImageCopy.Buffer vkBufferImageCopy = VkBufferImageCopy.calloc(1);
     
     @Override
@@ -70,6 +72,10 @@ public abstract class CinnabarAbstractTexture extends AbstractTexture {
     @Override
     public void releaseId() {
         destroy();
+        if (vkBufferImageCopy != null) {
+            vkBufferImageCopy.free();
+            vkBufferImageCopy = null;
+        }
     }
     
     @Override
@@ -77,8 +83,15 @@ public abstract class CinnabarAbstractTexture extends AbstractTexture {
         currentBound[activeBindPoint] = this;
     }
     
+    @Override
+    public void setFilter(boolean blur, boolean mipmap) {
+        // TODO:
+//        super.setFilter(blur, mipmap);
+    }
+    
     public void prepareImage(int vkFormat, int maxMipLevel, int width, int height) {
-        
+        destroy();
+        LiveHandles.create(this);
         imageFormat = vkFormat;
         mipLevels = maxMipLevel + 1;
         this.width = width;
@@ -102,6 +115,7 @@ public abstract class CinnabarAbstractTexture extends AbstractTexture {
             final var longPtr = stack.callocLong(1);
             throwFromCode(vkCreateImage(device, imageCreateInfo, null, longPtr));
             imageHandle = longPtr.get(0);
+            LiveHandles.create(imageHandle);
             
             final var memoryRequirements = VkMemoryRequirements.calloc(stack);
             vkGetImageMemoryRequirements(device, imageHandle, memoryRequirements);
@@ -127,18 +141,27 @@ public abstract class CinnabarAbstractTexture extends AbstractTexture {
             
             vkCreateImageView(device, imageViewCreateInfo, null, longPtr);
             imageViewHandle = longPtr.get(0);
+            LiveHandles.create(imageViewHandle);
         }
         // no need to do a transition yet, upload will take care of that
     }
     
     private void destroy() {
+        if (imageViewHandle != VK_NULL_HANDLE) {
+            LiveHandles.destroy(this);
+            vkDestroyImageView(device, imageViewHandle, null);
+            LiveHandles.destroy(imageViewHandle);
+            imageViewHandle = VK_NULL_HANDLE;
+        }
         if (imageHandle != VK_NULL_HANDLE) {
             vkDestroyImage(device, imageHandle, null);
+            LiveHandles.destroy(imageHandle);
+            imageHandle = VK_NULL_HANDLE;
         }
         if (memoryAllocation != null) {
             CinnabarRenderer.GPUMemoryAllocator.free(memoryAllocation);
+            memoryAllocation= null;
         }
-        vkBufferImageCopy.free();
     }
     
     public long handle() {

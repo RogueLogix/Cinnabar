@@ -46,14 +46,14 @@ public class RenderSystemMixin {
     
     @Overwrite
     public static void setupDefaultState(int x, int y, int width, int height) {
-//        GlStateManager._clearDepth(1.0);
-//        GlStateManager._enableDepthTest();
-//        GlStateManager._depthFunc(515);
+//        GlStateManager._clearDepth(1.0); // no replacement, its always cleared to 1.0
+        enableDepthTest();
+        depthFunc(GL_LEQUAL);
         projectionMatrix.identity();
         savedProjectionMatrix.identity();
         modelViewMatrix.identity();
         textureMatrix.identity();
-//        GlStateManager._viewport(x, y, width, height);
+        viewport(x, y, width, height);
     }
     
     @Overwrite
@@ -161,4 +161,13 @@ public class RenderSystemMixin {
         CinnabarGeneralState.depthFunc = depthFuncRemapper(depthFunc);
     }
     
+    
+    @Overwrite
+    public static void colorMask(boolean red, boolean green, boolean blue, boolean alpha) {
+        // TODO: colormask tracking
+    }
+    
+    @Overwrite
+    public static void texParameter(int target, int parameterName, int parameter) {
+    }
 }

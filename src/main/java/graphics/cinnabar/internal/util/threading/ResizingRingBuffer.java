@@ -51,6 +51,10 @@ public final class ResizingRingBuffer<T> {
     @Deprecated(forRemoval = true)
     private int waitingThreads = 0;
     
+    public ResizingRingBuffer() {
+        this(0);
+    }
+    
     public ResizingRingBuffer(int minimumInitialCapacity) {
         // round up to next multiple of block size
         final var initialCapacity = minimumInitialCapacity <= 0 ? BLOCK_SIZE : (minimumInitialCapacity + (BLOCK_SIZE - 1)) & (~BLOCK_SIZE);
@@ -153,6 +157,9 @@ public final class ResizingRingBuffer<T> {
         final int currentPutBlockIndex = (int) ((putIndex >> 32) & Integer.MAX_VALUE);
         final int currentPutSubBlockIndex = (int) ((putIndex) & Integer.MAX_VALUE);
         final var putBlock = blocks.get(currentPutBlockIndex);
+        if (putBlock.items[currentPutSubBlockIndex] != null) {
+            throw new IllegalStateException("Attempt to overwrite position in ring buffer, THIS IS A BUG");
+        }
         putBlock.items[currentPutSubBlockIndex] = item;
         final var itemCount = items.incrementAndGet();
         assert itemCount <= (long) blocks.size() * BLOCK_SIZE;
@@ -242,6 +249,11 @@ public final class ResizingRingBuffer<T> {
             }
         }
         return toReturn;
+    }
+    
+    @ThreadSafety.Many
+    public boolean empty() {
+        return items.get() == 0;
     }
     
     @ThreadSafety.Many

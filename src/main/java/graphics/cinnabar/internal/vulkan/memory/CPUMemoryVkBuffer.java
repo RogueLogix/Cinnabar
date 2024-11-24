@@ -3,15 +3,22 @@ package graphics.cinnabar.internal.vulkan.memory;
 import graphics.cinnabar.internal.CinnabarRenderer;
 import graphics.cinnabar.internal.memory.PointerWrapper;
 import graphics.cinnabar.internal.vulkan.Destroyable;
+import graphics.cinnabar.internal.vulkan.util.LiveHandles;
+import it.unimi.dsi.fastutil.longs.Long2ReferenceMap;
+import it.unimi.dsi.fastutil.longs.Long2ReferenceOpenHashMap;
+import net.roguelogix.phosphophyllite.util.NonnullDefault;
+import org.jetbrains.annotations.Nullable;
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.vulkan.*;
 
+import static graphics.cinnabar.internal.CinnabarDebug.DEBUG;
 import static graphics.cinnabar.internal.vulkan.exceptions.VkException.throwFromCode;
 import static org.lwjgl.vulkan.EXTExternalMemoryHost.VK_EXTERNAL_MEMORY_HANDLE_TYPE_HOST_ALLOCATION_BIT_EXT;
 import static org.lwjgl.vulkan.EXTExternalMemoryHost.vkGetMemoryHostPointerPropertiesEXT;
 import static org.lwjgl.vulkan.VK10.*;
 
-public record CPUMemoryVkBuffer(long bufferHandle, PointerWrapper hostPtr, long vkImportedMemory, boolean ownsHostAllocation) implements Destroyable {
+@NonnullDefault
+public record CPUMemoryVkBuffer(long bufferHandle, PointerWrapper hostPtr, long vkImportedMemory, boolean ownsHostAllocation, @Nullable RuntimeException src) implements Destroyable {
     
     public static CPUMemoryVkBuffer alloc(long size) {
         final var hostPtrAlignment = CinnabarRenderer.hostPtrAlignment();
@@ -92,8 +99,12 @@ public record CPUMemoryVkBuffer(long bufferHandle, PointerWrapper hostPtr, long 
             final var memoryHandle = handlePtr.get(0);
             
             vkBindBufferMemory(device, bufferHandle, memoryHandle, 0);
+            @Nullable final var src = DEBUG ? new RuntimeException("Double free of CPU Vk Buffer!") : null;
+            final var buffer = new CPUMemoryVkBuffer(bufferHandle, hostPtr, memoryHandle, ownsHostAllocation, src);
             
-            return new CPUMemoryVkBuffer(bufferHandle, hostPtr, memoryHandle, ownsHostAllocation);
+            LiveHandles.create(bufferHandle);
+            
+            return buffer;
         }
     }
     
@@ -106,5 +117,7 @@ public record CPUMemoryVkBuffer(long bufferHandle, PointerWrapper hostPtr, long 
         if (ownsHostAllocation) {
             hostPtr.free();
         }
+        
+        LiveHandles.destroy(bufferHandle);
     }
 }

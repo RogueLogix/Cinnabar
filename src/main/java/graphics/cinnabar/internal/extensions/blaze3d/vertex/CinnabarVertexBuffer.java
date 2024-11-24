@@ -11,7 +11,10 @@ import graphics.cinnabar.internal.statemachine.CinnabarGeneralState;
 import graphics.cinnabar.internal.util.CinnabarSharedIndexBuffers;
 import graphics.cinnabar.internal.vulkan.memory.CPUMemoryVkBuffer;
 import graphics.cinnabar.internal.vulkan.memory.VulkanMemoryAllocation;
+import graphics.cinnabar.internal.vulkan.util.LiveHandles;
 import graphics.cinnabar.internal.vulkan.util.VulkanQueueHelper;
+import it.unimi.dsi.fastutil.longs.Long2ReferenceMap;
+import it.unimi.dsi.fastutil.longs.Long2ReferenceOpenHashMap;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.ShaderInstance;
 import net.roguelogix.phosphophyllite.util.NonnullDefault;
@@ -20,9 +23,7 @@ import org.joml.Matrix4f;
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.system.MemoryUtil;
 import org.lwjgl.system.libc.LibCString;
-import org.lwjgl.vulkan.VkBufferCopy;
-import org.lwjgl.vulkan.VkBufferCreateInfo;
-import org.lwjgl.vulkan.VkMemoryRequirements;
+import org.lwjgl.vulkan.*;
 
 import static org.lwjgl.opengl.GL11C.*;
 import static org.lwjgl.vulkan.EXTExtendedDynamicState2.vkCmdSetLogicOpEXT;
@@ -33,12 +34,7 @@ import static org.lwjgl.vulkan.VK13.*;
 
 @NonnullDefault
 public class CinnabarVertexBuffer extends VertexBuffer {
-    private static final int PENDING_STAGING_BUFFERS = CinnabarRenderer.SUBMITS_IN_FLIGHT;
-    
-    private long destroyWaitSemaphoreValue = 0;
-    
-    private final CPUMemoryVkBuffer[] stagingBuffers = new CPUMemoryVkBuffer[PENDING_STAGING_BUFFERS];
-    private final long[] stagingBufferSemaphoreValues = new long[PENDING_STAGING_BUFFERS];
+    private final Exception allocationPoint = new RuntimeException();
     
     private long bufferHandle = VK_NULL_HANDLE;
     @Nullable
@@ -83,14 +79,29 @@ public class CinnabarVertexBuffer extends VertexBuffer {
                 createInfo.sharingMode(VK_SHARING_MODE_EXCLUSIVE);
                 createInfo.pQueueFamilyIndices(null);
                 
+                final var memoryRequirements = VkMemoryRequirements2.calloc(stack).sType$Default();
+                final var bufferRequirements = VkDeviceBufferMemoryRequirements.calloc(stack).sType$Default();
+                bufferRequirements.pCreateInfo(createInfo);
+                vkGetDeviceBufferMemoryRequirements(device, bufferRequirements, memoryRequirements);
+                bufferAllocation = CinnabarRenderer.GPUMemoryAllocator.alloc(memoryRequirements);
+                
+                // size up the actual buffer to match the allocation's size
+                createInfo.size(bufferAllocation.range().size());
+                vkGetDeviceBufferMemoryRequirements(device, bufferRequirements, memoryRequirements);
+                if (memoryRequirements.memoryRequirements().size() > bufferAllocation.range().size()){
+                    throw new IllegalStateException();
+                }
+                
+                if(bufferHandle != VK_NULL_HANDLE){
+                    throw new IllegalStateException("About to leak VkBuffer!");
+                }
+                
                 vkCreateBuffer(device, createInfo, null, longPtr);
                 bufferHandle = longPtr.get(0);
                 
-                final var memoryRequirements = VkMemoryRequirements.malloc(stack);
-                vkGetBufferMemoryRequirements(device, bufferHandle, memoryRequirements);
-                bufferAllocation = CinnabarRenderer.GPUMemoryAllocator.alloc(memoryRequirements);
-                
                 vkBindBufferMemory(device, bufferHandle, bufferAllocation.memoryHandle(), bufferAllocation.range().offset());
+                
+                LiveHandles.create(bufferHandle, allocationPoint);
             }
         }
         assert bufferAllocation != null;
@@ -98,20 +109,9 @@ public class CinnabarVertexBuffer extends VertexBuffer {
         
         final var queue = CinnabarRenderer.queueHelper;
         final var commandBuffer = queue.getImplicitCommandBuffer(VulkanQueueHelper.QueueType.MAIN_GRAPHICS);
-        int stagingBufferIndex = 0;
-        for (int i = 0; i < stagingBufferSemaphoreValues.length; i++) {
-            if (stagingBufferSemaphoreValues[i] < stagingBufferSemaphoreValues[stagingBufferIndex]) {
-                stagingBufferIndex = i;
-            }
-        }
-        queue.clientSubmitAndWaitImplicit(VulkanQueueHelper.QueueType.MAIN_GRAPHICS, stagingBufferSemaphoreValues[stagingBufferIndex]);
-        if (stagingBuffers[stagingBufferIndex] != null) {
-            stagingBuffers[stagingBufferIndex].destroy();
-            stagingBuffers[stagingBufferIndex] = null;
-        }
         
-        
-        final var stagingBuffer = stagingBuffers[stagingBufferIndex] = CPUMemoryVkBuffer.alloc(totalBytesNeeded);
+        final var stagingBuffer = CPUMemoryVkBuffer.alloc(totalBytesNeeded);
+        queue.destroyEndOfSubmit(stagingBuffer);
         final var hostPtr = stagingBuffer.hostPtr();
         
         // TODO: if buffer ownership can be transferred, there is no need for this memcpy
@@ -132,9 +132,8 @@ public class CinnabarVertexBuffer extends VertexBuffer {
             copyRegion.dstOffset(0);
             copyRegion.size(totalBytesNeeded);
             copyRegion.limit(1);
-            vkCmdCopyBuffer(commandBuffer, stagingBuffers[stagingBufferIndex].bufferHandle(), bufferHandle, copyRegion);
+            vkCmdCopyBuffer(commandBuffer, stagingBuffer.bufferHandle(), bufferHandle, copyRegion);
         }
-        stagingBufferSemaphoreValues[stagingBufferIndex] = queue.nextSignalImplicit(VulkanQueueHelper.QueueType.MAIN_GRAPHICS, VK_PIPELINE_STAGE_TRANSFER_BIT);
         markUsed(VK_PIPELINE_STAGE_TRANSFER_BIT);
         
         meshData.close();
@@ -142,34 +141,30 @@ public class CinnabarVertexBuffer extends VertexBuffer {
     
     public void markUsed(int stageMask) {
         final var queue = CinnabarRenderer.queueHelper;
-        destroyWaitSemaphoreValue = queue.nextSignalImplicit(VulkanQueueHelper.QueueType.MAIN_GRAPHICS, stageMask);
+//        destroyWaitSemaphoreValue = queue.nextSignalImplicit(VulkanQueueHelper.QueueType.MAIN_GRAPHICS, stageMask);
     }
     
     public void gpuDestroy() {
         final var queue = CinnabarRenderer.queueHelper;
         
-        // if in use, need to wait for it to not be in use
-        if (destroyWaitSemaphoreValue != 0) {
-            queue.clientSubmitAndWaitImplicit(VulkanQueueHelper.QueueType.MAIN_GRAPHICS, destroyWaitSemaphoreValue);
-        }
+        LiveHandles.destroy(bufferHandle);
+        
         final var device = CinnabarRenderer.device();
-        vkDestroyBuffer(device, bufferHandle, null);
+        final var oldHandle = bufferHandle;
+        queue.destroyEndOfSubmit(() -> {
+            vkDestroyBuffer(device, oldHandle, null);
+        });
         bufferHandle = VK_NULL_HANDLE;
         if (bufferAllocation != null) {
-            CinnabarRenderer.GPUMemoryAllocator.free(bufferAllocation);
+            queue.destroyEndOfSubmit(bufferAllocation);
             bufferAllocation = null;
         }
         indicesOffset = -1;
-        
     }
     
     @Override
     public void close() {
         gpuDestroy();
-        for (int i = 0; i < stagingBufferSemaphoreValues.length; i++) {
-            assert stagingBufferSemaphoreValues[i] <= destroyWaitSemaphoreValue;
-            stagingBuffers[i].destroy();
-        }
     }
     
     protected void _drawWithShader(Matrix4f modelViewMatrix, Matrix4f projectionMatrix, ShaderInstance shader) {

@@ -71,8 +71,10 @@ public class VulkanDebug extends VkDebugUtilsMessengerCallbackEXT {
             prefix.append("UNKNOWN ");
         }
         
-        LOGGER.warn(String.format("%s: %s", prefix, callbackData.pMessageString()));
-        if (printStackTrace) {
+        final var messageString = callbackData.pMessageString();
+        LOGGER.warn(String.format("%s: %s", prefix, messageString));
+        // vkDestroyDevice may print a lot of messages, and the stack is not helpful
+        if (printStackTrace && !messageString.contains("vkDestroyDevice")) {
             StringWriter sw = new StringWriter();
             PrintWriter pw = new PrintWriter(sw);
             new VkException().printStackTrace(pw);
