@@ -46,7 +46,7 @@ public class CinnabarFramebufferState {
     
     public static void clear(int bits) {
         if (boundTarget != null) {
-            boundTarget.clear(true);
+            boundTarget.clear(bits);
         } else {
             window().clear(bits);
         }

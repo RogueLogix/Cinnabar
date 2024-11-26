@@ -2,7 +2,7 @@ package graphics.cinnabar.internal.util;
 
 import com.mojang.blaze3d.vertex.VertexFormat;
 import graphics.cinnabar.internal.CinnabarRenderer;
-import graphics.cinnabar.internal.vulkan.memory.CPUMemoryVkBuffer;
+import graphics.cinnabar.internal.vulkan.memory.HostMemoryVkBuffer;
 import graphics.cinnabar.internal.vulkan.memory.VulkanBuffer;
 import graphics.cinnabar.internal.vulkan.util.VulkanQueueHelper;
 import org.lwjgl.system.MemoryStack;
@@ -18,7 +18,7 @@ public class CinnabarSharedIndexBuffers {
     private static VulkanBuffer quadIndices = new VulkanBuffer(1, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
     private static VulkanBuffer lineIndices = new VulkanBuffer(1, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
     
-    private static VulkanBuffer upload(CPUMemoryVkBuffer tempBuffer) {
+    private static VulkanBuffer upload(HostMemoryVkBuffer tempBuffer) {
         final var newBuffer = new VulkanBuffer(tempBuffer.hostPtr().size(), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
         final var queue = CinnabarRenderer.queueHelper;
         final var commandBuffer = queue.getImplicitCommandBuffer(VulkanQueueHelper.QueueType.MAIN_GRAPHICS);
@@ -37,7 +37,7 @@ public class CinnabarSharedIndexBuffers {
                 if (quadIndices.size < (indexCount * 4L)) {
                     final int newSize = Math.max(indexCount * 4, (int) quadIndices.size * 2);
                     final int newIndexCount = newSize / 4;
-                    final var tempBuffer = CPUMemoryVkBuffer.alloc(newSize);
+                    final var tempBuffer = HostMemoryVkBuffer.alloc(newSize);
                     CinnabarRenderer.queueDestroyEndOfGPUSubmit(tempBuffer);
                     final var intBuff = tempBuffer.hostPtr();
                     final var polyCount = newIndexCount / 6;
@@ -60,7 +60,7 @@ public class CinnabarSharedIndexBuffers {
             case LINES -> {
                 if (lineIndices.size < (indexCount * 4L)) {
                     final int newSize = indexCount * 4;
-                    final var tempBuffer = CPUMemoryVkBuffer.alloc(newSize);
+                    final var tempBuffer = HostMemoryVkBuffer.alloc(newSize);
                     CinnabarRenderer.queueDestroyEndOfGPUSubmit(tempBuffer);
                     final var intBuff = tempBuffer.hostPtr();
                     final var polyCount = indexCount / 6;
@@ -82,7 +82,7 @@ public class CinnabarSharedIndexBuffers {
             default -> {
                 if (sequentialIndices.size < indexCount * 4L) {
                     final int newSize = indexCount * 4;
-                    final var tempBuffer = CPUMemoryVkBuffer.alloc(newSize);
+                    final var tempBuffer = HostMemoryVkBuffer.alloc(newSize);
                     CinnabarRenderer.queueDestroyEndOfGPUSubmit(tempBuffer);
                     final var intBuff = tempBuffer.hostPtr();
                     for (int i = 0; i < indexCount; i++) {

@@ -1,19 +1,13 @@
 package graphics.cinnabar.internal;
 
-import com.mojang.blaze3d.vertex.VertexFormat;
 import graphics.cinnabar.api.threading.Queues;
-import graphics.cinnabar.internal.extensions.blaze3d.vertex.CinnabarVertexBuffer;
-import graphics.cinnabar.internal.extensions.minecraft.renderer.CinnabarShaderInstance;
 import graphics.cinnabar.internal.memory.MagicNumbers;
 import graphics.cinnabar.internal.mixin.helpers.blaze3d.vertex.VertexFormatMixinHelper;
-import graphics.cinnabar.internal.statemachine.CinnabarBlendState;
 import graphics.cinnabar.internal.util.CinnabarSharedIndexBuffers;
 import graphics.cinnabar.internal.util.threading.ResizingRingBuffer;
 import graphics.cinnabar.internal.vulkan.Destroyable;
 import graphics.cinnabar.internal.vulkan.VulkanCore;
-import graphics.cinnabar.internal.vulkan.memory.CPUMemoryVkBuffer;
 import graphics.cinnabar.internal.vulkan.memory.GPUMemoryAllocator;
-import graphics.cinnabar.internal.vulkan.memory.VulkanBuffer;
 import graphics.cinnabar.internal.vulkan.util.CinnabarDescriptorSets;
 import graphics.cinnabar.internal.vulkan.util.LiveHandles;
 import graphics.cinnabar.internal.vulkan.util.VulkanQueueHelper;

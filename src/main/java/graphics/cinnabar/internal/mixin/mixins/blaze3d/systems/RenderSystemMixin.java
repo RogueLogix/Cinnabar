@@ -179,4 +179,14 @@ public class RenderSystemMixin {
     @Overwrite
     public static void texParameter(int target, int parameterName, int parameter) {
     }
+
+    @Overwrite
+    public static void enableScissor(int x, int y, int width, int height) {
+        CinnabarFramebufferState.enableGlScissor(x, y, width, height);
+    }
+
+    @Overwrite
+    public static void disableScissor() {
+        CinnabarFramebufferState.disableGlScissor();
+    }
 }

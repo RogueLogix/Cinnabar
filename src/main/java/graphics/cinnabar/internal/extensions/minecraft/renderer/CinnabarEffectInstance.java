@@ -10,9 +10,10 @@ import graphics.cinnabar.internal.extensions.minecraft.renderer.texture.Cinnabar
 import graphics.cinnabar.internal.statemachine.CinnabarBlendState;
 import graphics.cinnabar.internal.statemachine.CinnabarGeneralState;
 import graphics.cinnabar.internal.vulkan.MagicNumbers;
-import graphics.cinnabar.internal.vulkan.memory.CPUMemoryVkBuffer;
+import graphics.cinnabar.internal.vulkan.memory.HostMemoryVkBuffer;
 import graphics.cinnabar.internal.vulkan.memory.VulkanBuffer;
 import graphics.cinnabar.internal.vulkan.util.CinnabarDescriptorSets;
+import graphics.cinnabar.internal.vulkan.util.VulkanQueueHelper;
 import graphics.cinnabar.internal.vulkan.util.VulkanSampler;
 import net.minecraft.client.renderer.EffectInstance;
 import net.minecraft.server.packs.resources.ResourceProvider;
@@ -29,7 +30,7 @@ import static org.lwjgl.vulkan.EXTExtendedDynamicState2.VK_DYNAMIC_STATE_LOGIC_O
 import static org.lwjgl.vulkan.EXTExtendedDynamicState3.*;
 import static org.lwjgl.vulkan.VK13.*;
 
-public class CinnabarEffectInstance extends EffectInstance {
+public class CinnabarEffectInstance extends EffectInstance implements ICinnabarShader{
     
     private CinnabarProgram vertexProgram;
     private CinnabarProgram fragmentProgram;
@@ -45,8 +46,7 @@ public class CinnabarEffectInstance extends EffectInstance {
     private final VulkanBuffer UBOGPUBuffer;
     
     private final long UBODescriptorSet;
-    private final long SamplerDescriptorSet;
-    private CPUMemoryVkBuffer uboStagingBuffer;
+    private HostMemoryVkBuffer uboStagingBuffer;
 
     public CinnabarEffectInstance(ResourceProvider resourceProvider, String name) throws IOException {
         super(resourceProvider, name);
@@ -137,9 +137,6 @@ public class CinnabarEffectInstance extends EffectInstance {
                 createInfo.pBindings(bindings);
                 
                 vkCreateDescriptorSetLayout(device, createInfo, null, longPtr);
-                SamplerDescriptorSet = CinnabarDescriptorSets.allocDescriptorSet(longPtr.get(0));
-            } else {
-                SamplerDescriptorSet = 0;
             }
             SamplerDescriptorSetLayout = longPtr.get(0);
         }
@@ -322,7 +319,6 @@ public class CinnabarEffectInstance extends EffectInstance {
         }
         final var device = CinnabarRenderer.device();
         CinnabarDescriptorSets.free(UBODescriptorSet);
-        CinnabarDescriptorSets.free(SamplerDescriptorSet);
         vkDestroyDescriptorSetLayout(device, UBODescriptorSetLayout, null);
         vkDestroyDescriptorSetLayout(device, SamplerDescriptorSetLayout, null);
         vkDestroyPipeline(device, pipeline, null);
@@ -337,13 +333,15 @@ public class CinnabarEffectInstance extends EffectInstance {
     
     @Override
     public void apply() {
-        throw new NotImplemented("Must apply to command buffer");
+        apply(CinnabarRenderer.queueHelper.getImplicitCommandBuffer(VulkanQueueHelper.QueueType.MAIN_GRAPHICS));
     }
     
     public void apply(VkCommandBuffer commandBuffer) {
+        long activeSamplerSet = VK_NULL_HANDLE;
         try (final var stack = MemoryStack.stackPush()) {
             final var device = CinnabarRenderer.device();
             final var descriptorWrites = VkWriteDescriptorSet.calloc(samplerNames.size());
+            activeSamplerSet = CinnabarRenderer.queueHelper.descriptorPoolsForSubmit().allocSamplerSet(SamplerDescriptorSetLayout);
             for (int i = 0; i < samplerNames.size(); i++) {
                 final var srcObject = CinnabarAbstractTexture.boundShaderTexture(i);
                 long imageViewHandle = 0;
@@ -360,7 +358,7 @@ public class CinnabarEffectInstance extends EffectInstance {
                 descriptorWrites.position(i);
                 descriptorWrites.descriptorCount(1);
                 descriptorWrites.sType(VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET);
-                descriptorWrites.dstSet(SamplerDescriptorSet);
+                descriptorWrites.dstSet(activeSamplerSet);
                 descriptorWrites.dstBinding(i);
                 descriptorWrites.dstArrayElement(0);
                 descriptorWrites.descriptorType(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
@@ -370,7 +368,7 @@ public class CinnabarEffectInstance extends EffectInstance {
             vkUpdateDescriptorSets(device, descriptorWrites, null);
 
             if (this.dirty && UBOGPUBuffer != null) {
-                uboStagingBuffer = CPUMemoryVkBuffer.alloc(UBOSize);
+                uboStagingBuffer = HostMemoryVkBuffer.alloc(UBOSize);
                 CinnabarRenderer.queueDestroyEndOfGPUSubmit(uboStagingBuffer);
                 for (Uniform uniform : this.uniforms) {
                     uniform.upload();
@@ -410,14 +408,14 @@ public class CinnabarEffectInstance extends EffectInstance {
         vkCmdSetDepthWriteEnable(commandBuffer, CinnabarGeneralState.depthWrite);
         vkCmdSetCullMode(commandBuffer, CinnabarGeneralState.cull ? VK_CULL_MODE_BACK_BIT : VK_CULL_MODE_NONE);
         if (UBODescriptorSet != VK_NULL_HANDLE) {
-            if (SamplerDescriptorSet != VK_NULL_HANDLE) {
-                vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, new long[]{UBODescriptorSet, SamplerDescriptorSet}, null);
+            if (SamplerDescriptorSetLayout != VK_NULL_HANDLE) {
+                vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, new long[]{UBODescriptorSet, activeSamplerSet}, null);
             } else {
                 vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, new long[]{UBODescriptorSet}, null);
             }
         } else {
-            if (SamplerDescriptorSet != VK_NULL_HANDLE) {
-                vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, new long[]{SamplerDescriptorSet}, null);
+            if (SamplerDescriptorSetLayout != VK_NULL_HANDLE) {
+                vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, new long[]{activeSamplerSet}, null);
             }
         }
         CinnabarBlendState.apply(commandBuffer);

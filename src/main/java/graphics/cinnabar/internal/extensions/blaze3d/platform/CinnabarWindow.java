@@ -1,5 +1,6 @@
 package graphics.cinnabar.internal.extensions.blaze3d.platform;
 
+import com.mojang.blaze3d.pipeline.MainTarget;
 import com.mojang.blaze3d.platform.DisplayData;
 import com.mojang.blaze3d.platform.ScreenManager;
 import com.mojang.blaze3d.platform.Window;
@@ -11,6 +12,7 @@ import graphics.cinnabar.internal.CinnabarRenderer;
 import graphics.cinnabar.internal.vulkan.MagicNumbers;
 import graphics.cinnabar.internal.vulkan.util.VulkanQueueHelper;
 import it.unimi.dsi.fastutil.longs.LongArrayList;
+import net.minecraft.client.Minecraft;
 import net.neoforged.fml.loading.ImmediateWindowHandler;
 import net.roguelogix.phosphophyllite.util.NonnullDefault;
 import org.jetbrains.annotations.Nullable;
@@ -28,6 +30,7 @@ import static org.lwjgl.opengl.GL11C.GL_COLOR_BUFFER_BIT;
 import static org.lwjgl.vulkan.KHRSurface.*;
 import static org.lwjgl.vulkan.KHRSwapchain.*;
 import static org.lwjgl.vulkan.VK10.*;
+import static org.lwjgl.vulkan.VK12.VK_SEMAPHORE_TYPE_TIMELINE;
 
 @NonnullDefault
 public class CinnabarWindow extends Window {
@@ -39,6 +42,7 @@ public class CinnabarWindow extends Window {
     public final Vector2i swapchainExtent = new Vector2i();
     
     private int currentSwapchainFrame = -1;
+    private final LongArrayList swapchainImageSemaphores = new LongArrayList();
     private final LongArrayList swapchainImages = new LongArrayList();
     private final long frameAcquisitionFence;
     
@@ -59,7 +63,7 @@ public class CinnabarWindow extends Window {
             vkCreateFence(device, VkFenceCreateInfo.calloc(stack).sType$Default(), null, longPtr);
             frameAcquisitionFence = longPtr.get(0);
             
-            present();
+            acquireFrame(false);
         }
         
         imageSubresourceRange.aspectMask(VK_IMAGE_ASPECT_COLOR_BIT);
@@ -80,6 +84,9 @@ public class CinnabarWindow extends Window {
         imageBarrier.free();
         imageSubresourceRange.free();
         vkDeviceWaitIdle(CinnabarRenderer.device());
+        for (int i = 0; i < swapchainImageSemaphores.size(); i++) {
+            vkDestroySemaphore(device, swapchainImageSemaphores.getLong(i), null);
+        }
         vkWaitForFences(CinnabarRenderer.device(), frameAcquisitionFence, true, -1);
         vkDestroyFence(device, frameAcquisitionFence, null);
         vkDestroySwapchainKHR(device, swapchain, null);
@@ -107,14 +114,17 @@ public class CinnabarWindow extends Window {
         this.vsync = vsync;
         CinnabarRenderer.waitIdle();
         throwFromCode(vkWaitForFences(device, frameAcquisitionFence, true, Long.MAX_VALUE));
-        recreateSwapchain();
+        recreateSwapchain(false);
     }
     
-    private void recreateSwapchain() {
+    private void recreateSwapchain(boolean recursing) {
+        present(); // will probably cause a suboptimal return code, thats fine
         CinnabarRenderer.waitIdle();
         createSwapchain(getWidth(), getHeight());
         // re-acquire a swapchain image
-        present();
+        acquireFrame(recursing);
+        // prevents a black flicker for a single frame
+        Minecraft.getInstance().getMainRenderTarget().blitToScreen(getWidth(), getHeight());
     }
     
     private void createSwapchain(int width, int height) {
@@ -137,7 +147,6 @@ public class CinnabarWindow extends Window {
             vkGetPhysicalDeviceSurfacePresentModesKHR(physicalDevice, surface, intPtr, presentModes);
             int presentMode = -1;
             final var presentModeOrder = this.vsync ? VSyncPresentModeOrder : NoSyncPresentModeOrder;
-            // TODO: no v-sync
             for (int i = 0; i < presentModeOrder.length && presentMode == -1; i++) {
                 final int preferredPresentMode = presentModeOrder[i];
                 for (int j = 0; j < presentModeCount; j++) {
@@ -196,6 +205,13 @@ public class CinnabarWindow extends Window {
             for (int i = 0; i < swapchainImageCount; i++) {
                 swapchainImages.add(swapchainImagesPtr.get(i));
             }
+
+            final var semaphoreCreateInfo = VkSemaphoreCreateInfo.calloc(stack).sType$Default();
+            final var handleReturn = stack.mallocLong(1);
+            for (int i = swapchainImageSemaphores.size(); i < swapchainImageCount; i++) {
+                throwFromCode(vkCreateSemaphore(device, semaphoreCreateInfo, null, handleReturn));
+                swapchainImageSemaphores.add(handleReturn.get(0));
+            }
         }
         currentSwapchainFrame = -1;
     }
@@ -206,6 +222,7 @@ public class CinnabarWindow extends Window {
         replayQueue();
         Tesselator.getInstance().clear();
         present();
+        acquireFrame(false);
         
         if (this.fullscreen != this.actuallyFullscreen) {
             this.actuallyFullscreen = this.fullscreen;
@@ -219,24 +236,17 @@ public class CinnabarWindow extends Window {
     }
     
     public void present() {
-        
-        // TODO: binary semaphore for the present system
+
         try (final var stack = MemoryStack.stackPush()) {
             
             // present frame, if one is acquired
             if(currentSwapchainFrame != -1) {
-                final var commandBuffer = CinnabarRenderer.queueHelper.getImplicitCommandBuffer(VulkanQueueHelper.QueueType.MAIN_GRAPHICS);
-                
-                imageBarrier.srcAccessMask(VK_ACCESS_TRANSFER_WRITE_BIT);
-                imageBarrier.dstAccessMask(0);
-                imageBarrier.oldLayout(VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-                imageBarrier.newLayout(VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
-                imageBarrier.image(getImageForBlit());
-                
-                vkCmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 0, null, null, imageBarrier);
-                
-                CinnabarRenderer.waitIdle();
-                
+
+                // semaphore and barrier are on teh same stage bit, should be fine
+                final var semaphore = swapchainImageSemaphores.getLong(currentSwapchainFrame);
+                CinnabarRenderer.queueHelper.signalSemaphore(VulkanQueueHelper.QueueType.MAIN_GRAPHICS, semaphore, 0, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
+
+                CinnabarRenderer.queueHelper.submit(false);
                 // wait for last acquire
                 throwFromCode(vkWaitForFences(device, frameAcquisitionFence, true, Long.MAX_VALUE));
                 
@@ -247,27 +257,33 @@ public class CinnabarWindow extends Window {
                 final var presentInfo = VkPresentInfoKHR.calloc(stack);
                 presentInfo.sType(VK_STRUCTURE_TYPE_PRESENT_INFO_KHR);
                 presentInfo.swapchainCount(1);
+                presentInfo.pWaitSemaphores(stack.longs(semaphore));
                 presentInfo.pSwapchains(swapchainPtr);
                 presentInfo.pImageIndices(imageIndexPtr);
                 throwFromCode(vkQueuePresentKHR(CinnabarRenderer.graphicsQueue(), presentInfo));
                 currentSwapchainFrame = -1;
             }
-            
+        }
+    }
+
+    private void acquireFrame(boolean recursing) {
+        try (final var stack = MemoryStack.stackPush()) {
+
             // acquire next frame
             final var intPtr = stack.mallocInt(1);
             intPtr.put(0, -1);
-            
+
             throwFromCode(vkResetFences(device, frameAcquisitionFence));
             int returnCode = vkAcquireNextImageKHR(device, swapchain, Long.MAX_VALUE, VK_NULL_HANDLE, frameAcquisitionFence, intPtr);
-            if (returnCode != VK_SUCCESS) {
+            throwFromCode(returnCode);
+            if (returnCode == VK_SUBOPTIMAL_KHR && !recursing) {
                 // acquire wasn't happy, rebuild the swapchain
                 // its probably a resolution change
-                throwFromCode(returnCode);
                 throwFromCode(vkWaitForFences(device, frameAcquisitionFence, true, Long.MAX_VALUE));
                 throwFromCode(vkResetFences(device, frameAcquisitionFence));
                 currentSwapchainFrame = -1;
                 swapchainImages.clear();
-                recreateSwapchain();
+                recreateSwapchain(true);
                 // recreate swapchain is recursive into this function and will re-acquire a frame
             } else {
                 currentSwapchainFrame = intPtr.get(0);

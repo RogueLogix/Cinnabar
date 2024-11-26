@@ -3,6 +3,7 @@ package graphics.cinnabar.internal.extensions.blaze3d.shaders;
 import com.mojang.blaze3d.shaders.Shader;
 import com.mojang.blaze3d.shaders.Uniform;
 import graphics.cinnabar.internal.extensions.minecraft.renderer.CinnabarShaderInstance;
+import graphics.cinnabar.internal.extensions.minecraft.renderer.ICinnabarShader;
 import org.lwjgl.system.MemoryUtil;
 
 import java.nio.Buffer;
@@ -11,9 +12,9 @@ public class CinnabarUniform extends Uniform {
     public CinnabarUniform(String name, int type, int count, Shader parent) {
         super(name, type, count, parent);
     }
-    
-    CinnabarShaderInstance cinnabarParent() {
-        return (CinnabarShaderInstance) parent;
+
+    ICinnabarShader cinnabarParent() {
+        return (ICinnabarShader) parent;
     }
     
     @Override

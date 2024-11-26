@@ -5,8 +5,6 @@ import graphics.cinnabar.internal.memory.LeakDetection;
 import graphics.cinnabar.internal.memory.PointerWrapper;
 import graphics.cinnabar.internal.vulkan.Destroyable;
 import graphics.cinnabar.internal.vulkan.util.LiveHandles;
-import it.unimi.dsi.fastutil.longs.Long2ReferenceMap;
-import it.unimi.dsi.fastutil.longs.Long2ReferenceOpenHashMap;
 import net.roguelogix.phosphophyllite.util.NonnullDefault;
 import org.jetbrains.annotations.Nullable;
 import org.lwjgl.system.MemoryStack;
@@ -19,14 +17,14 @@ import static org.lwjgl.vulkan.EXTExternalMemoryHost.vkGetMemoryHostPointerPrope
 import static org.lwjgl.vulkan.VK10.*;
 
 @NonnullDefault
-public record CPUMemoryVkBuffer(long bufferHandle, PointerWrapper hostPtr, long vkImportedMemory,
-                                boolean ownsHostAllocation, @Nullable RuntimeException src) implements Destroyable {
+public record HostMemoryVkBuffer(long bufferHandle, PointerWrapper hostPtr, long vkImportedMemory,
+                                 boolean ownsHostAllocation, @Nullable RuntimeException src) implements Destroyable {
 
     // debug feature, works better in renderdoc
     private static final boolean ALLOCATE_VULKAN_MEMORY_FOR_ALLOC = false;
     private static final int VULKAN_CPU_MEMORY_TYPE_INDEX = 1;
 
-    public static CPUMemoryVkBuffer alloc(long size) {
+    public static HostMemoryVkBuffer alloc(long size) {
 
         final var hostPtrAlignment = CinnabarRenderer.hostPtrAlignment();
         final var roundedUpSize = (size + (hostPtrAlignment - 1)) & -hostPtrAlignment;
@@ -56,7 +54,7 @@ public record CPUMemoryVkBuffer(long bufferHandle, PointerWrapper hostPtr, long 
                 LeakDetection.addAccessibleLocation(new PointerWrapper(hostPtr.get(0), roundedUpSize));
 
                 @Nullable final var src = DEBUG ? new RuntimeException("Double free of CPU Vk Buffer!") : null;
-                final var buffer = new CPUMemoryVkBuffer(bufferHandlePtr.get(0), new PointerWrapper(hostPtr.get(0), roundedUpSize), memoryHandlePtr.get(0), true, src);
+                final var buffer = new HostMemoryVkBuffer(bufferHandlePtr.get(0), new PointerWrapper(hostPtr.get(0), roundedUpSize), memoryHandlePtr.get(0), true, src);
                 LiveHandles.create(buffer);
                 return buffer;
             }
@@ -66,11 +64,11 @@ public record CPUMemoryVkBuffer(long bufferHandle, PointerWrapper hostPtr, long 
         return create(hostPtr, true);
     }
 
-    public static CPUMemoryVkBuffer create(long ptr, long size) {
+    public static HostMemoryVkBuffer create(long ptr, long size) {
         return create(new PointerWrapper(ptr, size), false);
     }
 
-    private static CPUMemoryVkBuffer create(PointerWrapper hostPtr, boolean ownsHostAllocation) {
+    private static HostMemoryVkBuffer create(PointerWrapper hostPtr, boolean ownsHostAllocation) {
         final var device = CinnabarRenderer.device();
 
         if ((hostPtr.pointer() & (CinnabarRenderer.hostPtrAlignment() - 1)) != 0) {
@@ -139,7 +137,7 @@ public record CPUMemoryVkBuffer(long bufferHandle, PointerWrapper hostPtr, long 
 
             vkBindBufferMemory(device, bufferHandle, memoryHandle, 0);
             @Nullable final var src = DEBUG ? new RuntimeException("Double free of CPU Vk Buffer!") : null;
-            final var buffer = new CPUMemoryVkBuffer(bufferHandle, hostPtr, memoryHandle, ownsHostAllocation, src);
+            final var buffer = new HostMemoryVkBuffer(bufferHandle, hostPtr, memoryHandle, ownsHostAllocation, src);
 
             LiveHandles.create(buffer);
 

@@ -182,14 +182,16 @@ public class VulkanCore implements Destroyable {
                     
                     var layerPointers = stack.mallocPointer(1);
                     layerPointers.put(0, stack.UTF8("VK_LAYER_KHRONOS_validation"));
-//                     renderdoc does not support VK_EXT_external_memory_host
-//                    layerPointers.put(1, stack.UTF8("VK_LAYER_RENDERDOC_Capture"));
                     enabledInstanceExtensions.add(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
                     
                     createInfo.ppEnabledLayerNames(layerPointers);
                     debugCreateInfo = VulkanDebug.getCreateInfo(stack);
                     createInfo.pNext(debugCreateInfo.address());
                 }
+            } else {
+                var layerPointers = stack.mallocPointer(1);
+                layerPointers.put(0, stack.UTF8("VK_LAYER_MESA_overlay"));
+                createInfo.ppEnabledLayerNames(layerPointers);
             }
             
             @Nullable final var glfwExtensions = glfwGetRequiredInstanceExtensions();

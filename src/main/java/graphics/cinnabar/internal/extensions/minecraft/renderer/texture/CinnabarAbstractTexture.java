@@ -3,11 +3,10 @@ package graphics.cinnabar.internal.extensions.minecraft.renderer.texture;
 import com.mojang.blaze3d.platform.NativeImage;
 import graphics.cinnabar.internal.CinnabarRenderer;
 import graphics.cinnabar.internal.exceptions.NotImplemented;
-import graphics.cinnabar.internal.vulkan.memory.CPUMemoryVkBuffer;
+import graphics.cinnabar.internal.vulkan.memory.HostMemoryVkBuffer;
 import graphics.cinnabar.internal.vulkan.memory.VulkanMemoryAllocation;
 import graphics.cinnabar.internal.vulkan.util.LiveHandles;
 import graphics.cinnabar.internal.vulkan.util.VulkanQueueHelper;
-import graphics.cinnabar.internal.vulkan.util.VulkanSampler;
 import net.minecraft.client.renderer.texture.AbstractTexture;
 import net.roguelogix.phosphophyllite.util.NonnullDefault;
 import org.jetbrains.annotations.Nullable;
@@ -173,7 +172,7 @@ public abstract class CinnabarAbstractTexture extends AbstractTexture {
         return imageViewHandle;
     }
     
-    public void recordUpload(NativeImage nativeImage, CPUMemoryVkBuffer cpuMemoryVkBuffer, int level, int xOffset, int yOffset, int unpackSkipPixels, int unpackSkipRows, int width, int height, boolean blur, boolean clamp, boolean mipmap) {
+    public void recordUpload(NativeImage nativeImage, HostMemoryVkBuffer hostMemoryVkBuffer, int level, int xOffset, int yOffset, int unpackSkipPixels, int unpackSkipRows, int width, int height, boolean blur, boolean clamp, boolean mipmap) {
         
         // copy is directly from host NativeImage allocation to GPU memory
         // no stage for a format remap to be done
@@ -200,7 +199,7 @@ public abstract class CinnabarAbstractTexture extends AbstractTexture {
         final var commandBuffer = CinnabarRenderer.queueHelper.getImplicitCommandBuffer(VulkanQueueHelper.QueueType.MAIN_GRAPHICS);
         // TOP_OF_PIPE is fine because there will be frame to frame queue drains
         recordTransition(commandBuffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 0, VK_ACCESS_TRANSFER_WRITE_BIT, level, 1);
-        vkCmdCopyBufferToImage(commandBuffer, cpuMemoryVkBuffer.bufferHandle(), imageHandle, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, vkBufferImageCopy);
+        vkCmdCopyBufferToImage(commandBuffer, hostMemoryVkBuffer.bufferHandle(), imageHandle, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, vkBufferImageCopy);
         recordTransition(commandBuffer, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, level, 1);
     }
     

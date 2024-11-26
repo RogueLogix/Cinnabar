@@ -5,6 +5,7 @@ import graphics.cinnabar.internal.exceptions.NotImplemented;
 import graphics.cinnabar.internal.util.GrowingMemoryStack;
 import graphics.cinnabar.internal.util.threading.ResizingRingBuffer;
 import graphics.cinnabar.internal.vulkan.Destroyable;
+import graphics.cinnabar.internal.vulkan.memory.TransientCPUBufferAllocator;
 import it.unimi.dsi.fastutil.longs.LongArrayList;
 import it.unimi.dsi.fastutil.objects.ReferenceArrayList;
 import net.roguelogix.phosphophyllite.threading.ThreadSafety;
@@ -33,55 +34,57 @@ import static org.lwjgl.vulkan.VK13.vkQueueSubmit2;
  */
 @NonnullDefault
 public class VulkanQueueHelper implements Destroyable {
-    
+
     private final VkDevice device = CinnabarRenderer.device();
-    
+
     private boolean valid = true;
-    
+
     private final int submitsInFlight;
     private int currentSubmit = 0;
-    
+
     private final GrowingMemoryStack stack = new GrowingMemoryStack();
     private final MemoryStack lwjglStack = MemoryStack.create();
-    
+
     private final ReferenceArrayList<ResizingRingBuffer<Destroyable>> endOfGPUSubmitDestroy = new ReferenceArrayList<>();
-    
+    private final ReferenceArrayList<VulkanDescriptorPools> transientDescriptorPools = new ReferenceArrayList<>();
+    private final ReferenceArrayList<TransientCPUBufferAllocator> transientCPUBufferAllocators = new ReferenceArrayList<>();
+
     public enum QueueType {
         MAIN_GRAPHICS,
         ASYNC_COMPUTE,
         ASYNC_TRANSFER,
     }
-    
+
     private enum QueueState {
         WAITING,
         COMMANDS,
         SIGNALING
     }
-    
+
     private class Builder implements Destroyable {
         private final VkQueue queue;
         private final int queueFamilyIndex;
         private QueueState queueState = QueueState.WAITING;
-        
+
         private final List<VulkanTransientCommandBufferPool> commandPools;
         @Nullable
         private VkCommandBuffer currentCommandBuffer;
-        
+
         private final ReferenceArrayList<VkCommandBuffer> commandBuffers = new ReferenceArrayList<>();
         private final LongArrayList submitSemaphores = new LongArrayList();
         private final LongArrayList submitSemaphoreValues = new LongArrayList();
         private final LongArrayList submitSemaphoreStages = new LongArrayList();
-        
+
         // these structs are only 64 bytes in size, so this is 128k of memory
         private final VkSubmitInfo2.Buffer submitInfos = VkSubmitInfo2.calloc(2048);
         private final VkCommandBufferBeginInfo beginInfo = VkCommandBufferBeginInfo.calloc();
-        
+
         private final long implicitSyncSemaphore;
         private final AtomicLong implicitSyncSemaphoreLastWaitValue = new AtomicLong(0);
         private long implicitSyncSemaphoreValue = 0;
         private long implicitSyncSemaphoreMask = 0;
         private final long[] lastSubmitWaitValues = new long[submitsInFlight];
-        
+
         private Builder(VkQueue queue, int queueFamily) {
             this.queue = queue;
             this.queueFamilyIndex = queueFamily;
@@ -89,8 +92,9 @@ public class VulkanQueueHelper implements Destroyable {
             this.commandPools = Collections.unmodifiableList(pools);
             for (int i = 0; i < submitsInFlight; i++) {
                 pools.add(new VulkanTransientCommandBufferPool(queueFamily));
-//                endOfGPUSubmitDestroy.add(Collections.synchronizedList(new ReferenceArrayList<>()));
                 endOfGPUSubmitDestroy.add(new ResizingRingBuffer<>());
+                transientDescriptorPools.add(new VulkanDescriptorPools());
+                transientCPUBufferAllocators.add(new TransientCPUBufferAllocator());
             }
             beginInfo.sType$Default();
             beginInfo.flags(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
@@ -106,21 +110,21 @@ public class VulkanQueueHelper implements Destroyable {
             }
             submitInfos.sType$Default();
         }
-        
+
         @Override
         public void destroy() {
             vkDestroySemaphore(device, implicitSyncSemaphore, null);
-            commandPools.forEach(VulkanTransientCommandBufferPool::destroy);
+            commandPools.forEach(Destroyable::destroy);
             submitInfos.free();
             beginInfo.free();
         }
-        
+
         private void reset() {
             assert queueState == QueueState.WAITING;
             clientWaitImplicit(lastSubmitWaitValues[currentSubmit]);
-            commandPools.get(currentSubmit).reset();
+            commandPools.get(currentSubmit).reset(false, false);
         }
-        
+
         private void submit() {
             if (submitInfos.position() == 0 && implicitSyncSemaphoreMask == 0 && queueState == QueueState.WAITING) {
                 return;
@@ -138,7 +142,7 @@ public class VulkanQueueHelper implements Destroyable {
             submitInfos.sType$Default();
             currentCommandBuffer = null;
         }
-        
+
         public void switchToState(QueueState newState) {
             if (queueState == newState) {
                 return;
@@ -186,7 +190,7 @@ public class VulkanQueueHelper implements Destroyable {
             }
             queueState = newState;
         }
-        
+
         public boolean clientImplicitSignaled(long value) {
             try (final var stack = MemoryStack.stackPush()) {
                 final var valuePtr = stack.longs(0);
@@ -194,7 +198,7 @@ public class VulkanQueueHelper implements Destroyable {
                 return valuePtr.get(0) >= value;
             }
         }
-        
+
         public void clientWaitImplicit(long value) {
             // TODO: maybe remove this, technically this is valid for other threads to do
             if (value > implicitSyncSemaphoreValue) {
@@ -215,18 +219,18 @@ public class VulkanQueueHelper implements Destroyable {
                 }
             }
         }
-        
+
         public void waitImplicit(long value, long stageMask) {
             waitSemaphore(implicitSyncSemaphore, value, stageMask);
         }
-        
+
         private void waitSemaphore(long semaphore, long value, long stageMask) {
             switchToState(QueueState.WAITING);
             submitSemaphores.add(semaphore);
             submitSemaphoreValues.add(value);
             submitSemaphoreStages.add(stageMask);
         }
-        
+
         private VkCommandBuffer getTransientCommandBuffer() {
             switchToState(QueueState.COMMANDS);
             finishActiveBuffer();
@@ -234,7 +238,7 @@ public class VulkanQueueHelper implements Destroyable {
             commandBuffers.add(buffer);
             return buffer;
         }
-        
+
         private VkCommandBuffer getImplicitCommandBuffer() {
             if (currentCommandBuffer == null) {
                 currentCommandBuffer = getTransientCommandBuffer();
@@ -243,7 +247,7 @@ public class VulkanQueueHelper implements Destroyable {
             assert queueState == QueueState.COMMANDS;
             return currentCommandBuffer;
         }
-        
+
         public void finishActiveBuffer() {
             if (currentCommandBuffer != null) {
                 assert queueState == QueueState.COMMANDS;
@@ -251,20 +255,20 @@ public class VulkanQueueHelper implements Destroyable {
             }
             currentCommandBuffer = null;
         }
-        
+
         public long nextSignalImplicit(long stageMask) {
             // appends the stage mask to the next implicit signal
             implicitSyncSemaphoreMask |= stageMask;
             return implicitSyncSemaphoreValue + 1;
         }
-        
+
         private long signalImplicit(long stageMask) {
             implicitSyncSemaphoreValue++;
             signalSemaphore(implicitSyncSemaphore, implicitSyncSemaphoreValue, stageMask | implicitSyncSemaphoreMask);
             implicitSyncSemaphoreMask = 0;
             return implicitSyncSemaphoreValue;
         }
-        
+
         private void signalSemaphore(long semaphore, long value, long stageMask) {
             switchToState(QueueState.SIGNALING);
             submitSemaphores.add(semaphore);
@@ -272,9 +276,9 @@ public class VulkanQueueHelper implements Destroyable {
             submitSemaphoreStages.add(stageMask);
         }
     }
-    
+
     private final Builder[] queueBuilders = new Builder[3];
-    
+
     public VulkanQueueHelper(int submitsInFlight, VkQueue graphicsQueue, int graphicsQueueFamily, @Nullable VkQueue computeQueue, int computeQueueFamily, @Nullable VkQueue transferQueue, int transferQueueFamily) {
         this.submitsInFlight = submitsInFlight;
         queueBuilders[0] = new Builder(graphicsQueue, graphicsQueueFamily);
@@ -289,7 +293,7 @@ public class VulkanQueueHelper implements Destroyable {
             queueBuilders[2] = queueBuilders[1];
         }
     }
-    
+
     @Override
     public void destroy() {
         valid = false;
@@ -301,9 +305,9 @@ public class VulkanQueueHelper implements Destroyable {
             queueBuilders[2].destroy();
         }
         stack.destroy();
+        transientCPUBufferAllocators.forEach(Destroyable::destroy);
+        transientDescriptorPools.forEach(Destroyable::destroy);
         endOfGPUSubmitDestroy.forEach(ring -> {
-//            ring.forEach(Destroyable::destroy);
-            
             @Nullable Destroyable toDestroy;
             while (!ring.empty()) {
                 toDestroy = ring.poll();
@@ -313,11 +317,11 @@ public class VulkanQueueHelper implements Destroyable {
             }
         });
     }
-    
+
     public void submit() {
         submit(false);
     }
-    
+
     public void submit(boolean wait) {
         if (Thread.currentThread().threadId() != 1) {
             throw new IllegalStateException();
@@ -345,47 +349,62 @@ public class VulkanQueueHelper implements Destroyable {
             queueBuilders[2].reset();
         }
         final var ring = endOfGPUSubmitDestroy.get(currentSubmit);
-//        synchronized (ring) {
-//            ring.forEach(Destroyable::destroy);
-//            ring.clear();
-//        }
         while (!ring.empty()) {
             @Nullable final var toDestroy = ring.poll();
             if (toDestroy != null) {
                 toDestroy.destroy();
             }
         }
+        transientDescriptorPools.get(currentSubmit).reset();
+        transientCPUBufferAllocators.get(currentSubmit).reset();
+        if (wait) {
+            for (int submit = (currentSubmit + 1) % submitsInFlight; submit != currentSubmit; submit = (submit + 1) % submitsInFlight) {
+                final var ring2 = endOfGPUSubmitDestroy.get(submit);
+                while (!ring2.empty()) {
+                    @Nullable final var toDestroy = ring2.poll();
+                    if (toDestroy != null) {
+                        toDestroy.destroy();
+                    }
+                }
+                transientDescriptorPools.get(submit).reset();
+                transientCPUBufferAllocators.get(submit).reset();
+            }
+        }
     }
-    
+
     @ThreadSafety.Many
     public void destroyEndOfSubmit(Destroyable destroyable) {
-        if(!valid){
+        if (!valid) {
             throw new IllegalStateException();
         }
         final var ring = endOfGPUSubmitDestroy.get(currentSubmit);
-//        synchronized (ring) {
-////            if(ring.contains(destroyable)) {
-////                throw new IllegalArgumentException("Attempt to enqueue already-enqueued destroyable");
-////            }
-//            ring.add(destroyable);
-//        }
         ring.put(destroyable);
     }
-    
+
+    @ThreadSafety.MainGraphics
+    public VulkanDescriptorPools descriptorPoolsForSubmit() {
+        return transientDescriptorPools.get(currentSubmit);
+    }
+
+    @ThreadSafety.MainGraphics
+    public TransientCPUBufferAllocator cpuBufferAllocatorForSubmit() {
+        return transientCPUBufferAllocators.get(currentSubmit);
+    }
+
     public boolean clientImplicitSignaled(QueueType queueType, long value) {
         if (value == 0) {
             return true;
         }
         return queueBuilders[queueType.ordinal()].clientImplicitSignaled(value);
     }
-    
+
     public void clientWaitImplicit(QueueType queueType, long value) {
         if (value == 0) {
             return;
         }
         queueBuilders[queueType.ordinal()].clientWaitImplicit(value);
     }
-    
+
     public void clientSubmitAndWaitImplicit(QueueType queueType, long value) {
         if (value == 0) {
             return;
@@ -399,27 +418,27 @@ public class VulkanQueueHelper implements Destroyable {
         submit();
         builder.clientWaitImplicit(value);
     }
-    
+
     public void waitImplicit(QueueType queueType, long value, long stageMask) {
         queueBuilders[queueType.ordinal()].waitImplicit(value, stageMask);
     }
-    
+
     public void waitSemaphore(QueueType queueType, long semaphore, long value, long stageMask) {
         queueBuilders[queueType.ordinal()].waitSemaphore(semaphore, value, stageMask);
     }
-    
+
     public VkCommandBuffer getTransientCommandBuffer(QueueType queueType) {
         return queueBuilders[queueType.ordinal()].getTransientCommandBuffer();
     }
-    
+
     public VkCommandBuffer getImplicitCommandBuffer(QueueType queueType) {
         return queueBuilders[queueType.ordinal()].getImplicitCommandBuffer();
     }
-    
+
     private void finishActiveCommandBuffer(QueueType queueType) {
         queueBuilders[queueType.ordinal()].finishActiveBuffer();
     }
-    
+
     /**
      * Inserts a signal with this value in the command stream sometime between now and when the next submit happens
      * useful for CPU side fencing on buffer usage finished, ie: end of frame fencing
@@ -432,19 +451,19 @@ public class VulkanQueueHelper implements Destroyable {
     public long nextSignalImplicit(QueueType queueType, long stageMask) {
         return queueBuilders[queueType.ordinal()].nextSignalImplicit(stageMask);
     }
-    
+
     public long signalImplicit(QueueType queueType, long stageMask) {
         return queueBuilders[queueType.ordinal()].signalImplicit(stageMask);
     }
-    
+
     public void signalSemaphore(QueueType queueType, long semaphore, long value, long stageMask) {
         queueBuilders[queueType.ordinal()].signalSemaphore(semaphore, value, stageMask);
     }
-    
+
     public void queueBarrier(QueueType queue, long srcStageMask, long srcAccessMask, long dstStageMask, long dstAccessMask) {
         queueToQueueSync(queue, srcStageMask, srcAccessMask, queue, dstStageMask, dstAccessMask);
     }
-    
+
     public void queueToQueueSync(QueueType srcQueue, long srcStageMask, long srcAccessMask, QueueType dstQueue, long dstStageMask, long dstAccessMask) {
         final var srcBuilder = queueBuilders[srcQueue.ordinal()];
         final var dstBuilder = queueBuilders[dstQueue.ordinal()];
@@ -469,8 +488,8 @@ public class VulkanQueueHelper implements Destroyable {
             }
         }
     }
-    
-    
+
+
     // TODO: builder/batched for this, each semaphore signal/wait and barrier is pretty expensive to do, so being able to batch ownership transfer is a good thing
     // TODO: also, this needs to take in the buffer/image (region) that is being transferred, currently this relies on no transfer actually needing to happen
     public void ownershipTransfer(QueueType srcQueue, long srcStageMask, long srcAccessMask, QueueType dstQueue, long dstStageMask, long dstAccessMask) {

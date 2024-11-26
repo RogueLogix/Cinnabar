@@ -267,7 +267,7 @@ public class GPUMemoryAllocator implements Destroyable {
             if (allocatedSpace == null) {
                 throw new IllegalStateException("Failed to make allocation in block");
             }
-            return new VulkanMemoryAllocation(handle, new MemoryRange(allocatedSpace.offset(), size), allocator);
+            return new VulkanMemoryAllocation(handle, new MemoryRange(allocatedSpace.offset(), size), allocator::free);
         }
         
         @Nullable

@@ -3,21 +3,18 @@ package graphics.cinnabar.internal.extensions.minecraft.renderer;
 import com.mojang.blaze3d.shaders.Uniform;
 import com.mojang.blaze3d.vertex.VertexFormat;
 import com.mojang.blaze3d.vertex.VertexFormatElement;
-import graphics.cinnabar.Cinnabar;
 import graphics.cinnabar.internal.CinnabarDebug;
 import graphics.cinnabar.internal.CinnabarRenderer;
 import graphics.cinnabar.internal.exceptions.NotImplemented;
 import graphics.cinnabar.internal.extensions.blaze3d.shaders.CinnabarProgram;
 import graphics.cinnabar.internal.extensions.minecraft.renderer.texture.CinnabarAbstractTexture;
 import graphics.cinnabar.internal.statemachine.CinnabarBlendState;
-import graphics.cinnabar.internal.statemachine.CinnabarGeneralState;
 import graphics.cinnabar.internal.vulkan.MagicNumbers;
-import graphics.cinnabar.internal.vulkan.memory.CPUMemoryVkBuffer;
+import graphics.cinnabar.internal.vulkan.memory.HostMemoryVkBuffer;
 import graphics.cinnabar.internal.vulkan.memory.VulkanBuffer;
 import graphics.cinnabar.internal.vulkan.util.CinnabarDescriptorSets;
 import graphics.cinnabar.internal.vulkan.util.VulkanSampler;
 import net.minecraft.client.renderer.ShaderInstance;
-import net.minecraft.client.renderer.texture.AbstractTexture;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.packs.resources.ResourceProvider;
 import net.roguelogix.phosphophyllite.util.Util;
@@ -34,7 +31,7 @@ import static org.lwjgl.vulkan.EXTExtendedDynamicState2.VK_DYNAMIC_STATE_LOGIC_O
 import static org.lwjgl.vulkan.EXTExtendedDynamicState3.*;
 import static org.lwjgl.vulkan.VK13.*;
 
-public class CinnabarShaderInstance extends ShaderInstance {
+public class CinnabarShaderInstance extends ShaderInstance implements ICinnabarShader{
 
     private CinnabarProgram vertexProgram;
     private CinnabarProgram fragmentProgram;
@@ -50,9 +47,8 @@ public class CinnabarShaderInstance extends ShaderInstance {
     private final VulkanBuffer UBOGPUBuffer;
 
     private final long UBODescriptorSet;
-    private final long SamplerDescriptorSet;
     @Nullable
-    private CPUMemoryVkBuffer uboStagingBuffer;
+    private VulkanBuffer.CPU uboStagingBuffer;
 
     public CinnabarShaderInstance(ResourceProvider resourceProvider, ResourceLocation shaderLocation, VertexFormat vertexFormat) throws IOException {
         super(resourceProvider, shaderLocation, vertexFormat);
@@ -119,9 +115,6 @@ public class CinnabarShaderInstance extends ShaderInstance {
                 createInfo.pBindings(bindings);
 
                 vkCreateDescriptorSetLayout(device, createInfo, null, longPtr);
-                SamplerDescriptorSet = CinnabarDescriptorSets.allocDescriptorSet(longPtr.get(0));
-            } else {
-                SamplerDescriptorSet = 0;
             }
             SamplerDescriptorSetLayout = longPtr.get(0);
         }
@@ -304,7 +297,6 @@ public class CinnabarShaderInstance extends ShaderInstance {
         }
         final var device = CinnabarRenderer.device();
         CinnabarDescriptorSets.free(UBODescriptorSet);
-        CinnabarDescriptorSets.free(SamplerDescriptorSet);
         vkDestroyDescriptorSetLayout(device, UBODescriptorSetLayout, null);
         vkDestroyDescriptorSetLayout(device, SamplerDescriptorSetLayout, null);
         vkDestroyPipeline(device, pipeline, null);
@@ -349,8 +341,8 @@ public class CinnabarShaderInstance extends ShaderInstance {
     @Override
     public void setSampler(String name, Object textureId) {
         if (textureId instanceof Integer intID) {
-            if (intID >= 0 || intID < -13){
-                throw new IllegalArgumentException("Only integer ID's -1 through -13 are allowed for mapping to ShaderTexture bind points.");
+            if (intID >= -1 || intID < -14) {
+                throw new IllegalArgumentException("Only integer ID's -2 through -14 are allowed for mapping to ShaderTexture bind points.");
             }
         }
         super.setSampler(name, textureId);
@@ -362,42 +354,46 @@ public class CinnabarShaderInstance extends ShaderInstance {
     }
 
     public void apply(VkCommandBuffer commandBuffer) {
+        long activeSamplerSet = VK_NULL_HANDLE;
         try (final var stack = MemoryStack.stackPush()) {
             final var device = CinnabarRenderer.device();
-            final var descriptorWrites = VkWriteDescriptorSet.calloc(samplerNames.size());
-            for (int i = 0; i < samplerNames.size(); i++) {
-                final var mapValue = samplerMap.get(samplerNames.get(i));
-                var boundObject = mapValue;
-                if (mapValue instanceof Integer mapValueInt) {
+            if (SamplerDescriptorSetLayout != VK_NULL_HANDLE) {
+                activeSamplerSet = CinnabarRenderer.queueHelper.descriptorPoolsForSubmit().allocSamplerSet(SamplerDescriptorSetLayout);
+                final var descriptorWrites = VkWriteDescriptorSet.calloc(samplerNames.size());
+                for (int i = 0; i < samplerNames.size(); i++) {
+                    final var mapValue = samplerMap.get(samplerNames.get(i));
+                    var boundObject = mapValue;
+                    if (mapValue instanceof Integer mapValueInt) {
                     boundObject = CinnabarAbstractTexture.boundShaderTexture(-mapValueInt - 1);
-                }
-                final var srcObject = boundObject;
-                long imageViewHandle = 0;
-                if (srcObject instanceof CinnabarAbstractTexture abstractTexture) {
-                    imageViewHandle = abstractTexture.viewHandle();
-                } else {
-                    throw new UnsupportedOperationException();
-                }
-                final var imageInfo = VkDescriptorImageInfo.calloc(1, stack);
-                imageInfo.sampler(VulkanSampler.DEFAULT.vulkanHandle);
-                imageInfo.imageView(imageViewHandle);
-                imageInfo.imageLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+                    }
+                    final var srcObject = boundObject;
+                    long imageViewHandle = 0;
+                    if (srcObject instanceof CinnabarAbstractTexture abstractTexture) {
+                        imageViewHandle = abstractTexture.viewHandle();
+                    } else {
+                        throw new UnsupportedOperationException();
+                    }
+                    final var imageInfo = VkDescriptorImageInfo.calloc(1, stack);
+                    imageInfo.sampler(VulkanSampler.DEFAULT.vulkanHandle);
+                    imageInfo.imageView(imageViewHandle);
+                    imageInfo.imageLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
-                descriptorWrites.position(i);
-                descriptorWrites.descriptorCount(1);
-                descriptorWrites.sType(VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET);
-                descriptorWrites.dstSet(SamplerDescriptorSet);
-                descriptorWrites.dstBinding(i);
-                descriptorWrites.dstArrayElement(0);
-                descriptorWrites.descriptorType(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
-                descriptorWrites.pImageInfo(imageInfo);
+                    descriptorWrites.position(i);
+                    descriptorWrites.descriptorCount(1);
+                    descriptorWrites.sType(VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET);
+                    descriptorWrites.dstSet(activeSamplerSet);
+                    descriptorWrites.dstBinding(i);
+                    descriptorWrites.dstArrayElement(0);
+                    descriptorWrites.descriptorType(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+                    descriptorWrites.pImageInfo(imageInfo);
+                }
+                descriptorWrites.position(0);
+                vkUpdateDescriptorSets(device, descriptorWrites, null);
             }
-            descriptorWrites.position(0);
-            vkUpdateDescriptorSets(device, descriptorWrites, null);
             if (this.dirty && UBOGPUBuffer != null) {
                 this.dirty = false;
-                uboStagingBuffer = CPUMemoryVkBuffer.alloc(UBOSize);
-                CinnabarRenderer.queueDestroyEndOfGPUSubmit(uboStagingBuffer);
+                uboStagingBuffer = CinnabarRenderer.queueHelper.cpuBufferAllocatorForSubmit().alloc(UBOSize);
+                CinnabarRenderer.queueHelper.destroyEndOfSubmit(uboStagingBuffer);
                 for (Uniform uniform : this.uniforms) {
                     uniform.upload();
                 }
@@ -420,7 +416,7 @@ public class CinnabarShaderInstance extends ShaderInstance {
                 copyRegion.dstOffset(0);
                 copyRegion.size(UBOSize);
                 copyRegion.limit(1);
-                vkCmdCopyBuffer(commandBuffer, uboStagingBuffer.bufferHandle(), UBOGPUBuffer.handle, copyRegion);
+                vkCmdCopyBuffer(commandBuffer, uboStagingBuffer.handle, UBOGPUBuffer.handle, copyRegion);
 
                 bufferDepInfo.srcStageMask(VK_PIPELINE_STAGE_TRANSFER_BIT);
                 bufferDepInfo.srcAccessMask(VK_ACCESS_TRANSFER_WRITE_BIT);
@@ -434,14 +430,14 @@ public class CinnabarShaderInstance extends ShaderInstance {
         }
         vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
         if (UBODescriptorSet != VK_NULL_HANDLE) {
-            if (SamplerDescriptorSet != VK_NULL_HANDLE) {
-                vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, new long[]{UBODescriptorSet, SamplerDescriptorSet}, null);
+            if (SamplerDescriptorSetLayout != VK_NULL_HANDLE) {
+                vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, new long[]{UBODescriptorSet, activeSamplerSet}, null);
             } else {
                 vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, new long[]{UBODescriptorSet}, null);
             }
         } else {
-            if (SamplerDescriptorSet != VK_NULL_HANDLE) {
-                vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, new long[]{SamplerDescriptorSet}, null);
+            if (SamplerDescriptorSetLayout != VK_NULL_HANDLE) {
+                vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, new long[]{activeSamplerSet}, null);
             }
         }
         CinnabarBlendState.apply(commandBuffer);
@@ -453,7 +449,7 @@ public class CinnabarShaderInstance extends ShaderInstance {
 
     public void writeUniform(long UBOOffset, long cpuMemAddress, long size) {
         if (uboStagingBuffer != null) {
-            LibCString.nmemcpy(uboStagingBuffer.hostPtr().pointer() + UBOOffset, cpuMemAddress, size);
+            LibCString.nmemcpy(uboStagingBuffer.hostPtr.pointer() + UBOOffset, cpuMemAddress, size);
         } else {
             throw new IllegalStateException();
         }

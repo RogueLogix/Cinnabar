@@ -9,12 +9,9 @@ import graphics.cinnabar.internal.statemachine.CinnabarBlendState;
 import graphics.cinnabar.internal.statemachine.CinnabarFramebufferState;
 import graphics.cinnabar.internal.statemachine.CinnabarGeneralState;
 import graphics.cinnabar.internal.util.CinnabarSharedIndexBuffers;
-import graphics.cinnabar.internal.vulkan.memory.CPUMemoryVkBuffer;
 import graphics.cinnabar.internal.vulkan.memory.VulkanMemoryAllocation;
 import graphics.cinnabar.internal.vulkan.util.LiveHandles;
 import graphics.cinnabar.internal.vulkan.util.VulkanQueueHelper;
-import it.unimi.dsi.fastutil.longs.Long2ReferenceMap;
-import it.unimi.dsi.fastutil.longs.Long2ReferenceOpenHashMap;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.ShaderInstance;
 import net.roguelogix.phosphophyllite.util.NonnullDefault;
@@ -88,11 +85,11 @@ public class CinnabarVertexBuffer extends VertexBuffer {
                 // size up the actual buffer to match the allocation's size
                 createInfo.size(bufferAllocation.range().size());
                 vkGetDeviceBufferMemoryRequirements(device, bufferRequirements, memoryRequirements);
-                if (memoryRequirements.memoryRequirements().size() > bufferAllocation.range().size()){
+                if (memoryRequirements.memoryRequirements().size() > bufferAllocation.range().size()) {
                     throw new IllegalStateException();
                 }
                 
-                if(bufferHandle != VK_NULL_HANDLE){
+                if (bufferHandle != VK_NULL_HANDLE) {
                     throw new IllegalStateException("About to leak VkBuffer!");
                 }
                 
@@ -110,9 +107,9 @@ public class CinnabarVertexBuffer extends VertexBuffer {
         final var queue = CinnabarRenderer.queueHelper;
         final var commandBuffer = queue.getImplicitCommandBuffer(VulkanQueueHelper.QueueType.MAIN_GRAPHICS);
         
-        final var stagingBuffer = CPUMemoryVkBuffer.alloc(totalBytesNeeded);
+        final var stagingBuffer = queue.cpuBufferAllocatorForSubmit().alloc(totalBytesNeeded);
         queue.destroyEndOfSubmit(stagingBuffer);
-        final var hostPtr = stagingBuffer.hostPtr();
+        final var hostPtr = stagingBuffer.hostPtr;
         
         // TODO: if buffer ownership can be transferred, there is no need for this memcpy
         final var vertexDataPtr = MemoryUtil.memAddress(vertexData);
@@ -133,20 +130,20 @@ public class CinnabarVertexBuffer extends VertexBuffer {
             bufferDepInfo.buffer(bufferHandle);
             bufferDepInfo.size(totalBytesNeeded);
             bufferDepInfo.offset(0);
-
+            
             bufferDepInfo.srcStageMask(VK_PIPELINE_STAGE_VERTEX_INPUT_BIT);
             bufferDepInfo.srcAccessMask(VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT);
             bufferDepInfo.dstStageMask(VK_PIPELINE_STAGE_TRANSFER_BIT);
             bufferDepInfo.dstAccessMask(VK_ACCESS_TRANSFER_WRITE_BIT);
             vkCmdPipelineBarrier2(commandBuffer, depInfo);
-
+            
             final var copyRegion = VkBufferCopy.calloc(1, stack);
             copyRegion.srcOffset(0);
             copyRegion.dstOffset(0);
             copyRegion.size(totalBytesNeeded);
             copyRegion.limit(1);
-            vkCmdCopyBuffer(commandBuffer, stagingBuffer.bufferHandle(), bufferHandle, copyRegion);
-
+            vkCmdCopyBuffer(commandBuffer, stagingBuffer.handle, bufferHandle, copyRegion);
+            
             bufferDepInfo.srcStageMask(VK_PIPELINE_STAGE_TRANSFER_BIT);
             bufferDepInfo.srcAccessMask(VK_ACCESS_TRANSFER_WRITE_BIT);
             bufferDepInfo.dstStageMask(VK_PIPELINE_STAGE_VERTEX_INPUT_BIT);
@@ -154,7 +151,7 @@ public class CinnabarVertexBuffer extends VertexBuffer {
             vkCmdPipelineBarrier2(commandBuffer, depInfo);
         }
         markUsed(VK_PIPELINE_STAGE_TRANSFER_BIT);
-
+        
         meshData.close();
     }
     
@@ -186,19 +183,26 @@ public class CinnabarVertexBuffer extends VertexBuffer {
         gpuDestroy();
     }
     
+    @Override
+    public void draw() {
+        draw(CinnabarRenderer.queueHelper.getImplicitCommandBuffer(VulkanQueueHelper.QueueType.MAIN_GRAPHICS));
+    }
+    
     protected void _drawWithShader(Matrix4f modelViewMatrix, Matrix4f projectionMatrix, ShaderInstance shader) {
         final var cinnabarShader = (CinnabarShaderInstance) shader;
         shader.setDefaultUniforms(this.mode, modelViewMatrix, projectionMatrix, Minecraft.getInstance().getWindow());
-        CinnabarRenderer.waitIdle();
         final var commandBuffer = CinnabarRenderer.queueHelper.getImplicitCommandBuffer(VulkanQueueHelper.QueueType.MAIN_GRAPHICS);
         cinnabarShader.apply(commandBuffer);
+        draw(commandBuffer);
+    }
+    
+    private void draw(VkCommandBuffer commandBuffer) {
         vkCmdSetPrimitiveTopology(commandBuffer, vkTopology(mode.asGLMode));
         
         vkCmdSetViewport(commandBuffer, 0, CinnabarFramebufferState.viewport());
         vkCmdSetScissor(commandBuffer, 0, CinnabarFramebufferState.scissor());
-
-//        vkCmdSetCullMode(commandBuffer, CinnabarGeneralState.cull ? VK_CULL_MODE_BACK_BIT : VK_CULL_MODE_NONE);
-        vkCmdSetCullMode(commandBuffer, VK_CULL_MODE_NONE);
+        
+        vkCmdSetCullMode(commandBuffer, CinnabarGeneralState.cull ? VK_CULL_MODE_BACK_BIT : VK_CULL_MODE_NONE);
         vkCmdSetDepthTestEnable(commandBuffer, CinnabarGeneralState.depthTest);
         vkCmdSetDepthWriteEnable(commandBuffer, CinnabarGeneralState.depthWrite);
         vkCmdSetDepthCompareOp(commandBuffer, CinnabarGeneralState.depthFunc);
