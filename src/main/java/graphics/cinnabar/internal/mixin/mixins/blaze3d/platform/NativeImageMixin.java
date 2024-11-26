@@ -3,7 +3,6 @@ package graphics.cinnabar.internal.mixin.mixins.blaze3d.platform;
 import com.mojang.blaze3d.platform.NativeImage;
 import graphics.cinnabar.internal.CinnabarRenderer;
 import graphics.cinnabar.internal.extensions.minecraft.renderer.texture.CinnabarAbstractTexture;
-import graphics.cinnabar.internal.vulkan.Destroyable;
 import graphics.cinnabar.internal.vulkan.memory.CPUMemoryVkBuffer;
 import org.lwjgl.stb.STBImage;
 import org.lwjgl.system.MemoryUtil;
@@ -29,9 +28,7 @@ public abstract class NativeImageMixin implements AutoCloseable{
     
     @Redirect(method = "<init>(Lcom/mojang/blaze3d/platform/NativeImage$Format;IIZ)V", at = @At(value = "INVOKE", target = "org/lwjgl/system/MemoryUtil.nmemCalloc(JJ)J"))
     private long Cinnabar$NativeImageMixin$nmemCalloc(long num, long size) {
-        final long ptr = Cinnabar$NativeImageMixin$nmemAlloc(size);
-        LibCString.nmemset(ptr, (int) num, size);
-        return ptr;
+        return Cinnabar$NativeImageMixin$nmemAlloc(num * size);
     }
     
     @Redirect(method = "<init>(Lcom/mojang/blaze3d/platform/NativeImage$Format;IIZ)V", at = @At(value = "INVOKE", target = "org/lwjgl/system/MemoryUtil.nmemAlloc(J)J"))
@@ -72,9 +69,6 @@ public abstract class NativeImageMixin implements AutoCloseable{
     
     @Inject(method = "close", at = @At(value = "HEAD"))
     private void Cinnabar$NativeImageMixin$close(CallbackInfo ignored) {
-        // destroy the Vulkan buffer first
-        // have to wait idle though, in case this is actively being used in an upload
-        // native images are rarely destroyed though
         if (cpuMemoryVkBuffer != null) {
             // this can be called from another thread, so, just add it to the destroy queue
             CinnabarRenderer.queueDestroyEndOfGPUSubmit(cpuMemoryVkBuffer);

@@ -25,7 +25,8 @@ public abstract class CinnabarAbstractTexture extends AbstractTexture {
     private static int activeBindPoint = 0;
     
     private static CinnabarAbstractTexture[] currentBound = new CinnabarAbstractTexture[12];
-    
+    private static CinnabarAbstractTexture[] shaderTexture = new CinnabarAbstractTexture[12];
+
     
     public static int activeBindPoint() {
         return activeBindPoint;
@@ -35,8 +36,8 @@ public abstract class CinnabarAbstractTexture extends AbstractTexture {
         activeBindPoint = id;
     }
     
-    public static void bind(AbstractTexture texture, int index) {
-        currentBound[index] = (CinnabarAbstractTexture) texture;
+    public static void bindShaderTexture(AbstractTexture texture, int index) {
+        shaderTexture[index] = (CinnabarAbstractTexture) texture;
     }
     
     @Nullable
@@ -45,8 +46,8 @@ public abstract class CinnabarAbstractTexture extends AbstractTexture {
     }
     
     @Nullable
-    public static CinnabarAbstractTexture bound(int index) {
-        return currentBound[index];
+    public static CinnabarAbstractTexture boundShaderTexture(int index) {
+        return shaderTexture[index];
     }
     
     private final VkDevice device = CinnabarRenderer.device();

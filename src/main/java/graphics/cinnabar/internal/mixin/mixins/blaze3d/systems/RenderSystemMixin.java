@@ -34,7 +34,7 @@ public class RenderSystemMixin {
     public static int maxSupportedTextureSize() {
         return RenderSystemMixinHelper.maxSupportedTextureSize();
     }
-    
+
     @Shadow
     private static Matrix4f projectionMatrix = new Matrix4f();
     @Shadow
@@ -66,8 +66,17 @@ public class RenderSystemMixin {
         if (shaderTexture >= 0 && shaderTexture < 12) {
             TextureManager texturemanager = Minecraft.getInstance().getTextureManager();
             AbstractTexture abstracttexture = texturemanager.getTexture(textureId);
-            CinnabarAbstractTexture.bind(abstracttexture, shaderTexture);
+            CinnabarAbstractTexture.bindShaderTexture(abstracttexture, shaderTexture);
         }
+    }
+
+    @Overwrite
+    public static int getShaderTexture(int shaderTexture) {
+        // a negative integer value signals to the ShaderInstance to pull from that binding point
+        // -1 : Sampler0 : binding points 0
+        // -2 : Sampler1 : binding points 1
+        // etc
+        return -(shaderTexture + 1);
     }
     
     @Overwrite

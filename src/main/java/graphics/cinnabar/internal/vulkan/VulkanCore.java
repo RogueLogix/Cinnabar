@@ -22,6 +22,7 @@ import static org.lwjgl.vulkan.EXTExtendedDynamicState2.VK_EXT_EXTENDED_DYNAMIC_
 import static org.lwjgl.vulkan.EXTExtendedDynamicState3.VK_EXT_EXTENDED_DYNAMIC_STATE_3_EXTENSION_NAME;
 import static org.lwjgl.vulkan.EXTExternalMemoryHost.VK_EXTERNAL_MEMORY_HANDLE_TYPE_HOST_ALLOCATION_BIT_EXT;
 import static org.lwjgl.vulkan.EXTExternalMemoryHost.VK_EXT_EXTERNAL_MEMORY_HOST_EXTENSION_NAME;
+import static org.lwjgl.vulkan.EXTShaderObject.VK_EXT_SHADER_OBJECT_EXTENSION_NAME;
 import static org.lwjgl.vulkan.KHRSwapchain.VK_KHR_SWAPCHAIN_EXTENSION_NAME;
 import static org.lwjgl.vulkan.VK10.*;
 import static org.lwjgl.vulkan.VK11.*;
@@ -30,12 +31,12 @@ import static org.lwjgl.vulkan.VK13.VK_API_VERSION_1_3;
 @NonnullDefault
 public class VulkanCore implements Destroyable {
     private static final List<String> requiredDeviceExtensions = List.of(
-            VK_KHR_SWAPCHAIN_EXTENSION_NAME,
-            VK_EXT_EXTERNAL_MEMORY_HOST_EXTENSION_NAME,
             // extended dynamic state is part of VK 1.3
             // state_2 still has logic op being dynamic
             VK_EXT_EXTENDED_DYNAMIC_STATE_2_EXTENSION_NAME,
-            VK_EXT_EXTENDED_DYNAMIC_STATE_3_EXTENSION_NAME
+            VK_EXT_EXTENDED_DYNAMIC_STATE_3_EXTENSION_NAME,
+            VK_EXT_EXTERNAL_MEMORY_HOST_EXTENSION_NAME,
+            VK_KHR_SWAPCHAIN_EXTENSION_NAME
     );
     
     public final VkInstance vkInstance;
@@ -181,7 +182,7 @@ public class VulkanCore implements Destroyable {
                     
                     var layerPointers = stack.mallocPointer(1);
                     layerPointers.put(0, stack.UTF8("VK_LAYER_KHRONOS_validation"));
-                    // renderdoc does not support VK_EXT_external_memory_host
+//                     renderdoc does not support VK_EXT_external_memory_host
 //                    layerPointers.put(1, stack.UTF8("VK_LAYER_RENDERDOC_Capture"));
                     enabledInstanceExtensions.add(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
                     
@@ -457,9 +458,25 @@ public class VulkanCore implements Destroyable {
             deviceCreateInfo.pNext(physicalDeviceFeatures13);
             deviceCreateInfo.pNext(extendedDynamicState2Features);
             deviceCreateInfo.pNext(extendedDynamicState3Features);
-            
+
+            final var extensionCount = stack.callocInt(1);
+            vkEnumerateDeviceExtensionProperties(physicalDevice, (String)null, extensionCount, null);
+            final var extensionProperties = VkExtensionProperties.calloc(extensionCount.get(0), stack);
+            vkEnumerateDeviceExtensionProperties(physicalDevice, (String)null, extensionCount, extensionProperties);
+
             var extensions = stack.mallocPointer(requiredDeviceExtensions.size());
             for (int i = 0; i < requiredDeviceExtensions.size(); i++) {
+                boolean hasExtension = false;
+                for (int j = 0; j < extensionCount.get(0); j++) {
+                    extensionProperties.position(j);
+                    if(extensionProperties.extensionNameString().equals(requiredDeviceExtensions.get(i))) {
+                        hasExtension = true;
+                        break;
+                    }
+                }
+                if(!hasExtension){
+                    throw new IllegalStateException("Missing device extension " + requiredDeviceExtensions.get(i));
+                }
                 extensions.put(i, stack.UTF8(requiredDeviceExtensions.get(i)));
             }
             deviceCreateInfo.ppEnabledExtensionNames(extensions);

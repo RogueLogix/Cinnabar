@@ -106,11 +106,12 @@ public class CinnabarWindow extends Window {
         RenderSystem.assertOnRenderThreadOrInit();
         this.vsync = vsync;
         CinnabarRenderer.waitIdle();
+        throwFromCode(vkWaitForFences(device, frameAcquisitionFence, true, Long.MAX_VALUE));
         recreateSwapchain();
     }
     
     private void recreateSwapchain() {
-        throwFromCode(vkWaitForFences(device, frameAcquisitionFence, true, Long.MAX_VALUE));
+        CinnabarRenderer.waitIdle();
         createSwapchain(getWidth(), getHeight());
         // re-acquire a swapchain image
         present();
@@ -264,10 +265,13 @@ public class CinnabarWindow extends Window {
                 throwFromCode(returnCode);
                 throwFromCode(vkWaitForFences(device, frameAcquisitionFence, true, Long.MAX_VALUE));
                 throwFromCode(vkResetFences(device, frameAcquisitionFence));
+                currentSwapchainFrame = -1;
+                swapchainImages.clear();
                 recreateSwapchain();
-                throwFromCode(vkAcquireNextImageKHR(device, swapchain, Long.MAX_VALUE, VK_NULL_HANDLE, frameAcquisitionFence, intPtr));
+                // recreate swapchain is recursive into this function and will re-acquire a frame
+            } else {
+                currentSwapchainFrame = intPtr.get(0);
             }
-            currentSwapchainFrame = intPtr.get(0);
         }
     }
     

@@ -127,15 +127,34 @@ public class CinnabarVertexBuffer extends VertexBuffer {
         }
         
         try (final var stack = MemoryStack.stackPush()) {
+            final var depInfo = VkDependencyInfo.calloc(stack).sType$Default();
+            final var bufferDepInfo = VkBufferMemoryBarrier2.calloc(1, stack).sType$Default();
+            depInfo.pBufferMemoryBarriers(bufferDepInfo);
+            bufferDepInfo.buffer(bufferHandle);
+            bufferDepInfo.size(totalBytesNeeded);
+            bufferDepInfo.offset(0);
+
+            bufferDepInfo.srcStageMask(VK_PIPELINE_STAGE_VERTEX_INPUT_BIT);
+            bufferDepInfo.srcAccessMask(VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT);
+            bufferDepInfo.dstStageMask(VK_PIPELINE_STAGE_TRANSFER_BIT);
+            bufferDepInfo.dstAccessMask(VK_ACCESS_TRANSFER_WRITE_BIT);
+            vkCmdPipelineBarrier2(commandBuffer, depInfo);
+
             final var copyRegion = VkBufferCopy.calloc(1, stack);
             copyRegion.srcOffset(0);
             copyRegion.dstOffset(0);
             copyRegion.size(totalBytesNeeded);
             copyRegion.limit(1);
             vkCmdCopyBuffer(commandBuffer, stagingBuffer.bufferHandle(), bufferHandle, copyRegion);
+
+            bufferDepInfo.srcStageMask(VK_PIPELINE_STAGE_TRANSFER_BIT);
+            bufferDepInfo.srcAccessMask(VK_ACCESS_TRANSFER_WRITE_BIT);
+            bufferDepInfo.dstStageMask(VK_PIPELINE_STAGE_VERTEX_INPUT_BIT);
+            bufferDepInfo.dstAccessMask(VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT);
+            vkCmdPipelineBarrier2(commandBuffer, depInfo);
         }
         markUsed(VK_PIPELINE_STAGE_TRANSFER_BIT);
-        
+
         meshData.close();
     }
     
@@ -177,7 +196,9 @@ public class CinnabarVertexBuffer extends VertexBuffer {
         
         vkCmdSetViewport(commandBuffer, 0, CinnabarFramebufferState.viewport());
         vkCmdSetScissor(commandBuffer, 0, CinnabarFramebufferState.scissor());
-        
+
+//        vkCmdSetCullMode(commandBuffer, CinnabarGeneralState.cull ? VK_CULL_MODE_BACK_BIT : VK_CULL_MODE_NONE);
+        vkCmdSetCullMode(commandBuffer, VK_CULL_MODE_NONE);
         vkCmdSetDepthTestEnable(commandBuffer, CinnabarGeneralState.depthTest);
         vkCmdSetDepthWriteEnable(commandBuffer, CinnabarGeneralState.depthWrite);
         vkCmdSetDepthCompareOp(commandBuffer, CinnabarGeneralState.depthFunc);

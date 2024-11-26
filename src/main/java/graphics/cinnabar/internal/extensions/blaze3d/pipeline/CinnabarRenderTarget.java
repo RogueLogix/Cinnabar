@@ -164,6 +164,8 @@ public class CinnabarRenderTarget extends RenderTarget {
     
     @Override
     public void destroyBuffers() {
+        CinnabarRenderer.waitIdle();
+
         RenderSystem.assertOnRenderThreadOrInit();
         assert colorImageHandle != 0;
         assert colorImageViewHandle != 0;

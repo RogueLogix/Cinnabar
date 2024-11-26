@@ -10,6 +10,7 @@ import graphics.cinnabar.internal.extensions.minecraft.renderer.texture.Cinnabar
 import graphics.cinnabar.internal.statemachine.CinnabarBlendState;
 import graphics.cinnabar.internal.statemachine.CinnabarGeneralState;
 import graphics.cinnabar.internal.vulkan.MagicNumbers;
+import graphics.cinnabar.internal.vulkan.memory.CPUMemoryVkBuffer;
 import graphics.cinnabar.internal.vulkan.memory.VulkanBuffer;
 import graphics.cinnabar.internal.vulkan.util.CinnabarDescriptorSets;
 import graphics.cinnabar.internal.vulkan.util.VulkanSampler;
@@ -18,6 +19,7 @@ import net.minecraft.server.packs.resources.ResourceProvider;
 import net.roguelogix.phosphophyllite.util.Util;
 import org.jetbrains.annotations.Nullable;
 import org.lwjgl.system.MemoryStack;
+import org.lwjgl.system.libc.LibCString;
 import org.lwjgl.vulkan.*;
 
 import java.io.IOException;
@@ -44,7 +46,8 @@ public class CinnabarEffectInstance extends EffectInstance {
     
     private final long UBODescriptorSet;
     private final long SamplerDescriptorSet;
-    
+    private CPUMemoryVkBuffer uboStagingBuffer;
+
     public CinnabarEffectInstance(ResourceProvider resourceProvider, String name) throws IOException {
         super(resourceProvider, name);
         this.vertexProgram = (CinnabarProgram) getVertexProgram();
@@ -308,6 +311,7 @@ public class CinnabarEffectInstance extends EffectInstance {
     
     @Override
     public void close() {
+        CinnabarRenderer.waitIdle();
         if (UBOGPUBuffer != null) {
             UBOGPUBuffer.destroy();
         }
@@ -341,7 +345,7 @@ public class CinnabarEffectInstance extends EffectInstance {
             final var device = CinnabarRenderer.device();
             final var descriptorWrites = VkWriteDescriptorSet.calloc(samplerNames.size());
             for (int i = 0; i < samplerNames.size(); i++) {
-                final var srcObject = CinnabarAbstractTexture.bound(i);
+                final var srcObject = CinnabarAbstractTexture.boundShaderTexture(i);
                 long imageViewHandle = 0;
                 if (srcObject instanceof CinnabarAbstractTexture abstractTexture) {
                     imageViewHandle = abstractTexture.viewHandle();
@@ -364,10 +368,42 @@ public class CinnabarEffectInstance extends EffectInstance {
             }
             descriptorWrites.position(0);
             vkUpdateDescriptorSets(device, descriptorWrites, null);
-        }
-        if (this.dirty) {
-            for (Uniform uniform : this.uniforms) {
-                uniform.upload();
+
+            if (this.dirty && UBOGPUBuffer != null) {
+                uboStagingBuffer = CPUMemoryVkBuffer.alloc(UBOSize);
+                CinnabarRenderer.queueDestroyEndOfGPUSubmit(uboStagingBuffer);
+                for (Uniform uniform : this.uniforms) {
+                    uniform.upload();
+                }
+
+                final var depInfo = VkDependencyInfo.calloc(stack).sType$Default();
+                final var bufferDepInfo = VkBufferMemoryBarrier2.calloc(1, stack).sType$Default();
+                depInfo.pBufferMemoryBarriers(bufferDepInfo);
+                bufferDepInfo.buffer(UBOGPUBuffer.handle);
+                bufferDepInfo.size(UBOGPUBuffer.size);
+                bufferDepInfo.offset(0);
+
+                bufferDepInfo.srcStageMask(VK_PIPELINE_STAGE_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
+                bufferDepInfo.srcAccessMask(VK_ACCESS_UNIFORM_READ_BIT);
+                bufferDepInfo.dstStageMask(VK_PIPELINE_STAGE_TRANSFER_BIT);
+                bufferDepInfo.dstAccessMask(VK_ACCESS_TRANSFER_WRITE_BIT);
+                vkCmdPipelineBarrier2(commandBuffer, depInfo);
+
+                final var copyRegion = VkBufferCopy.calloc(1, stack);
+                copyRegion.srcOffset(0);
+                copyRegion.dstOffset(0);
+                copyRegion.size(UBOSize);
+                copyRegion.limit(1);
+                vkCmdCopyBuffer(commandBuffer, uboStagingBuffer.bufferHandle(), UBOGPUBuffer.handle, copyRegion);
+
+                bufferDepInfo.srcStageMask(VK_PIPELINE_STAGE_TRANSFER_BIT);
+                bufferDepInfo.srcAccessMask(VK_ACCESS_TRANSFER_WRITE_BIT);
+                bufferDepInfo.dstStageMask(VK_PIPELINE_STAGE_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
+                bufferDepInfo.dstAccessMask(VK_ACCESS_UNIFORM_READ_BIT);
+                vkCmdPipelineBarrier2(commandBuffer, depInfo);
+
+                uboStagingBuffer = null;
+
             }
         }
         vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
@@ -392,7 +428,9 @@ public class CinnabarEffectInstance extends EffectInstance {
     }
     
     public void writeUniform(long UBOOffset, long cpuMemAddress, long size) {
-    
+        if(uboStagingBuffer != null){
+            LibCString.nmemcpy(uboStagingBuffer.hostPtr().pointer() + UBOOffset, cpuMemAddress, size);
+        }
     }
     
     private static int mapTypeAndCountToVkFormat(VertexFormatElement.Type type, int count, VertexFormatElement.Usage usage) {
