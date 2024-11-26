@@ -12,12 +12,6 @@ import org.spongepowered.asm.mixin.injection.Redirect;
 
 @Mixin(VertexFormat.class)
 public class VertexFormatMixin implements Destroyable {
-    @Redirect(method = "getImmediateDrawVertexBuffer", at = @At(value = "NEW", target = "(Lcom/mojang/blaze3d/vertex/VertexBuffer$Usage;)Lcom/mojang/blaze3d/vertex/VertexBuffer;"))
-    private VertexBuffer getImmediateDrawVertexBuffer$createVertexBuffer(VertexBuffer.Usage usage) {
-        VertexFormatMixinHelper.register(this);
-        return new CinnabarVertexBuffer(usage);
-    }
-    
     @Shadow
     private VertexBuffer immediateDrawVertexBuffer;
     

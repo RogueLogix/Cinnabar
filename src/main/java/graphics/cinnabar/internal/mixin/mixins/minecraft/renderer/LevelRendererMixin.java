@@ -15,20 +15,6 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @NonnullDefault
 @Mixin(LevelRenderer.class)
 public class LevelRendererMixin {
-    @Redirect(method = "createStars", at = @At(value = "NEW", target = "(Lcom/mojang/blaze3d/vertex/VertexBuffer$Usage;)Lcom/mojang/blaze3d/vertex/VertexBuffer;"))
-    private VertexBuffer createStars$createVertexBuffer(VertexBuffer.Usage usage) {
-        return new CinnabarVertexBuffer(usage);
-    }
-    
-    @Redirect(method = "createLightSky", at = @At(value = "NEW", target = "(Lcom/mojang/blaze3d/vertex/VertexBuffer$Usage;)Lcom/mojang/blaze3d/vertex/VertexBuffer;"))
-    private VertexBuffer createLightSky$createVertexBuffer(VertexBuffer.Usage usage) {
-        return new CinnabarVertexBuffer(usage);
-    }
-    
-    @Redirect(method = "createDarkSky", at = @At(value = "NEW", target = "(Lcom/mojang/blaze3d/vertex/VertexBuffer$Usage;)Lcom/mojang/blaze3d/vertex/VertexBuffer;"))
-    private VertexBuffer createDarkSky$createVertexBuffer(VertexBuffer.Usage usage) {
-        return new CinnabarVertexBuffer(usage);
-    }
     @Shadow
     @Nullable
     private VertexBuffer starBuffer;

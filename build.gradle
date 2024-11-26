@@ -126,6 +126,9 @@ configurations {
 dependencies {
     implementation platform("org.lwjgl:lwjgl-bom:$lwjglVersion")
 
+    jarJar(implementation(project(":serviceloaders")))
+    additionalRuntimeClasspath(project(":serviceloaders"))
+
     jarJar(implementation("org.lwjgl:lwjgl-vulkan"))
     additionalRuntimeClasspath("org.lwjgl:lwjgl-vulkan")
     jarJar(implementation("org.lwjgl:lwjgl-shaderc"))
