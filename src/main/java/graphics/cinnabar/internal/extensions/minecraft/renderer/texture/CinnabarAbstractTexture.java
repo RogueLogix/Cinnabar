@@ -1,12 +1,17 @@
 package graphics.cinnabar.internal.extensions.minecraft.renderer.texture;
 
 import com.mojang.blaze3d.platform.NativeImage;
+import graphics.cinnabar.Cinnabar;
 import graphics.cinnabar.internal.CinnabarRenderer;
 import graphics.cinnabar.internal.exceptions.NotImplemented;
 import graphics.cinnabar.internal.vulkan.memory.HostMemoryVkBuffer;
 import graphics.cinnabar.internal.vulkan.memory.VulkanMemoryAllocation;
 import graphics.cinnabar.internal.vulkan.util.LiveHandles;
 import graphics.cinnabar.internal.vulkan.util.VulkanQueueHelper;
+import it.unimi.dsi.fastutil.ints.Int2ReferenceMap;
+import it.unimi.dsi.fastutil.ints.Int2ReferenceOpenHashMap;
+import it.unimi.dsi.fastutil.longs.Long2ReferenceMap;
+import it.unimi.dsi.fastutil.longs.Long2ReferenceOpenHashMap;
 import net.minecraft.client.renderer.texture.AbstractTexture;
 import net.roguelogix.phosphophyllite.util.NonnullDefault;
 import org.jetbrains.annotations.Nullable;
@@ -63,10 +68,22 @@ public abstract class CinnabarAbstractTexture extends AbstractTexture {
     @Nullable
     private VkBufferImageCopy.Buffer vkBufferImageCopy = VkBufferImageCopy.calloc(1);
     
+    private static int nextID = 0;
+    private static final Int2ReferenceMap<@Nullable CinnabarAbstractTexture> idLookupMap = new Int2ReferenceOpenHashMap<>();
+    
+    @Nullable
+    public static CinnabarAbstractTexture fromID(int id) {
+        return idLookupMap.get(id);
+    }
+    
+    private final int id = nextID++;
+    {
+        idLookupMap.put(id, this);
+    }
+    
     @Override
     public int getId() {
-        // easier to return -1 than to rebind everything that calls this
-        return -1;
+        return id;
     }
     
     @Override
@@ -148,6 +165,7 @@ public abstract class CinnabarAbstractTexture extends AbstractTexture {
     
     private void destroy() {
         CinnabarRenderer.waitIdle();
+        idLookupMap.remove(id);
         if (imageViewHandle != VK_NULL_HANDLE) {
             LiveHandles.destroy(this);
             vkDestroyImageView(device, imageViewHandle, null);

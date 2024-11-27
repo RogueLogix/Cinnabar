@@ -18,9 +18,9 @@ switch (OperatingSystem.current()) {
         def osArch = System.getProperty("os.arch")
         if (osArch.startsWith("arm") || osArch.startsWith("aarch64")) {
             project.ext.lwjglNatives += osArch.contains("64") || osArch.startsWith("armv8") ? "-arm64" : "-arm32"
-        } else if  (osArch.startsWith("ppc")) {
+        } else if (osArch.startsWith("ppc")) {
             project.ext.lwjglNatives += "-ppc64le"
-        } else if  (osArch.startsWith("riscv")) {
+        } else if (osArch.startsWith("riscv")) {
             project.ext.lwjglNatives += "-riscv64"
         }
         break
@@ -52,6 +52,33 @@ base {
 }
 
 java.toolchain.languageVersion = JavaLanguageVersion.of(21)
+
+sourceSets {
+    // externally accessible API
+    api {
+        //The API has no resources
+        resources.srcDirs = []
+        compileClasspath += main.compileClasspath
+    }
+    // internal library
+    lib {
+        compileClasspath += api.output
+        compileClasspath += main.compileClasspath
+    }
+    // the main renderer core
+    // operates independent of MC itself
+    core {
+        compileClasspath += api.output
+        compileClasspath += lib.output
+        compileClasspath += main.compileClasspath
+    }
+    // adapts MC to use the renderer core
+    main {
+        compileClasspath += api.output
+        compileClasspath += core.output
+        compileClasspath += lib.output
+    }
+}
 
 neoForge {
     // Specify the version of NeoForge to use.
@@ -107,6 +134,8 @@ neoForge {
         // mostly optional in a single mod project
         // but multi mod projects should define one per mod
         "${mod_id}" {
+            sourceSet(sourceSets.api)
+            sourceSet(sourceSets.core)
             sourceSet(sourceSets.main)
         }
     }
@@ -123,17 +152,40 @@ configurations {
     runtimeClasspath.extendsFrom localRuntime
 }
 
+def lwjglNativeLibs = [
+        "shaderc",
+        "spvc",
+]
+
+def lwjglNativePlatforms = [
+        "natives-linux",
+        "natives-linux-arm64",
+        // these ones dont seem to exist in mavencentral, despite lwjgl claiming support
+//        "natives-linux-ppc64le",
+//        "natives-linux-riscv64",
+        "natives-macos",
+        "natives-macos-arm64",
+        "natives-windows",
+        "natives-windows-arm64",
+]
+
 dependencies {
-    implementation platform("org.lwjgl:lwjgl-bom:$lwjglVersion")
+//    implementation platform("org.lwjgl:lwjgl-bom:$lwjglVersion")
 
     jarJar(implementation(project(":serviceloaders")))
     additionalRuntimeClasspath(project(":serviceloaders"))
 
-    jarJar(implementation("org.lwjgl:lwjgl-vulkan"))
-    additionalRuntimeClasspath("org.lwjgl:lwjgl-vulkan")
-    jarJar(implementation("org.lwjgl:lwjgl-shaderc"))
-    additionalRuntimeClasspath("org.lwjgl:lwjgl-shaderc")
-    additionalRuntimeClasspath("org.lwjgl:lwjgl-shaderc::$lwjglNatives")
+    jarJar(implementation("org.lwjgl:lwjgl-vulkan:$lwjglVersion"))
+    additionalRuntimeClasspath("org.lwjgl:lwjgl-vulkan:$lwjglVersion")
+
+    for (lib in lwjglNativeLibs) {
+        jarJar(implementation("org.lwjgl:lwjgl-$lib:$lwjglVersion"))
+        additionalRuntimeClasspath("org.lwjgl:lwjgl-$lib:$lwjglVersion")
+        additionalRuntimeClasspath("org.lwjgl:lwjgl-$lib:$lwjglVersion:$lwjglNatives")
+        for (nativePlatform in lwjglNativePlatforms){
+            jarJar("org.lwjgl:lwjgl-$lib:$lwjglVersion:$nativePlatform")
+        }
+    }
 
     implementation("org.anarres:jcpp:1.4.14")
     jarJar(implementation("org.taumc:glsl-transformation-lib:0.2.0-20.ge3cb096"))
@@ -191,4 +243,10 @@ idea {
         downloadSources = true
         downloadJavadoc = true
     }
+}
+
+
+tasks.named('jar', Jar).configure { Jar jar ->
+    jar.duplicatesStrategy(DuplicatesStrategy.FAIL)
+    jar.from([sourceSets.api.output, sourceSets.lib.output, sourceSets.core.output, sourceSets.main.output])
 }

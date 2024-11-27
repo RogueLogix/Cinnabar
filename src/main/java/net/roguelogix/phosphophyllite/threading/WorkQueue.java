@@ -1,5 +1,6 @@
 package net.roguelogix.phosphophyllite.threading;
 
+import graphics.cinnabar.api.annotations.ThreadSafety;
 import graphics.cinnabar.internal.util.threading.ResizingRingBuffer;
 import net.minecraft.CrashReport;
 import net.minecraft.client.Minecraft;

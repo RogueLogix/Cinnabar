@@ -1,6 +1,6 @@
 package graphics.cinnabar.internal.vulkan;
 
-import net.roguelogix.phosphophyllite.threading.ThreadSafety;
+import graphics.cinnabar.api.annotations.ThreadSafety;
 
 public interface Destroyable {
     // destroys may be called by a worker thread

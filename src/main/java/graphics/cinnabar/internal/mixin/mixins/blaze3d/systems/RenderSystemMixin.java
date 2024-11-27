@@ -62,24 +62,6 @@ public class RenderSystemMixin {
     }
     
     @Overwrite
-    public static void _setShaderTexture(int shaderTexture, ResourceLocation textureId) {
-        if (shaderTexture >= 0 && shaderTexture < 12) {
-            TextureManager texturemanager = Minecraft.getInstance().getTextureManager();
-            AbstractTexture abstracttexture = texturemanager.getTexture(textureId);
-            CinnabarAbstractTexture.bindShaderTexture(abstracttexture, shaderTexture);
-        }
-    }
-
-    @Overwrite
-    public static int getShaderTexture(int shaderTexture) {
-        // a negative integer value signals to the ShaderInstance to pull from that binding point
-        // -1 : Sampler0 : binding points 0
-        // -2 : Sampler1 : binding points 1
-        // etc
-        return -(shaderTexture + 1);
-    }
-    
-    @Overwrite
     public static void bindTexture(int texture) {
         throw new NotImplemented();
     }

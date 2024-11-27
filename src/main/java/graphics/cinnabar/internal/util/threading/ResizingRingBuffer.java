@@ -2,7 +2,7 @@ package graphics.cinnabar.internal.util.threading;
 
 import it.unimi.dsi.fastutil.objects.ReferenceArrayList;
 import it.unimi.dsi.fastutil.objects.ReferenceList;
-import net.roguelogix.phosphophyllite.threading.ThreadSafety;
+import graphics.cinnabar.api.annotations.ThreadSafety;
 import net.roguelogix.phosphophyllite.util.NonnullDefault;
 import org.jetbrains.annotations.Nullable;
 

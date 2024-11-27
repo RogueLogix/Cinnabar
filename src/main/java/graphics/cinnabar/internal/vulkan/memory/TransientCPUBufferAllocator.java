@@ -7,7 +7,7 @@ import graphics.cinnabar.internal.util.MemoryRange;
 import graphics.cinnabar.internal.vulkan.Destroyable;
 import graphics.cinnabar.internal.vulkan.util.LiveHandles;
 import it.unimi.dsi.fastutil.longs.LongArrayList;
-import net.roguelogix.phosphophyllite.threading.ThreadSafety;
+import graphics.cinnabar.api.annotations.ThreadSafety;
 import net.roguelogix.phosphophyllite.util.NonnullDefault;
 import net.roguelogix.phosphophyllite.util.Pair;
 import org.lwjgl.system.MemoryStack;

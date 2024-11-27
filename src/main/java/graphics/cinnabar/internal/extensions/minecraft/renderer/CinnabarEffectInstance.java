@@ -343,7 +343,8 @@ public class CinnabarEffectInstance extends EffectInstance implements ICinnabarS
             final var descriptorWrites = VkWriteDescriptorSet.calloc(samplerNames.size());
             activeSamplerSet = CinnabarRenderer.queueHelper.descriptorPoolsForSubmit().allocSamplerSet(SamplerDescriptorSetLayout);
             for (int i = 0; i < samplerNames.size(); i++) {
-                final var srcObject = CinnabarAbstractTexture.boundShaderTexture(i);
+                final var mapValue = samplerMap.get(samplerNames.get(i));
+                final var srcObject = CinnabarAbstractTexture.fromID(mapValue.getAsInt());
                 long imageViewHandle = 0;
                 if (srcObject instanceof CinnabarAbstractTexture abstractTexture) {
                     imageViewHandle = abstractTexture.viewHandle();

@@ -25,6 +25,9 @@ import org.antlr.v4.runtime.tree.TerminalNode;
 import org.apache.commons.io.IOUtils;
 import org.jetbrains.annotations.Nullable;
 import org.lwjgl.system.MemoryStack;
+import org.lwjgl.util.spvc.Spv;
+import org.lwjgl.util.spvc.Spvc;
+import org.lwjgl.util.spvc.SpvcReflectedResource;
 import org.lwjgl.vulkan.VkShaderModuleCreateInfo;
 import org.taumc.glsl.Transformer;
 import org.taumc.glsl.grammar.GLSLLexer;
@@ -49,7 +52,7 @@ public class CinnabarProgram extends EffectProgram {
     private static final long SHADERC_COMPILER_OPTIONS = shaderc_compile_options_initialize();
     
     static {
-        shaderc_compile_options_set_optimization_level(SHADERC_COMPILER_OPTIONS, shaderc_optimization_level_performance);
+        shaderc_compile_options_set_optimization_level(SHADERC_COMPILER_OPTIONS, shaderc_optimization_level_zero);
         shaderc_compile_options_set_target_env(SHADERC_COMPILER_OPTIONS, shaderc_target_env_vulkan, shaderc_env_version_vulkan_1_3);
     }
     
@@ -69,7 +72,7 @@ public class CinnabarProgram extends EffectProgram {
     @Override
     public void close() {
         references--;
-        if(references > 0 || closed){
+        if (references > 0 || closed) {
             return;
         }
         closed = true;
@@ -81,7 +84,7 @@ public class CinnabarProgram extends EffectProgram {
     
     public static CinnabarProgram compileShader(JsonObject jsonObject, VertexFormat vertexFormat, Type type, String name, InputStream shaderData, String sourceName, GlslPreprocessor preprocessor) throws IOException {
         
-        if (CinnabarDebug.DEBUG){
+        if (CinnabarDebug.DEBUG) {
             CINNABAR_LOG.debug("Compiling {} shader: {}", type.toString(), name);
         }
         
@@ -101,7 +104,7 @@ public class CinnabarProgram extends EffectProgram {
             //#define BULLSHIT_TO_MAKE_ANTARES_HAPPY
             GLSLLexer lexer = new GLSLLexer(CharStreams.fromReader(new CppReader(new Preprocessor(new StringLexerSource(versionRemovedPreprocessedSource, true)))));
             parser = new GLSLParser(new CommonTokenStream(lexer));
-        } catch (Exception e){
+        } catch (Exception e) {
             throw e;
         }
         
@@ -196,7 +199,7 @@ public class CinnabarProgram extends EffectProgram {
         builder.append("#version 460\n");
         getFormattedShader(translationUnit, builder);
         final var postTransformShaderSource = builder.toString().replace("\nuniform", "\n//uniform");
-        if(CinnabarDebug.DEBUG) {
+        if (CinnabarDebug.DEBUG) {
             for (String s : postTransformShaderSource.split("\n")) {
                 if (s.startsWith("//uniform")) {
                     CINNABAR_LOG.warn("Removed unused uniform line \"{}\"", s.substring(2));
@@ -224,7 +227,7 @@ public class CinnabarProgram extends EffectProgram {
         
         shaderc_result_release(compileResult);
         
-        if (CinnabarDebug.DEBUG){
+        if (CinnabarDebug.DEBUG) {
             CINNABAR_LOG.debug("Compiled {} shader: {}", type.toString(), name);
         }
         

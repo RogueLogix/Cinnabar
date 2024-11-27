@@ -1,7 +1,7 @@
 package graphics.cinnabar.internal.memory;
 
 import graphics.cinnabar.Cinnabar;
-import net.roguelogix.phosphophyllite.threading.ThreadSafety;
+import graphics.cinnabar.api.annotations.ThreadSafety;
 import net.roguelogix.phosphophyllite.util.NonnullDefault;
 import org.joml.*;
 import org.lwjgl.system.MemoryUtil;
