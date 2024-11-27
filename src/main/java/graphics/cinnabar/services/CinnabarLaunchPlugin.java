@@ -28,6 +28,7 @@ public class CinnabarLaunchPlugin implements ILaunchPluginService {
         constructorCallRewrites = Collections.unmodifiableList(list);
         
         list.add(new ImmutablePair<>("com/mojang/blaze3d/vertex/VertexBuffer", "graphics/cinnabar/internal/extensions/blaze3d/vertex/CinnabarVertexBuffer"));
+        list.add(new ImmutablePair<>("net/minecraft/client/renderer/ShaderInstance", "graphics/cinnabar/internal/extensions/minecraft/renderer/CinnabarShaderInstance"));
     }
     
     public static void attemptInject() {
@@ -106,6 +107,7 @@ public class CinnabarLaunchPlugin implements ILaunchPluginService {
                     for (Pair<String, String> constructorCallRewrite : constructorCallRewrites) {
                         if (methodInsnNode.owner.equals(constructorCallRewrite.getLeft()) && methodInsnNode.name.contains("<init>")) {
                             methodInsnNode.owner = rewritingConstructorCall.getRight();
+                            rewritingConstructorCall = null;
                             break;
                         }
                     }

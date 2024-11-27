@@ -14,8 +14,4 @@ import java.io.IOException;
 
 @Mixin(ClientHooks.ClientEvents.class)
 public class ClientEventsMixin {
-    @Redirect(method = "registerShaders", at = @At(value = "NEW", target = "(Lnet/minecraft/server/packs/resources/ResourceProvider;Lnet/minecraft/resources/ResourceLocation;Lcom/mojang/blaze3d/vertex/VertexFormat;)Lnet/minecraft/client/renderer/ShaderInstance;"))
-    private static ShaderInstance createShaderInstance(ResourceProvider resourceProvider, ResourceLocation shaderLocation, VertexFormat vertexFormat) throws IOException {
-        return new CinnabarShaderInstance(resourceProvider, shaderLocation, vertexFormat);
-    }
 }

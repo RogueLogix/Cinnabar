@@ -49,6 +49,10 @@ public class CinnabarShaderInstance extends ShaderInstance implements ICinnabarS
     @Nullable
     private VulkanBuffer.CPU uboStagingBuffer;
     
+    public CinnabarShaderInstance(ResourceProvider resourceProvider, String name, VertexFormat vertexFormat) throws IOException {
+        this(resourceProvider, ResourceLocation.parse(name), vertexFormat);
+    }
+    
     public CinnabarShaderInstance(ResourceProvider resourceProvider, ResourceLocation shaderLocation, VertexFormat vertexFormat) throws IOException {
         super(resourceProvider, shaderLocation, vertexFormat);
         this.vertexProgram = (CinnabarProgram) getVertexProgram();
