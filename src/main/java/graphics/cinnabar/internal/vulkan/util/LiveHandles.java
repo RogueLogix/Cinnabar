@@ -7,6 +7,8 @@ import it.unimi.dsi.fastutil.objects.Reference2ReferenceMap;
 import it.unimi.dsi.fastutil.objects.Reference2ReferenceOpenHashMap;
 import org.jetbrains.annotations.Nullable;
 
+import static org.lwjgl.vulkan.VK10.VK_NULL_HANDLE;
+
 public class LiveHandles {
     private static final Long2ReferenceMap<@Nullable Exception> liveHandles = new Long2ReferenceOpenHashMap<>();
     private static final Reference2ReferenceMap<Object, @Nullable Exception> liveObjects = new Reference2ReferenceOpenHashMap<>();
@@ -56,6 +58,9 @@ public class LiveHandles {
     }
     
     private static synchronized void destroySynced(long handle) {
+        if(handle == VK_NULL_HANDLE){
+            return;
+        }
         final var old = liveHandles.remove(handle);
         if (old == null) {
             throw new IllegalStateException("Double free!");

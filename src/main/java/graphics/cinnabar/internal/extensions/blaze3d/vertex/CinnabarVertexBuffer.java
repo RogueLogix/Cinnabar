@@ -161,6 +161,9 @@ public class CinnabarVertexBuffer extends VertexBuffer {
     }
     
     public void gpuDestroy() {
+        if (bufferHandle == VK_NULL_HANDLE) {
+            return;
+        }
         final var queue = CinnabarRenderer.queueHelper;
         
         LiveHandles.destroy(bufferHandle);

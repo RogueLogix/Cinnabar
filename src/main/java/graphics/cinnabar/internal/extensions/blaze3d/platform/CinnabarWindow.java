@@ -31,6 +31,7 @@ import static org.lwjgl.vulkan.KHRSurface.*;
 import static org.lwjgl.vulkan.KHRSwapchain.*;
 import static org.lwjgl.vulkan.VK10.*;
 import static org.lwjgl.vulkan.VK12.VK_SEMAPHORE_TYPE_TIMELINE;
+import static org.lwjgl.vulkan.VK13.vkCmdPipelineBarrier2;
 
 @NonnullDefault
 public class CinnabarWindow extends Window {
@@ -50,6 +51,7 @@ public class CinnabarWindow extends Window {
     private final VkImageMemoryBarrier.Buffer imageBarrier = VkImageMemoryBarrier.calloc(1);
     private final VkClearColorValue clearColor = VkClearColorValue.calloc();
     
+    private boolean resetImage = false;
     
     public CinnabarWindow(WindowEventHandler eventHandler, ScreenManager screenManager, DisplayData displayData, @Nullable String preferredFullscreenVideoMode, String title) {
         super(eventHandler, screenManager, displayData, preferredFullscreenVideoMode, title);
@@ -118,7 +120,6 @@ public class CinnabarWindow extends Window {
     }
     
     private void recreateSwapchain(boolean recursing) {
-        present(); // will probably cause a suboptimal return code, thats fine
         CinnabarRenderer.waitIdle();
         createSwapchain(getWidth(), getHeight());
         // re-acquire a swapchain image
@@ -232,7 +233,43 @@ public class CinnabarWindow extends Window {
     
     public long getImageForBlit() {
         throwFromCode(vkWaitForFences(device, frameAcquisitionFence, true, Long.MAX_VALUE));
-        return swapchainImages.getLong(currentSwapchainFrame);
+        final var colorImageHandle = swapchainImages.getLong(currentSwapchainFrame);
+        if(!resetImage){
+            return colorImageHandle;
+        }
+        resetImage = false;
+        try (final var stack = MemoryStack.stackPush()) {
+            final var commandBuffer = CinnabarRenderer.queueHelper.getImplicitCommandBuffer(VulkanQueueHelper.QueueType.MAIN_GRAPHICS);
+            
+            final var colorSubresourceRange = VkImageSubresourceRange.calloc(stack);
+            colorSubresourceRange.baseMipLevel(0);
+            colorSubresourceRange.levelCount(1);
+            colorSubresourceRange.baseArrayLayer(0);
+            colorSubresourceRange.layerCount(1);
+            colorSubresourceRange.aspectMask(VK_IMAGE_ASPECT_COLOR_BIT);
+            final var depthSubresourceRange = VkImageSubresourceRange.calloc(stack);
+            depthSubresourceRange.baseMipLevel(0);
+            depthSubresourceRange.levelCount(1);
+            depthSubresourceRange.baseArrayLayer(0);
+            depthSubresourceRange.layerCount(1);
+            depthSubresourceRange.aspectMask(VK_IMAGE_ASPECT_DEPTH_BIT);
+            
+            
+            // dont care to general
+            final var depInfo = VkDependencyInfo.calloc(stack).sType$Default();
+            final var imageBarriers = VkImageMemoryBarrier2.calloc(1, stack);
+            imageBarriers.sType$Default();
+            imageBarriers.image(colorImageHandle);
+            imageBarriers.srcStageMask(VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT);
+            imageBarriers.dstStageMask(VK_PIPELINE_STAGE_TRANSFER_BIT);
+            imageBarriers.dstAccessMask(VK_ACCESS_TRANSFER_WRITE_BIT);
+            imageBarriers.oldLayout(VK_IMAGE_LAYOUT_UNDEFINED);
+            imageBarriers.newLayout(VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+            imageBarriers.subresourceRange(colorSubresourceRange);
+            depInfo.pImageMemoryBarriers(imageBarriers);
+            vkCmdPipelineBarrier2(commandBuffer, depInfo);
+        }
+        return colorImageHandle;
     }
     
     public void present() {
@@ -275,6 +312,7 @@ public class CinnabarWindow extends Window {
 
             throwFromCode(vkResetFences(device, frameAcquisitionFence));
             int returnCode = vkAcquireNextImageKHR(device, swapchain, Long.MAX_VALUE, VK_NULL_HANDLE, frameAcquisitionFence, intPtr);
+            resetImage = true;
             throwFromCode(returnCode);
             if (returnCode == VK_SUBOPTIMAL_KHR && !recursing) {
                 // acquire wasn't happy, rebuild the swapchain

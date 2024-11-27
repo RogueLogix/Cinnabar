@@ -119,10 +119,10 @@ public class VulkanQueueHelper implements Destroyable {
             beginInfo.free();
         }
 
-        private void reset() {
+        private void reset(int submit) {
             assert queueState == QueueState.WAITING;
-            clientWaitImplicit(lastSubmitWaitValues[currentSubmit]);
-            commandPools.get(currentSubmit).reset(false, false);
+            clientWaitImplicit(lastSubmitWaitValues[submit]);
+            commandPools.get(submit).reset(false, false);
         }
 
         private void submit() {
@@ -341,13 +341,15 @@ public class VulkanQueueHelper implements Destroyable {
             currentSubmit %= submitsInFlight;
         }
         stack.reset();
-        queueBuilders[0].reset();
+        queueBuilders[0].reset(currentSubmit);
         if (queueBuilders[0] != queueBuilders[1]) {
-            queueBuilders[1].reset();
+            queueBuilders[1].reset(currentSubmit);
         }
         if (queueBuilders[1] != queueBuilders[2]) {
-            queueBuilders[2].reset();
+            queueBuilders[2].reset(currentSubmit);
         }
+        transientDescriptorPools.get(currentSubmit).reset();
+        transientCPUBufferAllocators.get(currentSubmit).reset();
         final var ring = endOfGPUSubmitDestroy.get(currentSubmit);
         while (!ring.empty()) {
             @Nullable final var toDestroy = ring.poll();
@@ -355,10 +357,17 @@ public class VulkanQueueHelper implements Destroyable {
                 toDestroy.destroy();
             }
         }
-        transientDescriptorPools.get(currentSubmit).reset();
-        transientCPUBufferAllocators.get(currentSubmit).reset();
         if (wait) {
             for (int submit = (currentSubmit + 1) % submitsInFlight; submit != currentSubmit; submit = (submit + 1) % submitsInFlight) {
+                queueBuilders[0].reset(submit);
+                if (queueBuilders[0] != queueBuilders[1]) {
+                    queueBuilders[1].reset(submit);
+                }
+                if (queueBuilders[1] != queueBuilders[2]) {
+                    queueBuilders[2].reset(submit);
+                }
+                transientDescriptorPools.get(submit).reset();
+                transientCPUBufferAllocators.get(submit).reset();
                 final var ring2 = endOfGPUSubmitDestroy.get(submit);
                 while (!ring2.empty()) {
                     @Nullable final var toDestroy = ring2.poll();
@@ -366,8 +375,6 @@ public class VulkanQueueHelper implements Destroyable {
                         toDestroy.destroy();
                     }
                 }
-                transientDescriptorPools.get(submit).reset();
-                transientCPUBufferAllocators.get(submit).reset();
             }
         }
     }

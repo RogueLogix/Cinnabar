@@ -341,8 +341,8 @@ public class CinnabarShaderInstance extends ShaderInstance implements ICinnabarS
     @Override
     public void setSampler(String name, Object textureId) {
         if (textureId instanceof Integer intID) {
-            if (intID >= -1 || intID < -14) {
-                throw new IllegalArgumentException("Only integer ID's -2 through -14 are allowed for mapping to ShaderTexture bind points.");
+            if (intID >= 0 || intID < -13) {
+                throw new IllegalArgumentException("Only integer ID's -1 through -13 are allowed for mapping to ShaderTexture bind points.");
             }
         }
         super.setSampler(name, textureId);

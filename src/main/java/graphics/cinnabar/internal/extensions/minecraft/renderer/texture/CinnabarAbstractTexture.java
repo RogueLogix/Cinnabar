@@ -147,6 +147,7 @@ public abstract class CinnabarAbstractTexture extends AbstractTexture {
     }
     
     private void destroy() {
+        CinnabarRenderer.waitIdle();
         if (imageViewHandle != VK_NULL_HANDLE) {
             LiveHandles.destroy(this);
             vkDestroyImageView(device, imageViewHandle, null);

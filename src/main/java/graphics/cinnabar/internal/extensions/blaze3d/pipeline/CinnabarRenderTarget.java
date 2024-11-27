@@ -163,6 +163,50 @@ public class CinnabarRenderTarget extends RenderTarget {
             depthImageViewHandle = longPtr.get(0);
             LiveHandles.create(depthImageViewHandle);
         }
+        
+        try (final var stack = MemoryStack.stackPush()) {
+            final var commandBuffer = CinnabarRenderer.queueHelper.getImplicitCommandBuffer(VulkanQueueHelper.QueueType.MAIN_GRAPHICS);
+            
+            final var colorSubresourceRange = VkImageSubresourceRange.calloc(stack);
+            colorSubresourceRange.baseMipLevel(0);
+            colorSubresourceRange.levelCount(1);
+            colorSubresourceRange.baseArrayLayer(0);
+            colorSubresourceRange.layerCount(1);
+            colorSubresourceRange.aspectMask(VK_IMAGE_ASPECT_COLOR_BIT);
+            final var depthSubresourceRange = VkImageSubresourceRange.calloc(stack);
+            depthSubresourceRange.baseMipLevel(0);
+            depthSubresourceRange.levelCount(1);
+            depthSubresourceRange.baseArrayLayer(0);
+            depthSubresourceRange.layerCount(1);
+            depthSubresourceRange.aspectMask(VK_IMAGE_ASPECT_DEPTH_BIT);
+            
+            
+            // dont care to general
+            // wait for nothing, but transfer (clear) must wait for this
+            final var depInfo = VkDependencyInfo.calloc(stack).sType$Default();
+            final var imageBarriers = VkImageMemoryBarrier2.calloc(2, stack);
+            imageBarriers.position(0);
+            imageBarriers.sType$Default();
+            imageBarriers.image(colorImageHandle);
+            imageBarriers.srcStageMask(VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT);
+            imageBarriers.dstStageMask(VK_PIPELINE_STAGE_TRANSFER_BIT);
+            imageBarriers.dstAccessMask(VK_ACCESS_TRANSFER_WRITE_BIT);
+            imageBarriers.oldLayout(VK_IMAGE_LAYOUT_UNDEFINED);
+            imageBarriers.newLayout(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+            imageBarriers.subresourceRange(colorSubresourceRange);
+            imageBarriers.position(1);
+            imageBarriers.sType$Default();
+            imageBarriers.image(depthImageHandle);
+            imageBarriers.srcStageMask(VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT);
+            imageBarriers.dstStageMask(VK_PIPELINE_STAGE_TRANSFER_BIT);
+            imageBarriers.dstAccessMask(VK_ACCESS_MEMORY_WRITE_BIT);
+            imageBarriers.oldLayout(VK_IMAGE_LAYOUT_UNDEFINED);
+            imageBarriers.newLayout(VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
+            imageBarriers.subresourceRange(depthSubresourceRange);
+            imageBarriers.position(0);
+            depInfo.pImageMemoryBarriers(imageBarriers);
+            vkCmdPipelineBarrier2(commandBuffer, depInfo);
+        }
     }
 
     @Override
@@ -226,26 +270,29 @@ public class CinnabarRenderTarget extends RenderTarget {
 
 
             // dont care to general
-            // wait for nothing, but transfer (clear) must wait for this
+            // wait for previous frame/clear (should already be complete really),
+            // transfer (clear) must also wait for this
             final var depInfo = VkDependencyInfo.calloc(stack).sType$Default();
             final var imageBarriers = VkImageMemoryBarrier2.calloc(2, stack);
             imageBarriers.position(0);
             imageBarriers.sType$Default();
             imageBarriers.image(colorImageHandle);
-            imageBarriers.srcStageMask(VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT);
+            imageBarriers.srcStageMask(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_TRANSFER_BIT);
+            imageBarriers.srcAccessMask(VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_TRANSFER_READ_BIT);
             imageBarriers.dstStageMask(VK_PIPELINE_STAGE_TRANSFER_BIT);
             imageBarriers.dstAccessMask(VK_ACCESS_TRANSFER_WRITE_BIT);
             imageBarriers.oldLayout(VK_IMAGE_LAYOUT_UNDEFINED);
-            imageBarriers.newLayout(VK_IMAGE_LAYOUT_GENERAL);
+            imageBarriers.newLayout(VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
             imageBarriers.subresourceRange(colorSubresourceRange);
             imageBarriers.position(1);
             imageBarriers.sType$Default();
             imageBarriers.image(depthImageHandle);
-            imageBarriers.srcStageMask(VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT);
+            imageBarriers.srcStageMask(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_TRANSFER_BIT);
+            imageBarriers.srcAccessMask(VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_TRANSFER_READ_BIT);
             imageBarriers.dstStageMask(VK_PIPELINE_STAGE_TRANSFER_BIT);
             imageBarriers.dstAccessMask(VK_ACCESS_MEMORY_WRITE_BIT);
             imageBarriers.oldLayout(VK_IMAGE_LAYOUT_UNDEFINED);
-            imageBarriers.newLayout(VK_IMAGE_LAYOUT_GENERAL);
+            imageBarriers.newLayout(VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
             imageBarriers.subresourceRange(depthSubresourceRange);
             imageBarriers.position(0);
 
@@ -262,13 +309,13 @@ public class CinnabarRenderTarget extends RenderTarget {
                 for (int i = 0; i < 4; i++) {
                     clearColor.float32(i, clearChannels[i]);
                 }
-                vkCmdClearColorImage(commandBuffer, colorImageHandle, VK_IMAGE_LAYOUT_GENERAL, clearColor, colorSubresourceRange);
+                vkCmdClearColorImage(commandBuffer, colorImageHandle, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, clearColor, colorSubresourceRange);
             }
 
             if(doDepthClear) {
                 final var depthClear = VkClearDepthStencilValue.calloc(stack);
                 depthClear.depth(1.0f);
-                vkCmdClearDepthStencilImage(commandBuffer, depthImageHandle, VK_IMAGE_LAYOUT_GENERAL, depthClear, depthSubresourceRange);
+                vkCmdClearDepthStencilImage(commandBuffer, depthImageHandle, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, depthClear, depthSubresourceRange);
             }
 
             // no need to do a layout transition here, general is fine
@@ -278,13 +325,15 @@ public class CinnabarRenderTarget extends RenderTarget {
             imageBarriers.srcAccessMask(VK_ACCESS_TRANSFER_WRITE_BIT);
             imageBarriers.dstStageMask(VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
             imageBarriers.dstAccessMask(VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT);
-            imageBarriers.oldLayout(VK_IMAGE_LAYOUT_GENERAL);
+            imageBarriers.oldLayout(VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+            imageBarriers.newLayout(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
             imageBarriers.position(1);
             imageBarriers.srcStageMask(VK_PIPELINE_STAGE_TRANSFER_BIT);
             imageBarriers.srcAccessMask(VK_ACCESS_TRANSFER_WRITE_BIT);
             imageBarriers.dstStageMask(VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
             imageBarriers.dstAccessMask(VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT);
-            imageBarriers.oldLayout(VK_IMAGE_LAYOUT_GENERAL);
+            imageBarriers.oldLayout(VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+            imageBarriers.newLayout(VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
             if(!doColorClear){
                 imageBarriers.position(1);
             } else if (!doDepthClear){
@@ -397,16 +446,16 @@ public class CinnabarRenderTarget extends RenderTarget {
             imageBarrier.subresourceRange(imageSubresourceRange);
 
             imageBarrier.dstAccessMask(VK_ACCESS_TRANSFER_READ_BIT);
-            imageBarrier.oldLayout(VK_IMAGE_LAYOUT_GENERAL);
+            imageBarrier.oldLayout(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
             imageBarrier.newLayout(VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
             imageBarrier.image(colorImageHandle);
-            vkCmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, null, null, imageBarrier);
+            vkCmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, null, null, imageBarrier);
 
             imageBarrier.dstAccessMask(VK_ACCESS_TRANSFER_WRITE_BIT);
             imageBarrier.oldLayout(VK_IMAGE_LAYOUT_UNDEFINED);
             imageBarrier.newLayout(VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
             imageBarrier.image(window.getImageForBlit());
-            vkCmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, null, null, imageBarrier);
+            vkCmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, null, null, imageBarrier);
 
             final var srcOffsets = VkOffset3D.calloc(2, stack);
             srcOffsets.x(0).y(0).z(0);
@@ -434,7 +483,7 @@ public class CinnabarRenderTarget extends RenderTarget {
 
             vkCmdBlitImage(commandBuffer, colorImageHandle, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, window.getImageForBlit(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, blitRegion, VK_FILTER_NEAREST);
 
-            imageBarrier.newLayout(VK_IMAGE_LAYOUT_GENERAL);
+            imageBarrier.newLayout(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
             imageBarrier.dstAccessMask(VK_ACCESS_TRANSFER_WRITE_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT);
 
             imageBarrier.oldLayout(VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
