@@ -1,5 +1,6 @@
 package graphics.cinnabar.internal.mixin.mixins.blaze3d.vertex;
 
+import com.mojang.blaze3d.vertex.BufferUploader;
 import com.mojang.blaze3d.vertex.VertexBuffer;
 import graphics.cinnabar.internal.extensions.blaze3d.vertex.CinnabarVertexBuffer;
 import net.roguelogix.phosphophyllite.util.NonnullDefault;
@@ -39,5 +40,6 @@ public class VertexBufferMixin {
     
     @Overwrite
     public static void unbind() {
+        BufferUploader.invalidate();
     }
 }

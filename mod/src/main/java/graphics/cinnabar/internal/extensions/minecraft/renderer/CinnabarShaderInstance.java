@@ -5,14 +5,13 @@ import com.mojang.blaze3d.vertex.VertexFormat;
 import com.mojang.blaze3d.vertex.VertexFormatElement;
 import graphics.cinnabar.internal.CinnabarDebug;
 import graphics.cinnabar.internal.CinnabarRenderer;
-import graphics.cinnabar.internal.exceptions.NotImplemented;
 import graphics.cinnabar.internal.extensions.blaze3d.shaders.CinnabarProgram;
 import graphics.cinnabar.internal.extensions.minecraft.renderer.texture.CinnabarAbstractTexture;
 import graphics.cinnabar.internal.statemachine.CinnabarBlendState;
 import graphics.cinnabar.internal.vulkan.MagicNumbers;
-import graphics.cinnabar.internal.vulkan.memory.HostMemoryVkBuffer;
 import graphics.cinnabar.internal.vulkan.memory.VulkanBuffer;
 import graphics.cinnabar.internal.vulkan.util.CinnabarDescriptorSets;
+import graphics.cinnabar.internal.vulkan.util.VulkanQueueHelper;
 import graphics.cinnabar.internal.vulkan.util.VulkanSampler;
 import net.minecraft.client.renderer.ShaderInstance;
 import net.minecraft.resources.ResourceLocation;
@@ -340,7 +339,7 @@ public class CinnabarShaderInstance extends ShaderInstance implements ICinnabarS
     
     @Override
     public void apply() {
-        throw new NotImplemented("Must apply to command buffer");
+        apply(CinnabarRenderer.queueHelper.getImplicitCommandBuffer(VulkanQueueHelper.QueueType.MAIN_GRAPHICS));
     }
     
     public void apply(VkCommandBuffer commandBuffer) {
@@ -379,40 +378,7 @@ public class CinnabarShaderInstance extends ShaderInstance implements ICinnabarS
             }
             if (this.dirty && UBOGPUBuffer != null) {
                 this.dirty = false;
-                uboStagingBuffer = CinnabarRenderer.queueHelper.cpuBufferAllocatorForSubmit().alloc(UBOSize);
-                CinnabarRenderer.queueHelper.destroyEndOfSubmit(uboStagingBuffer);
-                for (Uniform uniform : this.uniforms) {
-                    uniform.upload();
-                }
-                
-                final var depInfo = VkDependencyInfo.calloc(stack).sType$Default();
-                final var bufferDepInfo = VkBufferMemoryBarrier2.calloc(1, stack).sType$Default();
-                depInfo.pBufferMemoryBarriers(bufferDepInfo);
-                bufferDepInfo.buffer(UBOGPUBuffer.handle);
-                bufferDepInfo.size(UBOGPUBuffer.size);
-                bufferDepInfo.offset(0);
-                
-                bufferDepInfo.srcStageMask(VK_PIPELINE_STAGE_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
-                bufferDepInfo.srcAccessMask(VK_ACCESS_UNIFORM_READ_BIT);
-                bufferDepInfo.dstStageMask(VK_PIPELINE_STAGE_TRANSFER_BIT);
-                bufferDepInfo.dstAccessMask(VK_ACCESS_TRANSFER_WRITE_BIT);
-                vkCmdPipelineBarrier2(commandBuffer, depInfo);
-                
-                final var copyRegion = VkBufferCopy.calloc(1, stack);
-                copyRegion.srcOffset(0);
-                copyRegion.dstOffset(0);
-                copyRegion.size(UBOSize);
-                copyRegion.limit(1);
-                vkCmdCopyBuffer(commandBuffer, uboStagingBuffer.handle, UBOGPUBuffer.handle, copyRegion);
-                
-                bufferDepInfo.srcStageMask(VK_PIPELINE_STAGE_TRANSFER_BIT);
-                bufferDepInfo.srcAccessMask(VK_ACCESS_TRANSFER_WRITE_BIT);
-                bufferDepInfo.dstStageMask(VK_PIPELINE_STAGE_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
-                bufferDepInfo.dstAccessMask(VK_ACCESS_UNIFORM_READ_BIT);
-                vkCmdPipelineBarrier2(commandBuffer, depInfo);
-                
-                uboStagingBuffer = null;
-                
+                doUniformUploads(commandBuffer);
             }
         }
         vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
@@ -438,7 +404,46 @@ public class CinnabarShaderInstance extends ShaderInstance implements ICinnabarS
         if (uboStagingBuffer != null) {
             LibCString.nmemcpy(uboStagingBuffer.hostPtr.pointer() + UBOOffset, cpuMemAddress, size);
         } else {
-            throw new IllegalStateException();
+            doUniformUploads(CinnabarRenderer.queueHelper.getImplicitCommandBuffer(VulkanQueueHelper.QueueType.MAIN_GRAPHICS));
+        }
+    }
+    
+    private void doUniformUploads(VkCommandBuffer commandBuffer) {
+        try (final var stack = MemoryStack.stackPush()) {
+            
+            uboStagingBuffer = CinnabarRenderer.queueHelper.cpuBufferAllocatorForSubmit().alloc(UBOSize);
+            CinnabarRenderer.queueHelper.destroyEndOfSubmit(uboStagingBuffer);
+            for (Uniform uniform : this.uniforms) {
+                uniform.upload();
+            }
+            
+            final var depInfo = VkDependencyInfo.calloc(stack).sType$Default();
+            final var bufferDepInfo = VkBufferMemoryBarrier2.calloc(1, stack).sType$Default();
+            depInfo.pBufferMemoryBarriers(bufferDepInfo);
+            bufferDepInfo.buffer(UBOGPUBuffer.handle);
+            bufferDepInfo.size(UBOGPUBuffer.size);
+            bufferDepInfo.offset(0);
+            
+            bufferDepInfo.srcStageMask(VK_PIPELINE_STAGE_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
+            bufferDepInfo.srcAccessMask(VK_ACCESS_UNIFORM_READ_BIT);
+            bufferDepInfo.dstStageMask(VK_PIPELINE_STAGE_TRANSFER_BIT);
+            bufferDepInfo.dstAccessMask(VK_ACCESS_TRANSFER_WRITE_BIT);
+            vkCmdPipelineBarrier2(commandBuffer, depInfo);
+            
+            final var copyRegion = VkBufferCopy.calloc(1, stack);
+            copyRegion.srcOffset(0);
+            copyRegion.dstOffset(0);
+            copyRegion.size(UBOSize);
+            copyRegion.limit(1);
+            vkCmdCopyBuffer(commandBuffer, uboStagingBuffer.handle, UBOGPUBuffer.handle, copyRegion);
+            
+            bufferDepInfo.srcStageMask(VK_PIPELINE_STAGE_TRANSFER_BIT);
+            bufferDepInfo.srcAccessMask(VK_ACCESS_TRANSFER_WRITE_BIT);
+            bufferDepInfo.dstStageMask(VK_PIPELINE_STAGE_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
+            bufferDepInfo.dstAccessMask(VK_ACCESS_UNIFORM_READ_BIT);
+            vkCmdPipelineBarrier2(commandBuffer, depInfo);
+            
+            uboStagingBuffer = null;
         }
     }
     

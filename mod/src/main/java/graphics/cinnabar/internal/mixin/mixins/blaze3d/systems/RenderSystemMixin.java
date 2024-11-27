@@ -171,4 +171,9 @@ public class RenderSystemMixin {
     public static void disableScissor() {
         CinnabarFramebufferState.disableGlScissor();
     }
+    
+    @Overwrite
+    public static void clearColor(float red, float green, float blue, float alpha) {
+        CinnabarFramebufferState.bound().clearColor(red, green, blue, alpha);
+    }
 }
