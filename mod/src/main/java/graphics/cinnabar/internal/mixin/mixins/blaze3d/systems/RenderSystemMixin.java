@@ -2,6 +2,7 @@ package graphics.cinnabar.internal.mixin.mixins.blaze3d.systems;
 
 import com.mojang.blaze3d.platform.GlStateManager;
 import com.mojang.blaze3d.systems.RenderSystem;
+import graphics.cinnabar.Cinnabar;
 import graphics.cinnabar.internal.exceptions.NotImplemented;
 import graphics.cinnabar.internal.extensions.minecraft.renderer.texture.CinnabarAbstractTexture;
 import graphics.cinnabar.internal.mixin.helpers.blaze3d.systems.RenderSystemMixinHelper;
@@ -12,6 +13,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.texture.AbstractTexture;
 import net.minecraft.client.renderer.texture.TextureManager;
 import net.minecraft.resources.ResourceLocation;
+import net.neoforged.neoforge.client.GlStateBackup;
 import org.joml.Matrix4f;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Overwrite;
@@ -175,5 +177,68 @@ public class RenderSystemMixin {
     @Overwrite
     public static void clearColor(float red, float green, float blue, float alpha) {
         CinnabarFramebufferState.bound().clearColor(red, green, blue, alpha);
+    }
+    
+    @Overwrite
+    public static void enableColorLogicOp() {
+        CinnabarGeneralState.logicOpEnable = true;
+    }
+    
+    @Overwrite
+    public static void disableColorLogicOp() {
+        CinnabarGeneralState.logicOpEnable = false;
+    }
+    
+    @Overwrite
+    public static void logicOp(GlStateManager.LogicOp op) {
+        CinnabarGeneralState.logicOp = switch (op) {
+            case AND -> VK_LOGIC_OP_AND;
+            case AND_INVERTED -> VK_LOGIC_OP_AND_INVERTED;
+            case AND_REVERSE -> VK_LOGIC_OP_AND_REVERSE;
+            case CLEAR -> VK_LOGIC_OP_CLEAR;
+            case COPY -> VK_LOGIC_OP_COPY;
+            case COPY_INVERTED -> VK_LOGIC_OP_COPY_INVERTED;
+            case EQUIV -> VK_LOGIC_OP_EQUIVALENT;
+            case INVERT -> VK_LOGIC_OP_INVERT;
+            case NAND -> VK_LOGIC_OP_NAND;
+            case NOOP -> VK_LOGIC_OP_NO_OP;
+            case NOR -> VK_LOGIC_OP_NOR;
+            case OR -> VK_LOGIC_OP_OR;
+            case OR_INVERTED -> VK_LOGIC_OP_OR_INVERTED;
+            case OR_REVERSE -> VK_LOGIC_OP_OR_REVERSE;
+            case SET -> VK_LOGIC_OP_SET;
+            case XOR -> VK_LOGIC_OP_XOR;
+        };
+    }
+    
+    
+    @Overwrite
+    public static void backupGlState(GlStateBackup state) {
+        state.blendEnabled = CinnabarBlendState.enabled();
+        state.blendSrcRgb = CinnabarBlendState.srcRgb();
+        state.blendDestRgb = CinnabarBlendState.dstRgb();
+        state.blendSrcAlpha = CinnabarBlendState.srcAlpha();
+        state.blendDestAlpha = CinnabarBlendState.dstAlpha();
+        state.depthEnabled = CinnabarGeneralState.depthTest;
+        state.depthFunc = CinnabarGeneralState.depthFunc;
+        state.cullEnabled = CinnabarGeneralState.cull;
+        state.scissorEnabled = CinnabarFramebufferState.scissorEnabled();
+        state.colorLogicEnabled = CinnabarGeneralState.logicOpEnable;
+        state.colorLogicOp = CinnabarGeneralState.logicOp;
+    }
+    
+    @Overwrite
+    public static void restoreGlState(GlStateBackup state) {
+        CinnabarBlendState.setEnabled(state.blendEnabled);
+        CinnabarBlendState.setBlendFactors(state.blendSrcRgb, state.blendDestRgb, state.blendSrcAlpha, state.blendDestAlpha);
+        CinnabarGeneralState.depthTest = state.depthEnabled;
+        CinnabarGeneralState.depthWrite = state.depthMask;
+        CinnabarGeneralState.depthFunc = state.depthFunc;
+        CinnabarGeneralState.cull = state.cullEnabled;
+        CinnabarFramebufferState.scissor();
+        // TODO: scissor offset/size not backed up
+//        state.scissorEnabled = CinnabarFramebufferState.scissorEnabled();
+        CinnabarGeneralState.logicOpEnable = state.colorLogicEnabled;
+        CinnabarGeneralState.logicOp = state.colorLogicOp;
     }
 }

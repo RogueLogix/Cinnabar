@@ -263,8 +263,8 @@ public class CinnabarVertexBuffer extends VertexBuffer {
         CinnabarBlendState.apply(commandBuffer);
         
         // TODO: track/set logic op
-        vkCmdSetLogicOpEnableEXT(commandBuffer, false);
-        vkCmdSetLogicOpEXT(commandBuffer, VK_LOGIC_OP_NO_OP);
+        vkCmdSetLogicOpEnableEXT(commandBuffer, CinnabarGeneralState.logicOpEnable);
+        vkCmdSetLogicOpEXT(commandBuffer, CinnabarGeneralState.logicOp);
         
         
         try (final var stack = MemoryStack.stackPush()) {

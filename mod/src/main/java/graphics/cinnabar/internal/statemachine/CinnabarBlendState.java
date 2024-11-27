@@ -59,8 +59,40 @@ public class CinnabarBlendState {
             case GL_SRC_COLOR -> VK_BLEND_FACTOR_SRC_COLOR;
             case GL_ONE_MINUS_SRC_COLOR -> VK_BLEND_FACTOR_ONE_MINUS_SRC_COLOR;
             case GL_ONE_MINUS_DST_COLOR -> VK_BLEND_FACTOR_ONE_MINUS_DST_COLOR;
-            // TODO: other factors
             default -> -1;
         };
+    }
+    
+    private static int vkToGLBlendFactor(int vkFactor) {
+        return switch (vkFactor) {
+            case VK_BLEND_FACTOR_ZERO -> GL_ZERO;
+            case VK_BLEND_FACTOR_ONE -> GL_ONE;
+            case VK_BLEND_FACTOR_SRC_ALPHA -> GL_SRC_ALPHA;
+            case VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA -> GL_ONE_MINUS_SRC_ALPHA;
+            case VK_BLEND_FACTOR_SRC_COLOR -> GL_SRC_COLOR;
+            case VK_BLEND_FACTOR_ONE_MINUS_SRC_COLOR -> GL_ONE_MINUS_SRC_COLOR;
+            case VK_BLEND_FACTOR_ONE_MINUS_DST_COLOR -> GL_ONE_MINUS_DST_COLOR;
+            default -> -1;
+        };
+    }
+    
+    public static boolean enabled() {
+        return enabled;
+    }
+    
+    public static int srcRgb() {
+        return vkToGLBlendFactor(colorBlendEquations.srcColorBlendFactor());
+    }
+    
+    public static int dstRgb() {
+        return vkToGLBlendFactor(colorBlendEquations.dstColorBlendFactor());
+    }
+    
+    public static int srcAlpha() {
+        return vkToGLBlendFactor(colorBlendEquations.srcAlphaBlendFactor());
+    }
+    
+    public static int dstAlpha() {
+        return vkToGLBlendFactor(colorBlendEquations.dstAlphaBlendFactor());
     }
 }

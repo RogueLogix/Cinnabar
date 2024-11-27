@@ -120,6 +120,10 @@ public class CinnabarFramebufferState {
         scissorEnabled = false;
     }
     
+    public static boolean scissorEnabled() {
+        return scissorEnabled;
+    }
+    
     public static VkRect2D.Buffer scissor() {
         if (!scissorEnabled) {
             //noinspection resource
