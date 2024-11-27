@@ -1,19 +1,36 @@
-import org.gradle.internal.os.OperatingSystem
-
 plugins {
     id 'java-library'
-    id 'maven-publish'
-    id 'net.neoforged.moddev' version '1.0.21'
 }
 
-tasks.named('wrapper', Wrapper).configure {
-    distributionType = Wrapper.DistributionType.BIN
+allprojects {
+    version = mod_version
+    group = mod_group_id
 }
 
-project.ext.lwjglVersion = "3.3.3"
+base {
+    archivesName = "$mod_id-$minecraft_version"
+}
 
-switch (OperatingSystem.current()) {
-    case OperatingSystem.LINUX:
+repositories {
+    maven { url "https://maven.neoforged.net/releases" }
+    maven { url "https://libraries.minecraft.net/" }
+    mavenCentral()
+    maven {
+        name = "TauMC"
+        url = "https://maven.taumc.org/releases"
+    }
+}
+
+configurations {
+    jijMod {}
+}
+
+configurations {
+    jijLib {}
+}
+
+switch (org.gradle.internal.os.OperatingSystem.current()) {
+    case org.gradle.internal.os.OperatingSystem.LINUX:
         project.ext.lwjglNatives = "natives-linux"
         def osArch = System.getProperty("os.arch")
         if (osArch.startsWith("arm") || osArch.startsWith("aarch64")) {
@@ -24,10 +41,10 @@ switch (OperatingSystem.current()) {
             project.ext.lwjglNatives += "-riscv64"
         }
         break
-    case OperatingSystem.MAC_OS:
+    case org.gradle.internal.os.OperatingSystem.MAC_OS:
         project.ext.lwjglNatives = System.getProperty("os.arch").startsWith("aarch64") ? "natives-macos-arm64" : "natives-macos"
         break
-    case OperatingSystem.WINDOWS:
+    case org.gradle.internal.os.OperatingSystem.WINDOWS:
         def osArch = System.getProperty("os.arch")
         project.ext.lwjglNatives = osArch.contains("64")
                 ? "natives-windows${osArch.startsWith("aarch64") ? "-arm64" : ""}"
@@ -35,122 +52,9 @@ switch (OperatingSystem.current()) {
         break
 }
 
-version = mod_version
-group = mod_group_id
-
-repositories {
-    mavenLocal()
-    mavenCentral()
-    maven {
-        name = "TauMC"
-        url = "https://maven.taumc.org/releases"
-    }
-}
-
-base {
-    archivesName = mod_id
-}
-
-java.toolchain.languageVersion = JavaLanguageVersion.of(21)
-
-sourceSets {
-    // externally accessible API
-    api {
-        //The API has no resources
-        resources.srcDirs = []
-        compileClasspath += main.compileClasspath
-    }
-    // internal library
-    lib {
-        compileClasspath += api.output
-        compileClasspath += main.compileClasspath
-    }
-    // the main renderer core
-    // operates independent of MC itself
-    core {
-        compileClasspath += api.output
-        compileClasspath += lib.output
-        compileClasspath += main.compileClasspath
-    }
-    // adapts MC to use the renderer core
-    main {
-        compileClasspath += api.output
-        compileClasspath += core.output
-        compileClasspath += lib.output
-    }
-}
-
-neoForge {
-    // Specify the version of NeoForge to use.
-    version = project.neo_version
-
-    parchment {
-        mappingsVersion = project.parchment_mappings_version
-        minecraftVersion = project.parchment_minecraft_version
-    }
-
-    // This line is optional. Access Transformers are automatically detected
-    // accessTransformers = project.files('src/main/resources/META-INF/accesstransformer.cfg')
-
-    // Default run configurations.
-    // These can be tweaked, removed, or duplicated as needed.
-    runs {
-        client {
-            client()
-
-            // Comma-separated list of namespaces to load gametests from. Empty = all namespaces.
-            systemProperty 'neoforge.enabledGameTestNamespaces', project.mod_id
-        }
-
-        data {
-            data()
-
-            // example of overriding the workingDirectory set in configureEach above, uncomment if you want to use it
-            // gameDirectory = project.file('run-data')
-
-            // Specify the modid for data generation, where to output the resulting resource, and where to look for existing resources.
-            programArguments.addAll '--mod', project.mod_id, '--all', '--output', file('src/generated/resources/').getAbsolutePath(), '--existing', file('src/main/resources/').getAbsolutePath()
-        }
-
-        // applies to all the run configs above
-        configureEach {
-            // Recommended logging data for a userdev environment
-            // The markers can be added/remove as needed separated by commas.
-            // "SCAN": For mods scan.
-            // "REGISTRIES": For firing of registry events.
-            // "REGISTRYDUMP": For getting the contents of all registries.
-            systemProperty 'forge.logging.markers', 'REGISTRIES'
-
-            // Recommended logging level for the console
-            // You can set various levels here.
-            // Please read: https://stackoverflow.com/questions/2031163/when-to-use-the-different-log-levels
-            logLevel = org.slf4j.event.Level.DEBUG
-        }
-    }
-
-    mods {
-        // define mod <-> source bindings
-        // these are used to tell the game which sources are for which mod
-        // mostly optional in a single mod project
-        // but multi mod projects should define one per mod
-        "${mod_id}" {
-            sourceSet(sourceSets.api)
-            sourceSet(sourceSets.core)
-            sourceSet(sourceSets.main)
-        }
-    }
-}
-
-// Include resources generated by data generators.
-sourceSets.main.resources { srcDir 'src/generated/resources' }
-
-// Sets up a dependency configuration called 'localRuntime'.
-// This configuration should be used instead of 'runtimeOnly' to declare
-// a dependency that will be present for runtime testing but that is
-// "optional", meaning it will not be pulled by dependents of this mod.
-configurations {
-    runtimeClasspath.extendsFrom localRuntime
-}
+def lwjglJavaLibs = [
+        "vulkan",
+]
 
 def lwjglNativeLibs = [
         "shaderc",
@@ -160,93 +64,80 @@ def lwjglNativeLibs = [
 def lwjglNativePlatforms = [
         "natives-linux",
         "natives-linux-arm64",
-        // these ones dont seem to exist in mavencentral, despite lwjgl claiming support
-//        "natives-linux-ppc64le",
-//        "natives-linux-riscv64",
         "natives-macos",
         "natives-macos-arm64",
         "natives-windows",
         "natives-windows-arm64",
 ]
 
+modLibsToAdd = []
+
 dependencies {
-//    implementation platform("org.lwjgl:lwjgl-bom:$lwjglVersion")
+    compileOnly("net.neoforged.fancymodloader:loader:$fml_version")
+    compileOnly("cpw.mods:securejarhandler:3.0.8")
+    compileOnly("org.jetbrains:annotations:24.1.0")
+    compileOnly("org.lwjgl:lwjgl-glfw:3.3.3")
+    jijMod(project(path: ":cinnabar", configuration: "builtModJar"))
 
-    jarJar(implementation(project(":serviceloaders")))
-    additionalRuntimeClasspath(project(":serviceloaders"))
+    modLibsToAdd.add("org.lwjgl:lwjgl-vulkan:$lwjglVersion")
+    modLibsToAdd.add("org.lwjgl:lwjgl-spvc:$lwjglVersion")
+    modLibsToAdd.add("org.lwjgl:lwjgl-shaderc:$lwjglVersion")
 
-    jarJar(implementation("org.lwjgl:lwjgl-vulkan:$lwjglVersion"))
-    additionalRuntimeClasspath("org.lwjgl:lwjgl-vulkan:$lwjglVersion")
-
+    for (lib in lwjglJavaLibs) {
+        var baseLibName = "org.lwjgl:lwjgl-$lib:$lwjglVersion"
+        println(baseLibName)
+        modLibsToAdd.add(baseLibName)
+        jijLib(baseLibName)
+        runtimeOnly(baseLibName)
+    }
     for (lib in lwjglNativeLibs) {
-        jarJar(implementation("org.lwjgl:lwjgl-$lib:$lwjglVersion"))
-        additionalRuntimeClasspath("org.lwjgl:lwjgl-$lib:$lwjglVersion")
-        additionalRuntimeClasspath("org.lwjgl:lwjgl-$lib:$lwjglVersion:$lwjglNatives")
+        var baseLibName = "org.lwjgl:lwjgl-$lib:$lwjglVersion"
+        println(baseLibName)
+        modLibsToAdd.add(baseLibName)
+        jijLib(baseLibName)
+        runtimeOnly(baseLibName)
+        runtimeOnly(baseLibName + ":$lwjglNatives")
         for (nativePlatform in lwjglNativePlatforms){
-            jarJar("org.lwjgl:lwjgl-$lib:$lwjglVersion:$nativePlatform")
+            jijLib(baseLibName + ":$nativePlatform")
         }
     }
 
-    implementation("org.anarres:jcpp:1.4.14")
-    jarJar(implementation("org.taumc:glsl-transformation-lib:0.2.0-20.ge3cb096"))
-    additionalRuntimeClasspath("org.taumc:glsl-transformation-lib:0.2.0-20.ge3cb096")
+    jijLib("org.taumc:glsl-transformation-lib:0.2.0-20.ge3cb096")
+    runtimeOnly("org.taumc:glsl-transformation-lib:0.2.0-20.ge3cb096")
+
 }
 
-// This block of code expands all declared replace properties in the specified resource targets.
-// A missing property will result in an error. Properties are expanded using ${} Groovy notation.
-var generateModMetadata = tasks.register("generateModMetadata", ProcessResources) {
-    var replaceProperties = [
-            minecraft_version      : minecraft_version,
-            minecraft_version_range: minecraft_version_range,
-            neo_version            : neo_version,
-            neo_version_range      : neo_version_range,
-            loader_version_range   : loader_version_range,
-            mod_id                 : mod_id,
-            mod_name               : mod_name,
-            mod_license            : mod_license,
-            mod_version            : mod_version,
-            mod_authors            : mod_authors,
-            mod_description        : mod_description
-    ]
-    inputs.properties replaceProperties
-    expand replaceProperties
-    from "src/main/templates"
-    into "build/generated/sources/modMetadata"
-}
-// Include the output of "generateModMetadata" as an input directory for the build
-// this works with both building through Gradle and the IDE.
-sourceSets.main.resources.srcDir generateModMetadata
-// To avoid having to run "generateModMetadata" manually, make it run on every project reload
-neoForge.ideSyncTask generateModMetadata
-
-// Example configuration to allow publishing using the maven-publish plugin
-publishing {
-    publications {
-        register('mavenJava', MavenPublication) {
-            from components.java
-        }
+jar {
+    manifest {
+        attributes["FMLModType"] = "LIBRARY"
+        attributes["Automatic-Module-Name"] = "cinnabar_locator"
     }
-    repositories {
-        maven {
-            url "file://${project.projectDir}/repo"
+    into("META-INF/mod") {
+        from(configurations.jijMod)
+    }
+    into("META-INF/lib") {
+        from(configurations.jijLib) {
+            exclude("lwjgl-3.3.3.jar")
+            exclude("annotations-3.0.1.jar")
+            exclude("jsr305-3.0.1.jar")
+            exclude("slf4j-api-1.7.12.jar")
+            exclude("ant-1.7.0.jar")
+            exclude("java-semver-0.8.0.jar")
+            exclude("ant-launcher-1.7.0.jar")
+            exclude("org.abego.treelayout.core-1.0.3.jar")
+            exclude("jopt-simple-4.7.jar")
+            exclude("icu4j-72.1.jar")
+            exclude("antlr-runtime-3.5.3.jar")
+            exclude("antlr4-runtime-4.13.2.jar")
         }
     }
 }
 
-tasks.withType(JavaCompile).configureEach {
-    options.encoding = 'UTF-8' // Use the UTF-8 charset for Java compilation
-}
-
-// IDEA no longer automatically downloads sources/javadoc jars for dependencies, so we need to explicitly enable the behavior.
-idea {
-    module {
-        downloadSources = true
-        downloadJavadoc = true
-    }
-}
-
-
-tasks.named('jar', Jar).configure { Jar jar ->
-    jar.duplicatesStrategy(DuplicatesStrategy.FAIL)
-    jar.from([sourceSets.api.output, sourceSets.lib.output, sourceSets.core.output, sourceSets.main.output])
+tasks.named('wrapper', Wrapper).configure {
+    // Define wrapper values here so as to not have to always do so when updating gradlew.properties.
+    // Switching this to Wrapper.DistributionType.ALL will download the full gradle sources that comes with
+    // documentation attached on cursor hover of gradle classes and methods. However, this comes with increased
+    // file size for Gradle. If you do switch this to ALL, run the Gradle wrapper task twice afterwards.
+    // (Verify by checking gradle/wrapper/gradle-wrapper.properties to see if distributionUrl now points to `-all`)
+    distributionType = Wrapper.DistributionType.BIN
 }
