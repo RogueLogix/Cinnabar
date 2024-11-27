@@ -1,5 +1,6 @@
 package graphics.cinnabar.internal.extensions.blaze3d.vertex;
 
+import com.mojang.blaze3d.vertex.ByteBufferBuilder;
 import com.mojang.blaze3d.vertex.MeshData;
 import com.mojang.blaze3d.vertex.VertexBuffer;
 import com.mojang.blaze3d.vertex.VertexFormat;
@@ -132,7 +133,7 @@ public class CinnabarVertexBuffer extends VertexBuffer {
             bufferDepInfo.offset(0);
             
             bufferDepInfo.srcStageMask(VK_PIPELINE_STAGE_VERTEX_INPUT_BIT);
-            bufferDepInfo.srcAccessMask(VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT);
+            bufferDepInfo.srcAccessMask(VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT | VK_ACCESS_INDEX_READ_BIT);
             bufferDepInfo.dstStageMask(VK_PIPELINE_STAGE_TRANSFER_BIT);
             bufferDepInfo.dstAccessMask(VK_ACCESS_TRANSFER_WRITE_BIT);
             vkCmdPipelineBarrier2(commandBuffer, depInfo);
@@ -147,12 +148,62 @@ public class CinnabarVertexBuffer extends VertexBuffer {
             bufferDepInfo.srcStageMask(VK_PIPELINE_STAGE_TRANSFER_BIT);
             bufferDepInfo.srcAccessMask(VK_ACCESS_TRANSFER_WRITE_BIT);
             bufferDepInfo.dstStageMask(VK_PIPELINE_STAGE_VERTEX_INPUT_BIT);
-            bufferDepInfo.dstAccessMask(VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT);
+            bufferDepInfo.dstAccessMask(VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT | VK_ACCESS_INDEX_READ_BIT);
             vkCmdPipelineBarrier2(commandBuffer, depInfo);
         }
         markUsed(VK_PIPELINE_STAGE_TRANSFER_BIT);
         
         meshData.close();
+    }
+    
+    @Override
+    public void uploadIndexBuffer(ByteBufferBuilder.Result result) {
+        if(indicesOffset == -1){
+            throw new IllegalStateException("Cannot upload index buffer to vertex buffer using shared indicies");
+        }
+        
+        final var indexData = result.byteBuffer();
+        
+        final var queue = CinnabarRenderer.queueHelper;
+        final var commandBuffer = queue.getImplicitCommandBuffer(VulkanQueueHelper.QueueType.MAIN_GRAPHICS);
+        
+        final var stagingBuffer = queue.cpuBufferAllocatorForSubmit().alloc(indexData.limit());
+        queue.destroyEndOfSubmit(stagingBuffer);
+        final var hostPtr = stagingBuffer.hostPtr;
+        
+        final var indexDataPtr = MemoryUtil.memAddress(indexData);
+        LibCString.nmemcpy(hostPtr.pointer(), indexDataPtr, indexData.limit());
+        
+        
+        try (final var stack = MemoryStack.stackPush()) {
+            final var depInfo = VkDependencyInfo.calloc(stack).sType$Default();
+            final var bufferDepInfo = VkBufferMemoryBarrier2.calloc(1, stack).sType$Default();
+            depInfo.pBufferMemoryBarriers(bufferDepInfo);
+            bufferDepInfo.buffer(bufferHandle);
+            bufferDepInfo.size(indexData.limit());
+            bufferDepInfo.offset(indicesOffset);
+            
+            bufferDepInfo.srcStageMask(VK_PIPELINE_STAGE_VERTEX_INPUT_BIT);
+            bufferDepInfo.srcAccessMask(VK_ACCESS_INDEX_READ_BIT);
+            bufferDepInfo.dstStageMask(VK_PIPELINE_STAGE_TRANSFER_BIT);
+            bufferDepInfo.dstAccessMask(VK_ACCESS_TRANSFER_WRITE_BIT);
+            vkCmdPipelineBarrier2(commandBuffer, depInfo);
+            
+            final var copyRegion = VkBufferCopy.calloc(1, stack);
+            copyRegion.srcOffset(0);
+            copyRegion.dstOffset(indicesOffset);
+            copyRegion.size(indexData.limit());
+            copyRegion.limit(1);
+            vkCmdCopyBuffer(commandBuffer, stagingBuffer.handle, bufferHandle, copyRegion);
+            
+            bufferDepInfo.srcStageMask(VK_PIPELINE_STAGE_TRANSFER_BIT);
+            bufferDepInfo.srcAccessMask(VK_ACCESS_TRANSFER_WRITE_BIT);
+            bufferDepInfo.dstStageMask(VK_PIPELINE_STAGE_VERTEX_INPUT_BIT);
+            bufferDepInfo.dstAccessMask(VK_ACCESS_INDEX_READ_BIT);
+            vkCmdPipelineBarrier2(commandBuffer, depInfo);
+        }
+        markUsed(VK_PIPELINE_STAGE_TRANSFER_BIT);
+        result.close();
     }
     
     public void markUsed(int stageMask) {
