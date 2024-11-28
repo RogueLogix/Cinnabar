@@ -35,6 +35,7 @@ import java.util.Arrays;
 import java.util.Objects;
 
 import static graphics.cinnabar.Cinnabar.CINNABAR_LOG;
+import static graphics.cinnabar.Cinnabar.LOGGER;
 import static graphics.cinnabar.internal.vulkan.exceptions.VkException.throwFromCode;
 import static org.lwjgl.util.shaderc.Shaderc.*;
 import static org.lwjgl.vulkan.VK10.vkCreateShaderModule;
@@ -123,21 +124,20 @@ public class CinnabarProgram extends EffectProgram {
             final var inputs = Arrays.stream(versionRemovedPreprocessedSource.split("\n")).filter(a -> a.startsWith("flat in") || a.startsWith("in")).toList();
             for (int i = 0; i < inputs.size(); i++) {
                 final var inputLine = inputs.get(i);
-                final var nameStartIndex = inputLine.lastIndexOf(' ');
-                final var variableName = inputLine.substring(nameStartIndex + 1, inputLine.length() - 1);
+                final var nameStartIndex = inputLine.lastIndexOf(' ', inputLine.indexOf(';'));
+                final var variableName = inputLine.substring(nameStartIndex + 1, inputLine.indexOf(';'));
                 transformer.removeVariable(variableName);
-                final var variableType = inputLine.substring(inputLine.lastIndexOf(' ', nameStartIndex - 1) + 1, nameStartIndex);
                 final var elementDeclarationFormat = "layout (location = %d) %s";
                 final var elementDeclaration = String.format(elementDeclarationFormat, i, inputLine);
                 transformer.injectVariable(elementDeclaration);
             }
         }
         
-        final var inputs = Arrays.stream(versionRemovedPreprocessedSource.split("\n")).filter(a -> a.startsWith("flat out") || a.startsWith("out")).toList();
-        for (int i = 0; i < inputs.size(); i++) {
-            final var inputLine = inputs.get(i);
-            final var nameStartIndex = inputLine.lastIndexOf(' ');
-            final var variableName = inputLine.substring(nameStartIndex + 1, inputLine.length() - 1);
+        final var outputs = Arrays.stream(versionRemovedPreprocessedSource.split("\n")).filter(a -> a.startsWith("flat out") || a.startsWith("out")).toList();
+        for (int i = 0; i < outputs.size(); i++) {
+            final var inputLine = outputs.get(i);
+            final var nameStartIndex = inputLine.lastIndexOf(' ', inputLine.indexOf(';'));
+            final var variableName = inputLine.substring(nameStartIndex + 1, inputLine.indexOf(';'));
             transformer.removeVariable(variableName);
             final var elementDeclarationFormat = "layout (location = %d) %s";
             final var elementDeclaration = String.format(elementDeclarationFormat, i, inputLine);
@@ -260,6 +260,7 @@ public class CinnabarProgram extends EffectProgram {
     private static String uniformTypeToGLSLType(String type, int count) {
         return switch (type) {
             case "matrix4x4" -> "mat4";
+            case "matrix3x3" -> "mat3";
             case "float" -> switch (count) {
                 case 1 -> "float";
                 case 2 -> "vec2";

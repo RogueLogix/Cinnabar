@@ -40,11 +40,18 @@ public class LiveHandles {
         if (!CinnabarDebug.DEBUG) {
             return;
         }
-        createSynced(object);
+        createSynced(object, null);
     }
     
-    private static synchronized void createSynced(Object object) {
-        final var old = liveObjects.put(object, new RuntimeException());
+    public static void create(Object object, Exception e) {
+        if (!CinnabarDebug.DEBUG) {
+            return;
+        }
+        createSynced(object, e);
+    }
+    
+    private static synchronized void createSynced(Object object, @Nullable Exception e) {
+        final var old = liveObjects.put(object, new RuntimeException(e));
         if(old != null){
             throw new IllegalStateException(old);
         }

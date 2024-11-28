@@ -7,6 +7,7 @@ import graphics.cinnabar.internal.vulkan.memory.HostMemoryVkBuffer;
 import graphics.cinnabar.internal.vulkan.memory.VulkanMemoryAllocation;
 import graphics.cinnabar.internal.vulkan.util.LiveHandles;
 import graphics.cinnabar.internal.vulkan.util.VulkanQueueHelper;
+import graphics.cinnabar.internal.vulkan.util.VulkanSampler;
 import it.unimi.dsi.fastutil.ints.Int2ReferenceMap;
 import it.unimi.dsi.fastutil.ints.Int2ReferenceOpenHashMap;
 import net.minecraft.client.renderer.texture.AbstractTexture;
@@ -57,6 +58,8 @@ public abstract class CinnabarAbstractTexture extends AbstractTexture {
     private long imageHandle;
     private long imageViewHandle;
     private int imageFormat;
+    
+    public VulkanSampler sampler = VulkanSampler.DEFAULT;
     
     @Nullable
     private VulkanMemoryAllocation memoryAllocation;
@@ -112,6 +115,7 @@ public abstract class CinnabarAbstractTexture extends AbstractTexture {
     @Override
     public void setFilter(boolean blur, boolean mipmap) {
         // TODO:
+        sampler = sampler.withMinMagLinear(blur).withMipmap(mipmap);
 //        super.setFilter(blur, mipmap);
     }
     

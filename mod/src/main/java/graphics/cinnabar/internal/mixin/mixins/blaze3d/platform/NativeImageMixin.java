@@ -4,6 +4,7 @@ import com.mojang.blaze3d.platform.NativeImage;
 import graphics.cinnabar.internal.CinnabarRenderer;
 import graphics.cinnabar.internal.extensions.minecraft.renderer.texture.CinnabarAbstractTexture;
 import graphics.cinnabar.internal.vulkan.memory.HostMemoryVkBuffer;
+import graphics.cinnabar.internal.vulkan.util.LiveHandles;
 import org.lwjgl.stb.STBImage;
 import org.lwjgl.system.MemoryUtil;
 import org.lwjgl.system.libc.LibCString;

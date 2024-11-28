@@ -45,7 +45,7 @@ public class CinnabarEffectInstance extends EffectInstance implements ICinnabarS
     private final VulkanBuffer UBOGPUBuffer;
     
     private final long UBODescriptorSet;
-    private HostMemoryVkBuffer uboStagingBuffer;
+    private VulkanBuffer.CPU uboStagingBuffer;
 
     public CinnabarEffectInstance(ResourceProvider resourceProvider, String name) throws IOException {
         super(resourceProvider, name);
@@ -365,7 +365,8 @@ public class CinnabarEffectInstance extends EffectInstance implements ICinnabarS
             vkUpdateDescriptorSets(device, descriptorWrites, null);
 
             if (this.dirty && UBOGPUBuffer != null) {
-                uboStagingBuffer = HostMemoryVkBuffer.alloc(UBOSize);
+                this.dirty = false;
+                uboStagingBuffer = CinnabarRenderer.queueHelper.cpuBufferAllocatorForSubmit().alloc(UBOSize);
                 CinnabarRenderer.queueDestroyEndOfGPUSubmit(uboStagingBuffer);
                 for (Uniform uniform : this.uniforms) {
                     uniform.upload();
@@ -378,7 +379,7 @@ public class CinnabarEffectInstance extends EffectInstance implements ICinnabarS
                 bufferDepInfo.size(UBOGPUBuffer.size);
                 bufferDepInfo.offset(0);
 
-                bufferDepInfo.srcStageMask(VK_PIPELINE_STAGE_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
+                bufferDepInfo.srcStageMask(VK_PIPELINE_STAGE_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
                 bufferDepInfo.srcAccessMask(VK_ACCESS_UNIFORM_READ_BIT);
                 bufferDepInfo.dstStageMask(VK_PIPELINE_STAGE_TRANSFER_BIT);
                 bufferDepInfo.dstAccessMask(VK_ACCESS_TRANSFER_WRITE_BIT);
@@ -389,11 +390,11 @@ public class CinnabarEffectInstance extends EffectInstance implements ICinnabarS
                 copyRegion.dstOffset(0);
                 copyRegion.size(UBOSize);
                 copyRegion.limit(1);
-                vkCmdCopyBuffer(commandBuffer, uboStagingBuffer.bufferHandle(), UBOGPUBuffer.handle, copyRegion);
+                vkCmdCopyBuffer(commandBuffer, uboStagingBuffer.handle, UBOGPUBuffer.handle, copyRegion);
 
                 bufferDepInfo.srcStageMask(VK_PIPELINE_STAGE_TRANSFER_BIT);
                 bufferDepInfo.srcAccessMask(VK_ACCESS_TRANSFER_WRITE_BIT);
-                bufferDepInfo.dstStageMask(VK_PIPELINE_STAGE_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
+                bufferDepInfo.dstStageMask(VK_PIPELINE_STAGE_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
                 bufferDepInfo.dstAccessMask(VK_ACCESS_UNIFORM_READ_BIT);
                 vkCmdPipelineBarrier2(commandBuffer, depInfo);
 
@@ -424,7 +425,7 @@ public class CinnabarEffectInstance extends EffectInstance implements ICinnabarS
     
     public void writeUniform(long UBOOffset, long cpuMemAddress, long size) {
         if(uboStagingBuffer != null){
-            LibCString.nmemcpy(uboStagingBuffer.hostPtr().pointer() + UBOOffset, cpuMemAddress, size);
+            LibCString.nmemcpy(uboStagingBuffer.hostPtr.pointer() + UBOOffset, cpuMemAddress, size);
         }
     }
     

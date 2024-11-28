@@ -356,15 +356,17 @@ public class CinnabarShaderInstance extends ShaderInstance implements ICinnabarS
                 for (int i = 0; i < samplerNames.size(); i++) {
                     final var mapValue = samplerMap.get(samplerNames.get(i));
                     long imageViewHandle = 0;
+                    long sampler = VulkanSampler.DEFAULT.vulkanHandle;
                     if (mapValue instanceof Integer mapValueInt) {
                         imageViewHandle = CinnabarAbstractTexture.imageViewHandleFromID(mapValueInt);
                     } else if (mapValue instanceof CinnabarAbstractTexture abstractTexture) {
                         imageViewHandle = abstractTexture.viewHandle();
+                        sampler = abstractTexture.sampler.vulkanHandle;
                     } else {
                         throw new UnsupportedOperationException();
                     }
                     final var imageInfo = VkDescriptorImageInfo.calloc(1, stack);
-                    imageInfo.sampler(VulkanSampler.DEFAULT.vulkanHandle);
+                    imageInfo.sampler(sampler);
                     imageInfo.imageView(imageViewHandle);
                     imageInfo.imageLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
                     

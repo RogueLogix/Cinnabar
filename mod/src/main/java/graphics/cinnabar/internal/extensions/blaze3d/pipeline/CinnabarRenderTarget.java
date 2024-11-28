@@ -46,7 +46,7 @@ public class CinnabarRenderTarget extends RenderTarget {
         super(useDepth);
     }
     
-    private long getColorImageHandle() {
+    public long getColorImageHandle() {
         return colorImageHandle;
     }
     
@@ -97,7 +97,7 @@ public class CinnabarRenderTarget extends RenderTarget {
             colorImageCreateInfo.sharingMode(VK_SHARING_MODE_EXCLUSIVE);
             colorImageCreateInfo.samples(VK_SAMPLE_COUNT_1_BIT);
             colorImageCreateInfo.flags(0);
-            colorImageCreateInfo.usage(VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT);
+            colorImageCreateInfo.usage(VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT);
             colorImageCreateInfo.format(FramebufferColorFormat);
 
             throwFromCode(vkCreateImage(device, colorImageCreateInfo, null, longPtr));
@@ -198,7 +198,7 @@ public class CinnabarRenderTarget extends RenderTarget {
             imageBarriers.dstStageMask(VK_PIPELINE_STAGE_TRANSFER_BIT);
             imageBarriers.dstAccessMask(VK_ACCESS_TRANSFER_WRITE_BIT);
             imageBarriers.oldLayout(VK_IMAGE_LAYOUT_UNDEFINED);
-            imageBarriers.newLayout(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+            imageBarriers.newLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
             imageBarriers.subresourceRange(colorSubresourceRange);
             imageBarriers.position(1);
             imageBarriers.sType$Default();
@@ -255,6 +255,7 @@ public class CinnabarRenderTarget extends RenderTarget {
     }
 
     public void clear(int bits) {
+        bindWrite(true);
         if((bits & GL_DEPTH_BUFFER_BIT) == 0 && (bits & GL_COLOR_BUFFER_BIT) == 0){
             return;
         }
@@ -437,12 +438,13 @@ public class CinnabarRenderTarget extends RenderTarget {
 
     @Override
     public void blitToScreen(int width, int height, boolean disableBlend) {
+        CinnabarFramebufferState.bind(null);
         try (final var stack = MemoryStack.stackPush()) {
             final var commandBuffer = CinnabarRenderer.queueHelper.getImplicitCommandBuffer(VulkanQueueHelper.QueueType.MAIN_GRAPHICS);
 
             final var window = (CinnabarWindow) Minecraft.getInstance().getWindow();
 
-            final var imageBarrier = VkImageMemoryBarrier.calloc(1).sType$Default();
+            final var imageBarrier = VkImageMemoryBarrier.calloc(1, stack).sType$Default();
             imageBarrier.srcAccessMask(VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT);
             imageBarrier.dstAccessMask(VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT);
             imageBarrier.dstQueueFamilyIndex(VK_QUEUE_FAMILY_IGNORED);
@@ -456,7 +458,7 @@ public class CinnabarRenderTarget extends RenderTarget {
             imageBarrier.subresourceRange(imageSubresourceRange);
 
             imageBarrier.dstAccessMask(VK_ACCESS_TRANSFER_READ_BIT);
-            imageBarrier.oldLayout(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+            imageBarrier.oldLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
             imageBarrier.newLayout(VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
             imageBarrier.image(colorImageHandle);
             vkCmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, null, null, imageBarrier);
@@ -493,8 +495,8 @@ public class CinnabarRenderTarget extends RenderTarget {
 
             vkCmdBlitImage(commandBuffer, colorImageHandle, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, window.getImageForBlit(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, blitRegion, VK_FILTER_NEAREST);
 
-            imageBarrier.newLayout(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-            imageBarrier.dstAccessMask(VK_ACCESS_TRANSFER_WRITE_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT);
+            imageBarrier.newLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+            imageBarrier.dstAccessMask(VK_ACCESS_TRANSFER_WRITE_BIT | VK_ACCESS_SHADER_READ_BIT);
 
             imageBarrier.oldLayout(VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
             imageBarrier.srcAccessMask(VK_ACCESS_TRANSFER_READ_BIT);

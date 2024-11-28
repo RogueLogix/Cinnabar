@@ -24,9 +24,9 @@ public class VulkanSampler {
         createInfo.magFilter(VK_FILTER_NEAREST); // set at build
         createInfo.minFilter(VK_FILTER_NEAREST); // set at build
         createInfo.mipmapMode(VK_SAMPLER_MIPMAP_MODE_NEAREST); // set at build
-        createInfo.addressModeU(VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE); // set at build
-        createInfo.addressModeV(VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE); // set at build
-        createInfo.addressModeW(VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE);
+        createInfo.addressModeU(VK_SAMPLER_ADDRESS_MODE_REPEAT); // set at build
+        createInfo.addressModeV(VK_SAMPLER_ADDRESS_MODE_REPEAT); // set at build
+        createInfo.addressModeW(VK_SAMPLER_ADDRESS_MODE_REPEAT);
         createInfo.mipLodBias(0.0f); // set at build
         createInfo.anisotropyEnable(false); // TODO
         createInfo.maxAnisotropy(0.0f);
@@ -34,7 +34,7 @@ public class VulkanSampler {
         createInfo.compareOp(VK_COMPARE_OP_ALWAYS);
         createInfo.minLod(0);
         createInfo.maxLod(VK_LOD_CLAMP_NONE); // set at build
-        createInfo.borderColor(VK_BORDER_COLOR_INT_OPAQUE_BLACK);
+        createInfo.borderColor(VK_BORDER_COLOR_INT_TRANSPARENT_BLACK);
         createInfo.unnormalizedCoordinates(false);
     }
     

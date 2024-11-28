@@ -207,7 +207,7 @@ public class VulkanCore implements Destroyable {
                     if(properties.layerNameString().equals("VK_LAYER_MESA_overlay")) {
                         var layerPointers = stack.mallocPointer(1);
                         layerPointers.put(0, stack.UTF8("VK_LAYER_MESA_overlay"));
-                        createInfo.ppEnabledLayerNames(layerPointers);
+                //        createInfo.ppEnabledLayerNames(layerPointers);
                         break;
                     }
                 }

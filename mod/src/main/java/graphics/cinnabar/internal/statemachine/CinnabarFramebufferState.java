@@ -7,7 +7,10 @@ import graphics.cinnabar.internal.vulkan.util.VulkanQueueHelper;
 import net.minecraft.client.Minecraft;
 import net.roguelogix.phosphophyllite.util.NonnullDefault;
 import org.jetbrains.annotations.Nullable;
+import org.lwjgl.system.MemoryStack;
 import org.lwjgl.vulkan.*;
+
+import static org.lwjgl.vulkan.VK10.*;
 
 @NonnullDefault
 public class CinnabarFramebufferState {
@@ -25,9 +28,49 @@ public class CinnabarFramebufferState {
         if (boundTarget != null) {
 //            boundTarget.resumeRendering(commandBuffer);
 //            boundTarget.endRendering(commandBuffer);
+            try (final var stack = MemoryStack.stackPush()){
+                final var imageBarrier = VkImageMemoryBarrier.calloc(1, stack).sType$Default();
+                imageBarrier.srcAccessMask(VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT);
+                imageBarrier.dstAccessMask(VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT);
+                imageBarrier.dstQueueFamilyIndex(VK_QUEUE_FAMILY_IGNORED);
+                imageBarrier.srcQueueFamilyIndex(VK_QUEUE_FAMILY_IGNORED);
+                final var imageSubresourceRange = VkImageSubresourceRange.calloc();
+                imageSubresourceRange.aspectMask(VK_IMAGE_ASPECT_COLOR_BIT);
+                imageSubresourceRange.baseMipLevel(0);
+                imageSubresourceRange.levelCount(1);
+                imageSubresourceRange.baseArrayLayer(0);
+                imageSubresourceRange.layerCount(1);
+                imageBarrier.subresourceRange(imageSubresourceRange);
+                
+                imageBarrier.oldLayout(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+                imageBarrier.newLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+                imageBarrier.image(boundTarget.getColorImageHandle());
+                vkCmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, 0, null, null, imageBarrier);
+                
+            }
         }
         boundTarget = renderTarget;
         if (boundTarget != null) {
+            try (final var stack = MemoryStack.stackPush()){
+                final var imageBarrier = VkImageMemoryBarrier.calloc(1, stack).sType$Default();
+                imageBarrier.srcAccessMask(VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT);
+                imageBarrier.dstAccessMask(VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT);
+                imageBarrier.dstQueueFamilyIndex(VK_QUEUE_FAMILY_IGNORED);
+                imageBarrier.srcQueueFamilyIndex(VK_QUEUE_FAMILY_IGNORED);
+                final var imageSubresourceRange = VkImageSubresourceRange.calloc();
+                imageSubresourceRange.aspectMask(VK_IMAGE_ASPECT_COLOR_BIT);
+                imageSubresourceRange.baseMipLevel(0);
+                imageSubresourceRange.levelCount(1);
+                imageSubresourceRange.baseArrayLayer(0);
+                imageSubresourceRange.layerCount(1);
+                imageBarrier.subresourceRange(imageSubresourceRange);
+                
+                imageBarrier.oldLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+                imageBarrier.newLayout(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+                imageBarrier.image(boundTarget.getColorImageHandle());
+                vkCmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, 0, null, null, imageBarrier);
+                
+            }
 //            boundTarget.beginRendering(commandBuffer);
 //            boundTarget.suspendRendering(commandBuffer);
         }
@@ -63,7 +106,7 @@ public class CinnabarFramebufferState {
             renderArea.set(boundTarget.renderArea());
         } else {
             renderAreaOffset.set(0, 0);
-            renderAreaExtent.set(window().swapchainExtent.x, window().swapchainExtent.y);
+            renderAreaExtent.set(window().getWidth(), window().getHeight());
         }
         return renderArea;
     }

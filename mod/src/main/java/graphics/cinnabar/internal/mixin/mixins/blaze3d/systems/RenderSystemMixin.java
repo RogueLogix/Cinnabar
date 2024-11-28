@@ -110,8 +110,7 @@ public class RenderSystemMixin {
     
     @Overwrite
     public static void blendFunc(GlStateManager.SourceFactor srcFactor, GlStateManager.DestFactor dstFactor) {
-        CinnabarBlendState.setBlendFactors(srcFactor.value, srcFactor.value, srcFactor.value, dstFactor.value);
-        
+        CinnabarBlendState.setBlendFactors(srcFactor.value, dstFactor.value, srcFactor.value, dstFactor.value);
     }
     
     @Overwrite
