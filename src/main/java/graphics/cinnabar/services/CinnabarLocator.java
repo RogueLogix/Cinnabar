@@ -6,6 +6,8 @@ import cpw.mods.jarhandling.SecureJar;
 import cpw.mods.modlauncher.Launcher;
 import cpw.mods.modlauncher.ModuleLayerHandler;
 import cpw.mods.modlauncher.api.IModuleLayerManager;
+import net.neoforged.fml.loading.FMLEnvironment;
+import net.neoforged.fml.loading.FMLLoader;
 import net.neoforged.fml.loading.moddiscovery.readers.JarModsDotTomlModFileReader;
 import net.neoforged.neoforgespi.ILaunchContext;
 import net.neoforged.neoforgespi.locating.*;
@@ -24,8 +26,12 @@ public class CinnabarLocator implements IModFileCandidateLocator {
     
     @Override
     public void findCandidates(ILaunchContext context, IDiscoveryPipeline pipeline) {
-        if (CinnabarGraphicsBootstrapper.inIDE()) {
+        if (!FMLEnvironment.production) {
             LOGGER.warn("Skipping locating Cinnabar and libs in dev environment");
+            return;
+        }
+        if (!FMLEnvironment.dist.isClient()) {
+            LOGGER.info("Skipping locating Cinnabar and libs on non-client environment");
             return;
         }
         try {
@@ -43,7 +49,7 @@ public class CinnabarLocator implements IModFileCandidateLocator {
         }
     }
     
-    private static void loadLibs(IDiscoveryPipeline pipeline, IModFile parent){
+    private static void loadLibs(IDiscoveryPipeline pipeline, IModFile parent) {
         try {
             walk(Path.of(CinnabarLocator.class.getResource("/META-INF/lib/").toURI()), 1).forEach(path -> {
                 final var filename = path.getFileName().toString();
@@ -51,7 +57,6 @@ public class CinnabarLocator implements IModFileCandidateLocator {
                     return;
                 }
                 LOGGER.debug("Loading lib {}", filename);
-                final var layerHandler = (ModuleLayerHandler)Launcher.INSTANCE.findLayerManager().get();
                 pipeline.addModFile(IModFile.create(SecureJar.from(path), JarModsDotTomlModFileReader::manifestParser, IModFile.Type.LIBRARY, ModFileDiscoveryAttributes.DEFAULT.withParent(parent)));
             });
         } catch (Exception e) {
