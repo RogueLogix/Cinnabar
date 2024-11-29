@@ -2,31 +2,31 @@ package graphics.cinnabar.internal.extensions.blaze3d.pipeline;
 
 import com.mojang.blaze3d.pipeline.RenderTarget;
 import com.mojang.blaze3d.systems.RenderSystem;
-import com.sun.jna.platform.win32.WinCrypt;
 import graphics.cinnabar.internal.CinnabarRenderer;
 import graphics.cinnabar.internal.extensions.blaze3d.platform.CinnabarWindow;
 import graphics.cinnabar.internal.extensions.minecraft.renderer.texture.CinnabarAbstractTexture;
+import graphics.cinnabar.internal.extensions.minecraft.renderer.texture.ICinnabarTexture;
 import graphics.cinnabar.internal.statemachine.CinnabarFramebufferState;
 import graphics.cinnabar.internal.vulkan.memory.VulkanMemoryAllocation;
 import graphics.cinnabar.internal.vulkan.util.LiveHandles;
 import graphics.cinnabar.internal.vulkan.util.VulkanQueueHelper;
+import graphics.cinnabar.internal.vulkan.util.VulkanSampler;
 import net.minecraft.client.Minecraft;
-import net.roguelogix.phosphophyllite.util.NonnullDefault;
+import graphics.cinnabar.api.annotations.NotNullDefault;
 import org.jetbrains.annotations.Nullable;
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.vulkan.*;
 
-import static graphics.cinnabar.internal.extensions.minecraft.renderer.texture.CinnabarAbstractTexture.registerID;
 import static graphics.cinnabar.internal.vulkan.MagicNumbers.FramebufferColorFormat;
 import static graphics.cinnabar.internal.vulkan.MagicNumbers.FramebufferDepthFormat;
-import static graphics.cinnabar.internal.vulkan.exceptions.VkException.throwFromCode;
+import static graphics.cinnabar.api.exceptions.VkException.checkVkCode;
 import static org.lwjgl.opengl.GL11C.*;
 import static org.lwjgl.vulkan.KHRSwapchain.VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
 import static org.lwjgl.vulkan.VK10.*;
 import static org.lwjgl.vulkan.VK13.*;
 
-@NonnullDefault
-public class CinnabarRenderTarget extends RenderTarget {
+@NotNullDefault
+public class CinnabarRenderTarget extends RenderTarget implements ICinnabarTexture {
     private final VkDevice device = CinnabarRenderer.device();
 
     private long colorImageHandle = 0;
@@ -100,7 +100,7 @@ public class CinnabarRenderTarget extends RenderTarget {
             colorImageCreateInfo.usage(VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT);
             colorImageCreateInfo.format(FramebufferColorFormat);
 
-            throwFromCode(vkCreateImage(device, colorImageCreateInfo, null, longPtr));
+            checkVkCode(vkCreateImage(device, colorImageCreateInfo, null, longPtr));
             colorImageHandle = longPtr.get(0);
             LiveHandles.create(colorImageHandle);
 
@@ -117,7 +117,7 @@ public class CinnabarRenderTarget extends RenderTarget {
             depthImageCreateInfo.usage(VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT);
             depthImageCreateInfo.format(FramebufferDepthFormat);
 
-            throwFromCode(vkCreateImage(device, depthImageCreateInfo, null, longPtr));
+            checkVkCode(vkCreateImage(device, depthImageCreateInfo, null, longPtr));
             depthImageHandle = longPtr.get(0);
             LiveHandles.create(depthImageHandle);
         }
@@ -149,7 +149,7 @@ public class CinnabarRenderTarget extends RenderTarget {
             colorImageViewCreateInfo.subresourceRange(colorImageSubresourceRange);
 
             colorImageViewCreateInfo.image(colorImageHandle);
-            throwFromCode(vkCreateImageView(device, colorImageViewCreateInfo, null, longPtr));
+            checkVkCode(vkCreateImageView(device, colorImageViewCreateInfo, null, longPtr));
             colorImageViewHandle = longPtr.get(0);
             LiveHandles.create(colorImageViewHandle);
 
@@ -165,7 +165,7 @@ public class CinnabarRenderTarget extends RenderTarget {
             depthImageViewCreateInfo.subresourceRange(depthImageSubresourceRange);
 
             depthImageViewCreateInfo.image(depthImageHandle);
-            throwFromCode(vkCreateImageView(device, depthImageViewCreateInfo, null, longPtr));
+            checkVkCode(vkCreateImageView(device, depthImageViewCreateInfo, null, longPtr));
             depthImageViewHandle = longPtr.get(0);
             LiveHandles.create(depthImageViewHandle);
         }
@@ -213,7 +213,7 @@ public class CinnabarRenderTarget extends RenderTarget {
             depInfo.pImageMemoryBarriers(imageBarriers);
             vkCmdPipelineBarrier2(commandBuffer, depInfo);
         }
-        colorTextureId = CinnabarAbstractTexture.registerID(colorImageViewHandle);
+        colorTextureId = CinnabarAbstractTexture.registerID(this);
     }
 
     @Override
@@ -510,5 +510,15 @@ public class CinnabarRenderTarget extends RenderTarget {
             vkCmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT, 0, null, null, imageBarrier);
 
         }
+    }
+    
+    @Override
+    public long viewHandle() {
+        return colorImageViewHandle;
+    }
+    
+    @Override
+    public VulkanSampler sampler() {
+        return VulkanSampler.DEFAULT;
     }
 }

@@ -2,11 +2,11 @@ package graphics.cinnabar.internal.mixin.mixins.minecraft.renderer;
 
 import com.mojang.blaze3d.platform.GlStateManager;
 import com.mojang.blaze3d.shaders.Uniform;
-import net.roguelogix.phosphophyllite.util.NonnullDefault;
+import graphics.cinnabar.api.annotations.NotNullDefault;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Overwrite;
 
-@NonnullDefault
+@NotNullDefault
 @Mixin(Uniform.class)
 public class UniformMixin {
     @Overwrite

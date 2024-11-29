@@ -3,10 +3,10 @@ package graphics.cinnabar;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.loading.FMLEnvironment;
-import net.roguelogix.phosphophyllite.config.ConfigFormat;
-import net.roguelogix.phosphophyllite.config.ConfigManager;
-import net.roguelogix.phosphophyllite.config.ConfigType;
-import net.roguelogix.phosphophyllite.registry.RegisterConfig;
+import graphics.cinnabar.lib.config.ConfigFormat;
+import graphics.cinnabar.lib.config.ConfigManager;
+import graphics.cinnabar.lib.config.ConfigType;
+import graphics.cinnabar.lib.config.RegisterConfig;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 

@@ -15,7 +15,7 @@ import graphics.cinnabar.internal.vulkan.util.LiveHandles;
 import graphics.cinnabar.internal.vulkan.util.VulkanQueueHelper;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.ShaderInstance;
-import net.roguelogix.phosphophyllite.util.NonnullDefault;
+import graphics.cinnabar.api.annotations.NotNullDefault;
 import org.jetbrains.annotations.Nullable;
 import org.joml.Matrix4f;
 import org.lwjgl.system.MemoryStack;
@@ -30,7 +30,7 @@ import static org.lwjgl.vulkan.EXTShaderObject.vkCmdSetLogicOpEnableEXT;
 import static org.lwjgl.vulkan.VK10.*;
 import static org.lwjgl.vulkan.VK13.*;
 
-@NonnullDefault
+@NotNullDefault
 public class CinnabarVertexBuffer extends VertexBuffer {
     private final Exception allocationPoint = new RuntimeException();
     

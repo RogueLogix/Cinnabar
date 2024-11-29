@@ -6,7 +6,7 @@ import org.lwjgl.vulkan.VkDescriptorPoolCreateInfo;
 import org.lwjgl.vulkan.VkDescriptorPoolSize;
 import org.lwjgl.vulkan.VkDescriptorSetAllocateInfo;
 
-import static graphics.cinnabar.internal.vulkan.exceptions.VkException.throwFromCode;
+import static graphics.cinnabar.api.exceptions.VkException.checkVkCode;
 import static org.lwjgl.vulkan.VK10.*;
 
 public class CinnabarDescriptorSets {
@@ -47,7 +47,7 @@ public class CinnabarDescriptorSets {
             allocInfo.pSetLayouts(setLayout);
     
             final var longPtr = stack.mallocLong(1);
-            throwFromCode(vkAllocateDescriptorSets(CinnabarRenderer.device(), allocInfo, longPtr));
+            checkVkCode(vkAllocateDescriptorSets(CinnabarRenderer.device(), allocInfo, longPtr));
             return longPtr.get(0);
         }
     }

@@ -1,4 +1,4 @@
-@NonnullDefault
+@NotNullDefault
 package graphics.cinnabar.api;
 
-import graphics.cinnabar.api.annotations.NonnullDefault;
+import graphics.cinnabar.api.annotations.NotNullDefault;

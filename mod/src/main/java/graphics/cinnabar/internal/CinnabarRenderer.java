@@ -1,10 +1,10 @@
 package graphics.cinnabar.internal;
 
 import graphics.cinnabar.api.threading.Queues;
-import graphics.cinnabar.internal.memory.MagicNumbers;
+import graphics.cinnabar.api.memory.MagicMemorySizes;
 import graphics.cinnabar.internal.mixin.helpers.blaze3d.vertex.VertexFormatMixinHelper;
 import graphics.cinnabar.internal.util.CinnabarSharedIndexBuffers;
-import graphics.cinnabar.internal.util.threading.ResizingRingBuffer;
+import graphics.cinnabar.lib.datastructures.ResizingRingBuffer;
 import graphics.cinnabar.internal.vulkan.Destroyable;
 import graphics.cinnabar.internal.vulkan.VulkanCore;
 import graphics.cinnabar.internal.vulkan.memory.GPUMemoryAllocator;
@@ -30,10 +30,6 @@ public class CinnabarRenderer {
     public static final int SUBMITS_IN_FLIGHT = 2;
     
     private static final ResizingRingBuffer<Destroyable> destroyQueue = new ResizingRingBuffer<>(0);
-    
-    static {
-        LOGGER.info("Initializing Vulkan");
-    }
     
     // MUST be created first, the other constructors will pull device statically, assuming it exists
     private static final VulkanCore VK_CORE = new VulkanCore();
@@ -68,7 +64,7 @@ public class CinnabarRenderer {
     }
     // TODO: configurable sizes?
     
-    public static final GPUMemoryAllocator GPUMemoryAllocator = new GPUMemoryAllocator(MagicNumbers.MiB * 256, MagicNumbers.KiB * 4);
+    public static final GPUMemoryAllocator GPUMemoryAllocator = new GPUMemoryAllocator(MagicMemorySizes.MiB * 256, MagicMemorySizes.KiB * 4);
     
     public static final VulkanQueueHelper queueHelper = new VulkanQueueHelper(SUBMITS_IN_FLIGHT, VK_CORE.graphicsQueue, VK_CORE.graphicsQueueFamily, VK_CORE.computeQueue, VK_CORE.comptueQueueFamily, VK_CORE.transferQueue, VK_CORE.transferQueueFamily);
     

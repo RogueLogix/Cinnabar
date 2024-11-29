@@ -12,7 +12,7 @@ import graphics.cinnabar.internal.extensions.minecraft.renderer.CinnabarShaderIn
 import net.minecraft.client.renderer.ShaderInstance;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.packs.resources.ResourceProvider;
-import net.roguelogix.phosphophyllite.util.NonnullDefault;
+import graphics.cinnabar.api.annotations.NotNullDefault;
 import org.jetbrains.annotations.Nullable;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
@@ -26,7 +26,7 @@ import java.io.InputStream;
 import java.io.Reader;
 import java.util.Objects;
 
-@NonnullDefault
+@NotNullDefault
 @Mixin(ShaderInstance.class)
 public class ShaderInstanceMixin {
     

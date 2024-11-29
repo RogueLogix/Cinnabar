@@ -11,21 +11,19 @@ import graphics.cinnabar.internal.vulkan.util.VulkanSampler;
 import it.unimi.dsi.fastutil.ints.Int2ReferenceMap;
 import it.unimi.dsi.fastutil.ints.Int2ReferenceOpenHashMap;
 import net.minecraft.client.renderer.texture.AbstractTexture;
-import net.roguelogix.phosphophyllite.util.NonnullDefault;
+import graphics.cinnabar.api.annotations.NotNullDefault;
 import org.jetbrains.annotations.Nullable;
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.vulkan.*;
 
-import java.util.function.LongSupplier;
-
-import static graphics.cinnabar.internal.vulkan.exceptions.VkException.throwFromCode;
+import static graphics.cinnabar.api.exceptions.VkException.checkVkCode;
 import static org.lwjgl.opengl.GL11C.*;
 import static org.lwjgl.opengl.GL11C.GL_RGBA;
 import static org.lwjgl.opengl.GL30C.GL_RG;
 import static org.lwjgl.vulkan.VK10.*;
 
-@NonnullDefault
-public abstract class CinnabarAbstractTexture extends AbstractTexture {
+@NotNullDefault
+public abstract class CinnabarAbstractTexture extends AbstractTexture implements ICinnabarTexture {
     private static int activeBindPoint = 0;
     
     private static CinnabarAbstractTexture[] currentBound = new CinnabarAbstractTexture[12];
@@ -71,19 +69,16 @@ public abstract class CinnabarAbstractTexture extends AbstractTexture {
     private VkBufferImageCopy.Buffer vkBufferImageCopy = VkBufferImageCopy.calloc(1);
     
     private static int nextID = 0;
-    private static final Int2ReferenceMap<@Nullable LongSupplier> idLookupMap = new Int2ReferenceOpenHashMap<>();
+    private static final Int2ReferenceMap<@Nullable ICinnabarTexture> idLookupMap = new Int2ReferenceOpenHashMap<>();
     
-    public static long imageViewHandleFromID(int id) {
-        @Nullable final var supplier = idLookupMap.get(id);
-        if (supplier == null) {
-            return 0;
-        }
-        return supplier.getAsLong();
+    @Nullable
+    public static ICinnabarTexture imageViewHandleFromID(int id) {
+        return idLookupMap.get(id);
     }
     
-    public static int registerID(long handle) {
+    public static int registerID(ICinnabarTexture texture) {
         final int id = nextID++;
-        idLookupMap.put(id, () -> handle);
+        idLookupMap.put(id, texture);
         return id;
     }
     
@@ -127,7 +122,7 @@ public abstract class CinnabarAbstractTexture extends AbstractTexture {
         this.width = width;
         this.height = height;
         
-        idLookupMap.put(id, () -> this.imageViewHandle);
+        idLookupMap.put(id, this);
         bind();
         try (final var stack = MemoryStack.stackPush()) {
             final var imageCreateInfo = VkImageCreateInfo.calloc(stack).sType$Default();
@@ -144,7 +139,7 @@ public abstract class CinnabarAbstractTexture extends AbstractTexture {
             imageCreateInfo.flags(0);
             
             final var longPtr = stack.callocLong(1);
-            throwFromCode(vkCreateImage(device, imageCreateInfo, null, longPtr));
+            checkVkCode(vkCreateImage(device, imageCreateInfo, null, longPtr));
             imageHandle = longPtr.get(0);
             LiveHandles.create(imageHandle);
             
@@ -205,6 +200,11 @@ public abstract class CinnabarAbstractTexture extends AbstractTexture {
         return imageViewHandle;
     }
     
+    @Override
+    public VulkanSampler sampler() {
+        return sampler;
+    }
+    
     public void recordUpload(NativeImage nativeImage, HostMemoryVkBuffer hostMemoryVkBuffer, int level, int xOffset, int yOffset, int unpackSkipPixels, int unpackSkipRows, int width, int height, boolean blur, boolean clamp, boolean mipmap) {
         
         // copy is directly from host NativeImage allocation to GPU memory
@@ -212,6 +212,8 @@ public abstract class CinnabarAbstractTexture extends AbstractTexture {
         if (glToVkFormatRemap(nativeImage.format().glFormat()) != imageFormat) {
             throw new NotImplemented("Implicit format conversion not supported");
         }
+        
+        sampler = sampler.withEdgeMode(clamp ? VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE : VK_SAMPLER_ADDRESS_MODE_REPEAT);
         
         final var texelSize = byteSizePerTexel(imageFormat);
         final int skipTexels = unpackSkipPixels + unpackSkipRows * nativeImage.getWidth();

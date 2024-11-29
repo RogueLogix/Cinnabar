@@ -36,13 +36,36 @@ sourceSets {
     api {
         //The API has no resources
         resources.srcDirs = []
-        compileClasspath += main.compileClasspath
+        compileClasspath += main.compileClasspath.filter { File element ->
+            // API requires javax.annotation for TypeQualifierDefault
+            return true
+        }
     }
     // internal library
     lib {
         compileClasspath += api.output
         compileClasspath += main.compileClasspath.filter { File element ->
-            return !element.name.startsWith("neoforge")
+            // MC and all related classes
+            if (element.name.startsWith("neoforge")) {
+                return false
+            }
+            // javax.annotation
+            if (element.name.startsWith("annotations-3.0.1") || element.name.startsWith("jsr305")) {
+                return false
+            }
+            return true
+        }
+    }
+    // internal library, parts that need access to MC
+    libmc {
+        compileClasspath += api.output
+        compileClasspath += lib.output
+        compileClasspath += main.compileClasspath.filter { File element ->
+            // javax.annotation
+            if (element.name.startsWith("annotations-3.0.1") || element.name.startsWith("jsr305")) {
+                return false
+            }
+            return true
         }
     }
     // the main renderer core
@@ -50,8 +73,17 @@ sourceSets {
     core {
         compileClasspath += api.output
         compileClasspath += lib.output
+        compileClasspath += libmc.output
         compileClasspath += main.compileClasspath.filter { File element ->
-            return !element.name.startsWith("neoforge")
+            // MC and all related classes
+            if (element.name.startsWith("neoforge")) {
+                return false
+            }
+            // javax.annotation
+            if (element.name.startsWith("annotations-3.0.1") || element.name.startsWith("jsr305")) {
+                return false
+            }
+            return true
         }
     }
     // adapts MC to use the renderer core
@@ -59,6 +91,7 @@ sourceSets {
         compileClasspath += api.output
         compileClasspath += core.output
         compileClasspath += lib.output
+        compileClasspath += libmc.output
     }
 }
 
@@ -120,6 +153,7 @@ neoForge {
             sourceSet(sourceSets.api)
             sourceSet(sourceSets.core)
             sourceSet(sourceSets.lib)
+            sourceSet(sourceSets.libmc)
             sourceSet(sourceSets.main)
         }
     }

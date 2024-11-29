@@ -1,7 +1,6 @@
 package graphics.cinnabar.api.threading;
 
-import graphics.cinnabar.internal.util.threading.ResizingRingBuffer;
-import net.roguelogix.phosphophyllite.util.API;
+import graphics.cinnabar.api.annotations.API;
 
 @API
 public class Queues {

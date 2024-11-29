@@ -1,12 +1,9 @@
 package graphics.cinnabar.internal.vulkan.memory;
 
 import graphics.cinnabar.internal.CinnabarRenderer;
-import graphics.cinnabar.internal.memory.PointerWrapper;
+import graphics.cinnabar.api.memory.PointerWrapper;
 import graphics.cinnabar.internal.vulkan.Destroyable;
 import graphics.cinnabar.internal.vulkan.util.LiveHandles;
-import it.unimi.dsi.fastutil.longs.Long2ReferenceMap;
-import it.unimi.dsi.fastutil.longs.Long2ReferenceOpenHashMap;
-import org.jetbrains.annotations.Nullable;
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.vulkan.VkBufferCreateInfo;
 import org.lwjgl.vulkan.VkDevice;

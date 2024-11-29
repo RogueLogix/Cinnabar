@@ -12,7 +12,7 @@ import org.lwjgl.vulkan.VkDevice;
 
 import java.nio.LongBuffer;
 
-import static graphics.cinnabar.internal.vulkan.exceptions.VkException.throwFromCode;
+import static graphics.cinnabar.api.exceptions.VkException.checkVkCode;
 import static org.lwjgl.vulkan.VK13.*;
 
 public class VulkanDescriptorPools implements Destroyable {
@@ -80,7 +80,7 @@ public class VulkanDescriptorPools implements Destroyable {
             createInfo.maxSets(512);
 
             final var longPtr = stack.mallocLong(1);
-            throwFromCode(vkCreateDescriptorPool(CinnabarRenderer.device(), createInfo, null, longPtr));
+            checkVkCode(vkCreateDescriptorPool(CinnabarRenderer.device(), createInfo, null, longPtr));
             pools.add(longPtr.get(0));
         }
     }
@@ -96,7 +96,7 @@ public class VulkanDescriptorPools implements Destroyable {
                 // pool is full, try the next one
                 continue;
             }
-            throwFromCode(code);
+            checkVkCode(code);
             return i;
         }
         return -1;

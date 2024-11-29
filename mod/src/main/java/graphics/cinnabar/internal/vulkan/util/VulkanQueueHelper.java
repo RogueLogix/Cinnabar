@@ -2,14 +2,14 @@ package graphics.cinnabar.internal.vulkan.util;
 
 import graphics.cinnabar.internal.CinnabarRenderer;
 import graphics.cinnabar.internal.exceptions.NotImplemented;
-import graphics.cinnabar.internal.util.GrowingMemoryStack;
-import graphics.cinnabar.internal.util.threading.ResizingRingBuffer;
+import graphics.cinnabar.api.memory.GrowingMemoryStack;
+import graphics.cinnabar.lib.datastructures.ResizingRingBuffer;
 import graphics.cinnabar.internal.vulkan.Destroyable;
 import graphics.cinnabar.internal.vulkan.memory.TransientCPUBufferAllocator;
 import it.unimi.dsi.fastutil.longs.LongArrayList;
 import it.unimi.dsi.fastutil.objects.ReferenceArrayList;
 import graphics.cinnabar.api.annotations.ThreadSafety;
-import net.roguelogix.phosphophyllite.util.NonnullDefault;
+import graphics.cinnabar.api.annotations.NotNullDefault;
 import org.jetbrains.annotations.Nullable;
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.system.libc.LibCString;
@@ -19,7 +19,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
 
-import static graphics.cinnabar.internal.vulkan.exceptions.VkException.throwFromCode;
+import static graphics.cinnabar.api.exceptions.VkException.checkVkCode;
 import static org.lwjgl.vulkan.VK10.*;
 import static org.lwjgl.vulkan.VK12.*;
 import static org.lwjgl.vulkan.VK13.vkCmdPipelineBarrier2;
@@ -32,7 +32,7 @@ import static org.lwjgl.vulkan.VK13.vkQueueSubmit2;
  * TODO: make thread safe
  * TODO: submit locking, to allow recording on a different thread
  */
-@NonnullDefault
+@NotNullDefault
 public class VulkanQueueHelper implements Destroyable {
 
     private final VkDevice device = CinnabarRenderer.device();
@@ -105,7 +105,7 @@ public class VulkanQueueHelper implements Destroyable {
                 typeCreateInfo.semaphoreType(VK_SEMAPHORE_TYPE_TIMELINE);
                 typeCreateInfo.initialValue(0);
                 final var handleReturn = stack.mallocLong(1);
-                throwFromCode(vkCreateSemaphore(device, createInfo, null, handleReturn));
+                checkVkCode(vkCreateSemaphore(device, createInfo, null, handleReturn));
                 implicitSyncSemaphore = handleReturn.get(0);
             }
             submitInfos.sType$Default();
@@ -135,7 +135,7 @@ public class VulkanQueueHelper implements Destroyable {
             // the last switchToState will have added an extra (empty) submit
             submitInfos.limit(submitInfos.position());
             submitInfos.position(0);
-            throwFromCode(vkQueueSubmit2(queue, submitInfos, 0));
+            checkVkCode(vkQueueSubmit2(queue, submitInfos, 0));
             submitInfos.limit(submitInfos.capacity());
             // clear out and setup first submit for next frame
             LibCString.nmemset(submitInfos.address(), 0, VkSubmitInfo2.SIZEOF);
@@ -242,7 +242,7 @@ public class VulkanQueueHelper implements Destroyable {
         private VkCommandBuffer getImplicitCommandBuffer() {
             if (currentCommandBuffer == null) {
                 currentCommandBuffer = getTransientCommandBuffer();
-                throwFromCode(vkBeginCommandBuffer(currentCommandBuffer, beginInfo));
+                checkVkCode(vkBeginCommandBuffer(currentCommandBuffer, beginInfo));
             }
             assert queueState == QueueState.COMMANDS;
             return currentCommandBuffer;
@@ -251,7 +251,7 @@ public class VulkanQueueHelper implements Destroyable {
         public void finishActiveBuffer() {
             if (currentCommandBuffer != null) {
                 assert queueState == QueueState.COMMANDS;
-                throwFromCode(vkEndCommandBuffer(currentCommandBuffer));
+                checkVkCode(vkEndCommandBuffer(currentCommandBuffer));
             }
             currentCommandBuffer = null;
         }

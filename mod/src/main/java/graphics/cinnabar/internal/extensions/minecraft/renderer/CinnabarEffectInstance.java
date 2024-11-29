@@ -9,14 +9,12 @@ import graphics.cinnabar.internal.extensions.minecraft.renderer.texture.Cinnabar
 import graphics.cinnabar.internal.statemachine.CinnabarBlendState;
 import graphics.cinnabar.internal.statemachine.CinnabarGeneralState;
 import graphics.cinnabar.internal.vulkan.MagicNumbers;
-import graphics.cinnabar.internal.vulkan.memory.HostMemoryVkBuffer;
 import graphics.cinnabar.internal.vulkan.memory.VulkanBuffer;
 import graphics.cinnabar.internal.vulkan.util.CinnabarDescriptorSets;
 import graphics.cinnabar.internal.vulkan.util.VulkanQueueHelper;
-import graphics.cinnabar.internal.vulkan.util.VulkanSampler;
+import graphics.cinnabar.lib.util.MathUtil;
 import net.minecraft.client.renderer.EffectInstance;
 import net.minecraft.server.packs.resources.ResourceProvider;
-import net.roguelogix.phosphophyllite.util.Util;
 import org.jetbrains.annotations.Nullable;
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.system.libc.LibCString;
@@ -24,7 +22,7 @@ import org.lwjgl.vulkan.*;
 
 import java.io.IOException;
 
-import static graphics.cinnabar.internal.vulkan.exceptions.VkException.throwFromCode;
+import static graphics.cinnabar.api.exceptions.VkException.checkVkCode;
 import static org.lwjgl.vulkan.EXTExtendedDynamicState2.VK_DYNAMIC_STATE_LOGIC_OP_EXT;
 import static org.lwjgl.vulkan.EXTExtendedDynamicState3.*;
 import static org.lwjgl.vulkan.VK13.*;
@@ -67,7 +65,7 @@ public class CinnabarEffectInstance extends EffectInstance implements ICinnabarS
                 // uniforms are always only float or int based, no bytes/etc
                 final var uniformByteSize = uniform.getCount() * 4;
                 // alignments are always a power of 2, but size can be npot for (i)vec3 uniforms
-                final var uniformAlignment = Util.roundUpPo2(uniformByteSize);
+                final var uniformAlignment = MathUtil.roundUpPo2(uniformByteSize);
                 if (uniformAlignment > largestAlignmentRequirement) {
                     largestAlignmentRequirement = uniformAlignment;
                 }
@@ -157,7 +155,7 @@ public class CinnabarEffectInstance extends EffectInstance implements ICinnabarS
                 }
             }
             
-            throwFromCode(vkCreatePipelineLayout(device, pipelineLayoutCreateInfo, null, longPtr));
+            checkVkCode(vkCreatePipelineLayout(device, pipelineLayoutCreateInfo, null, longPtr));
             pipelineLayout = longPtr.get(0);
             
             
@@ -298,7 +296,7 @@ public class CinnabarEffectInstance extends EffectInstance implements ICinnabarS
             pipelineCreateInfos.basePipelineHandle(0);
             pipelineCreateInfos.basePipelineIndex(0);
             
-            throwFromCode(vkCreateGraphicsPipelines(device, 0, pipelineCreateInfos, null, longPtr));
+            checkVkCode(vkCreateGraphicsPipelines(device, 0, pipelineCreateInfos, null, longPtr));
             pipeline = longPtr.get(0);
         }
         vertexProgram.attachToEffect(this);
@@ -343,13 +341,13 @@ public class CinnabarEffectInstance extends EffectInstance implements ICinnabarS
             activeSamplerSet = CinnabarRenderer.queueHelper.descriptorPoolsForSubmit().allocSamplerSet(SamplerDescriptorSetLayout);
             for (int i = 0; i < samplerNames.size(); i++) {
                 final var mapValue = samplerMap.get(samplerNames.get(i));
-                long imageViewHandle = CinnabarAbstractTexture.imageViewHandleFromID(mapValue.getAsInt());
-                if (imageViewHandle == VK_NULL_HANDLE) {
+                final var texture = CinnabarAbstractTexture.imageViewHandleFromID(mapValue.getAsInt());
+                if (texture == null) {
                     throw new UnsupportedOperationException();
                 }
                 final var imageInfo = VkDescriptorImageInfo.calloc(1, stack);
-                imageInfo.sampler(VulkanSampler.DEFAULT.vulkanHandle);
-                imageInfo.imageView(imageViewHandle);
+                imageInfo.sampler(texture.sampler().vulkanHandle);
+                imageInfo.imageView(texture.viewHandle());
                 imageInfo.imageLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
                 
                 descriptorWrites.position(i);

@@ -5,14 +5,14 @@ import graphics.cinnabar.internal.extensions.blaze3d.pipeline.CinnabarRenderTarg
 import graphics.cinnabar.internal.extensions.blaze3d.platform.CinnabarWindow;
 import graphics.cinnabar.internal.vulkan.util.VulkanQueueHelper;
 import net.minecraft.client.Minecraft;
-import net.roguelogix.phosphophyllite.util.NonnullDefault;
+import graphics.cinnabar.api.annotations.NotNullDefault;
 import org.jetbrains.annotations.Nullable;
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.vulkan.*;
 
 import static org.lwjgl.vulkan.VK10.*;
 
-@NonnullDefault
+@NotNullDefault
 public class CinnabarFramebufferState {
     private static CinnabarWindow window() {
         return (CinnabarWindow) Minecraft.getInstance().getWindow();

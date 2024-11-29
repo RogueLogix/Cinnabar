@@ -1,18 +1,18 @@
 package graphics.cinnabar.internal.vulkan.util;
 
+import graphics.cinnabar.api.annotations.NotNullDefault;
 import graphics.cinnabar.internal.CinnabarRenderer;
 import it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.objects.ObjectArrayList;
 import org.lwjgl.system.MemoryStack;
-import org.lwjgl.system.NonnullDefault;
 import org.lwjgl.vulkan.VkDevice;
 import org.lwjgl.vulkan.VkSamplerCreateInfo;
 
-import javax.annotation.Nullable;
+import org.jetbrains.annotations.Nullable;
 
 import static org.lwjgl.vulkan.VK10.*;
 
-@NonnullDefault
+@NotNullDefault
 public class VulkanSampler {
     private static final VkDevice device = CinnabarRenderer.device();
     private static final VkSamplerCreateInfo createInfo = VkSamplerCreateInfo.calloc();

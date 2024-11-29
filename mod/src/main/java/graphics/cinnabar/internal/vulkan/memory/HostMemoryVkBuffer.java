@@ -1,22 +1,22 @@
 package graphics.cinnabar.internal.vulkan.memory;
 
 import graphics.cinnabar.internal.CinnabarRenderer;
-import graphics.cinnabar.internal.memory.LeakDetection;
-import graphics.cinnabar.internal.memory.PointerWrapper;
+import graphics.cinnabar.api.memory.LeakDetection;
+import graphics.cinnabar.api.memory.PointerWrapper;
 import graphics.cinnabar.internal.vulkan.Destroyable;
 import graphics.cinnabar.internal.vulkan.util.LiveHandles;
-import net.roguelogix.phosphophyllite.util.NonnullDefault;
+import graphics.cinnabar.api.annotations.NotNullDefault;
 import org.jetbrains.annotations.Nullable;
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.vulkan.*;
 
 import static graphics.cinnabar.internal.CinnabarDebug.DEBUG;
-import static graphics.cinnabar.internal.vulkan.exceptions.VkException.throwFromCode;
+import static graphics.cinnabar.api.exceptions.VkException.checkVkCode;
 import static org.lwjgl.vulkan.EXTExternalMemoryHost.VK_EXTERNAL_MEMORY_HANDLE_TYPE_HOST_ALLOCATION_BIT_EXT;
 import static org.lwjgl.vulkan.EXTExternalMemoryHost.vkGetMemoryHostPointerPropertiesEXT;
 import static org.lwjgl.vulkan.VK10.*;
 
-@NonnullDefault
+@NotNullDefault
 public record HostMemoryVkBuffer(long bufferHandle, PointerWrapper hostPtr, long vkImportedMemory,
                                  boolean ownsHostAllocation, @Nullable RuntimeException src) implements Destroyable {
 
@@ -47,7 +47,7 @@ public record HostMemoryVkBuffer(long bufferHandle, PointerWrapper hostPtr, long
                 bufferCreateInfo.usage(VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
                 bufferCreateInfo.sharingMode(VK_SHARING_MODE_EXCLUSIVE);
 
-                throwFromCode(vkCreateBuffer(device, bufferCreateInfo, null, bufferHandlePtr));
+                checkVkCode(vkCreateBuffer(device, bufferCreateInfo, null, bufferHandlePtr));
 
                 vkBindBufferMemory(device, bufferHandlePtr.get(0), memoryHandlePtr.get(0), 0);
 
@@ -90,7 +90,7 @@ public record HostMemoryVkBuffer(long bufferHandle, PointerWrapper hostPtr, long
             bufferCreateInfo.sharingMode(VK_SHARING_MODE_EXCLUSIVE);
             externalBufferCreateInfo.handleTypes(VK_EXTERNAL_MEMORY_HANDLE_TYPE_HOST_ALLOCATION_BIT_EXT);
 
-            throwFromCode(vkCreateBuffer(device, bufferCreateInfo, null, handlePtr));
+            checkVkCode(vkCreateBuffer(device, bufferCreateInfo, null, handlePtr));
             final var bufferHandle = handlePtr.get(0);
 
             final var memoryRequirements = VkMemoryRequirements.calloc(stack);
@@ -132,7 +132,7 @@ public record HostMemoryVkBuffer(long bufferHandle, PointerWrapper hostPtr, long
                 throw new IllegalStateException("Couldn't find memory type to import host alloc to");
             }
 
-            throwFromCode(vkAllocateMemory(device, allocInfo, null, handlePtr));
+            checkVkCode(vkAllocateMemory(device, allocInfo, null, handlePtr));
             final var memoryHandle = handlePtr.get(0);
 
             vkBindBufferMemory(device, bufferHandle, memoryHandle, 0);

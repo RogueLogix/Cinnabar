@@ -2,7 +2,7 @@ package graphics.cinnabar.internal.mixin;
 
 import it.unimi.dsi.fastutil.objects.Object2ReferenceMap;
 import it.unimi.dsi.fastutil.objects.Object2ReferenceOpenHashMap;
-import net.roguelogix.phosphophyllite.util.NonnullDefault;
+import graphics.cinnabar.api.annotations.NotNullDefault;
 import org.jetbrains.annotations.Nullable;
 import org.objectweb.asm.tree.AbstractInsnNode;
 import org.objectweb.asm.tree.ClassNode;
@@ -14,7 +14,7 @@ import org.spongepowered.asm.mixin.extensibility.IMixinInfo;
 import java.util.List;
 import java.util.Set;
 
-@NonnullDefault
+@NotNullDefault
 public class MixinPlugin implements IMixinConfigPlugin {
     
     private static final Object2ReferenceMap<String, @Nullable String> superclassReplacements = new Object2ReferenceOpenHashMap<>();

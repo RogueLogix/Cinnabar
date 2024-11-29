@@ -1,13 +1,13 @@
 package graphics.cinnabar.internal.vulkan;
 
-import net.roguelogix.phosphophyllite.util.NonnullDefault;
+import graphics.cinnabar.api.annotations.NotNullDefault;
 
 import static org.lwjgl.vulkan.KHRSurface.*;
 import static org.lwjgl.vulkan.KHRSurface.VK_PRESENT_MODE_FIFO_KHR;
 import static org.lwjgl.vulkan.VK10.VK_FORMAT_B8G8R8A8_UNORM;
 import static org.lwjgl.vulkan.VK10.VK_FORMAT_D32_SFLOAT;
 
-@NonnullDefault
+@NotNullDefault
 public class MagicNumbers {
     // chosen due to universal support, and matching what MC normally gets from GL anyway
     public static final int FramebufferColorFormat = VK_FORMAT_B8G8R8A8_UNORM;

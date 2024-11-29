@@ -5,10 +5,10 @@ import com.mojang.blaze3d.platform.Window;
 import graphics.cinnabar.internal.extensions.blaze3d.platform.CinnabarWindow;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.VirtualScreen;
-import net.roguelogix.phosphophyllite.util.NonnullDefault;
+import graphics.cinnabar.api.annotations.NotNullDefault;
 import org.jetbrains.annotations.Nullable;
 
-@NonnullDefault
+@NotNullDefault
 public class CinnabarVirtualScreen extends VirtualScreen {
     public CinnabarVirtualScreen(Minecraft minecraft) {
         super(minecraft);

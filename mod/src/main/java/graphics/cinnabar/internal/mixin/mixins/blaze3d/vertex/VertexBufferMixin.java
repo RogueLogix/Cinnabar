@@ -3,7 +3,7 @@ package graphics.cinnabar.internal.mixin.mixins.blaze3d.vertex;
 import com.mojang.blaze3d.vertex.BufferUploader;
 import com.mojang.blaze3d.vertex.VertexBuffer;
 import graphics.cinnabar.internal.extensions.blaze3d.vertex.CinnabarVertexBuffer;
-import net.roguelogix.phosphophyllite.util.NonnullDefault;
+import graphics.cinnabar.api.annotations.NotNullDefault;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Overwrite;
 import org.spongepowered.asm.mixin.injection.At;
@@ -11,7 +11,7 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-@NonnullDefault
+@NotNullDefault
 @Mixin(VertexBuffer.class)
 public class VertexBufferMixin {
     

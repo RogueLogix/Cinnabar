@@ -7,16 +7,16 @@ import graphics.cinnabar.internal.CinnabarDebug;
 import graphics.cinnabar.internal.CinnabarRenderer;
 import graphics.cinnabar.internal.extensions.blaze3d.shaders.CinnabarProgram;
 import graphics.cinnabar.internal.extensions.minecraft.renderer.texture.CinnabarAbstractTexture;
+import graphics.cinnabar.internal.extensions.minecraft.renderer.texture.ICinnabarTexture;
 import graphics.cinnabar.internal.statemachine.CinnabarBlendState;
 import graphics.cinnabar.internal.vulkan.MagicNumbers;
 import graphics.cinnabar.internal.vulkan.memory.VulkanBuffer;
 import graphics.cinnabar.internal.vulkan.util.CinnabarDescriptorSets;
 import graphics.cinnabar.internal.vulkan.util.VulkanQueueHelper;
-import graphics.cinnabar.internal.vulkan.util.VulkanSampler;
+import graphics.cinnabar.lib.util.MathUtil;
 import net.minecraft.client.renderer.ShaderInstance;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.packs.resources.ResourceProvider;
-import net.roguelogix.phosphophyllite.util.Util;
 import org.jetbrains.annotations.Nullable;
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.system.libc.LibCString;
@@ -25,7 +25,7 @@ import org.lwjgl.vulkan.*;
 import java.io.IOException;
 
 import static graphics.cinnabar.Cinnabar.CINNABAR_LOG;
-import static graphics.cinnabar.internal.vulkan.exceptions.VkException.throwFromCode;
+import static graphics.cinnabar.api.exceptions.VkException.checkVkCode;
 import static org.lwjgl.vulkan.EXTExtendedDynamicState2.VK_DYNAMIC_STATE_LOGIC_OP_EXT;
 import static org.lwjgl.vulkan.EXTExtendedDynamicState3.*;
 import static org.lwjgl.vulkan.VK13.*;
@@ -139,7 +139,7 @@ public class CinnabarShaderInstance extends ShaderInstance implements ICinnabarS
                 }
             }
             
-            throwFromCode(vkCreatePipelineLayout(device, pipelineLayoutCreateInfo, null, longPtr));
+            checkVkCode(vkCreatePipelineLayout(device, pipelineLayoutCreateInfo, null, longPtr));
             pipelineLayout = longPtr.get(0);
             
             
@@ -277,7 +277,7 @@ public class CinnabarShaderInstance extends ShaderInstance implements ICinnabarS
             pipelineCreateInfos.basePipelineHandle(0);
             pipelineCreateInfos.basePipelineIndex(0);
             
-            throwFromCode(vkCreateGraphicsPipelines(device, 0, pipelineCreateInfos, null, longPtr));
+            checkVkCode(vkCreateGraphicsPipelines(device, 0, pipelineCreateInfos, null, longPtr));
             pipeline = longPtr.get(0);
             
         }
@@ -325,7 +325,7 @@ public class CinnabarShaderInstance extends ShaderInstance implements ICinnabarS
                 // uniforms are always only float or int based, no bytes/etc
                 final var uniformByteSize = uniform.getCount() * 4;
                 // alignments are always a power of 2, but size can be npot for (i)vec3 uniforms
-                final var uniformAlignment = Util.roundUpPo2(uniformByteSize);
+                final var uniformAlignment = MathUtil.roundUpPo2(uniformByteSize);
                 if (uniformAlignment > largestAlignmentRequirement) {
                     largestAlignmentRequirement = uniformAlignment;
                 }
@@ -355,13 +355,18 @@ public class CinnabarShaderInstance extends ShaderInstance implements ICinnabarS
                 final var descriptorWrites = VkWriteDescriptorSet.calloc(samplerNames.size());
                 for (int i = 0; i < samplerNames.size(); i++) {
                     final var mapValue = samplerMap.get(samplerNames.get(i));
-                    long imageViewHandle = 0;
-                    long sampler = VulkanSampler.DEFAULT.vulkanHandle;
+                    final long imageViewHandle;
+                    final long sampler;
                     if (mapValue instanceof Integer mapValueInt) {
-                        imageViewHandle = CinnabarAbstractTexture.imageViewHandleFromID(mapValueInt);
-                    } else if (mapValue instanceof CinnabarAbstractTexture abstractTexture) {
+                        final var texture = CinnabarAbstractTexture.imageViewHandleFromID(mapValueInt);
+                        if (texture == null) {
+                            throw new UnsupportedOperationException();
+                        }
+                        imageViewHandle = texture.viewHandle();
+                        sampler = texture.sampler().vulkanHandle;
+                    } else if (mapValue instanceof ICinnabarTexture abstractTexture) {
                         imageViewHandle = abstractTexture.viewHandle();
-                        sampler = abstractTexture.sampler.vulkanHandle;
+                        sampler = abstractTexture.sampler().vulkanHandle;
                     } else {
                         throw new UnsupportedOperationException();
                     }

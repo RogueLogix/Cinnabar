@@ -11,7 +11,7 @@ import graphics.cinnabar.internal.CinnabarDebug;
 import graphics.cinnabar.internal.CinnabarRenderer;
 import graphics.cinnabar.internal.exceptions.CompileFailure;
 import graphics.cinnabar.internal.vulkan.util.LiveHandles;
-import net.roguelogix.phosphophyllite.util.NonnullDefault;
+import graphics.cinnabar.api.annotations.NotNullDefault;
 import org.anarres.cpp.CppReader;
 import org.anarres.cpp.Preprocessor;
 import org.anarres.cpp.StringLexerSource;
@@ -35,13 +35,12 @@ import java.util.Arrays;
 import java.util.Objects;
 
 import static graphics.cinnabar.Cinnabar.CINNABAR_LOG;
-import static graphics.cinnabar.Cinnabar.LOGGER;
-import static graphics.cinnabar.internal.vulkan.exceptions.VkException.throwFromCode;
+import static graphics.cinnabar.api.exceptions.VkException.checkVkCode;
 import static org.lwjgl.util.shaderc.Shaderc.*;
 import static org.lwjgl.vulkan.VK10.vkCreateShaderModule;
 import static org.lwjgl.vulkan.VK10.vkDestroyShaderModule;
 
-@NonnullDefault
+@NotNullDefault
 public class CinnabarProgram extends EffectProgram {
     
     private static final long SHADERC_COMPILER = shaderc_compiler_initialize();
@@ -216,7 +215,7 @@ public class CinnabarProgram extends EffectProgram {
             assert spvCode != null;
             createInfo.pCode(spvCode);
             final var handlePtr = stack.mallocLong(1);
-            throwFromCode(vkCreateShaderModule(device, createInfo, null, handlePtr));
+            checkVkCode(vkCreateShaderModule(device, createInfo, null, handlePtr));
             shaderHandle = handlePtr.get(0);
         }
         

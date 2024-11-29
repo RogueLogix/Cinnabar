@@ -3,17 +3,17 @@ package graphics.cinnabar.internal.vulkan.memory;
 import graphics.cinnabar.internal.CinnabarRenderer;
 import graphics.cinnabar.internal.util.MemoryRange;
 import graphics.cinnabar.internal.vulkan.Destroyable;
+import graphics.cinnabar.lib.util.MathUtil;
 import it.unimi.dsi.fastutil.objects.ObjectArrayList;
 import it.unimi.dsi.fastutil.objects.ReferenceArrayList;
-import net.roguelogix.phosphophyllite.util.NonnullDefault;
-import net.roguelogix.phosphophyllite.util.Util;
+import graphics.cinnabar.api.annotations.NotNullDefault;
 import org.jetbrains.annotations.Nullable;
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.vulkan.*;
 
 import java.util.Collections;
 
-import static graphics.cinnabar.internal.vulkan.exceptions.VkException.throwFromCode;
+import static graphics.cinnabar.api.exceptions.VkException.checkVkCode;
 import static org.lwjgl.vulkan.VK10.*;
 import static org.lwjgl.vulkan.VK11.VK_STRUCTURE_TYPE_MEMORY_DEDICATED_ALLOCATE_INFO;
 import static org.lwjgl.vulkan.VK11.vkGetPhysicalDeviceMemoryProperties2;
@@ -23,7 +23,7 @@ import static org.lwjgl.vulkan.VK11.vkGetPhysicalDeviceMemoryProperties2;
  * all CPU memory is done via normal allocations, that are imported to VK and copied directly from
  * this removes any need for a staging buffer, and any need for me to do host buffer allocations
  */
-@NonnullDefault
+@NotNullDefault
 public class GPUMemoryAllocator implements Destroyable {
     private final VkDevice device = CinnabarRenderer.device();
     private final long VkAllocationSize;
@@ -38,7 +38,7 @@ public class GPUMemoryAllocator implements Destroyable {
     
     public GPUMemoryAllocator(long vkAllocationSize, long minimumSubAllocationSize) {
         VkAllocationSize = vkAllocationSize;
-        MinimumSubAllocationSize = Util.roundUpPo2(minimumSubAllocationSize);
+        MinimumSubAllocationSize = MathUtil.roundUpPo2(minimumSubAllocationSize);
         MinimumSubAllocationBitmask = MinimumSubAllocationSize - 1;
         // this will almost always get memory type 0, but _meh_ thats fine
         try (var stack = MemoryStack.stackPush()) {
@@ -166,7 +166,7 @@ public class GPUMemoryAllocator implements Destroyable {
             if (dedicatedAllocateInfo != null) {
                 allocInfo.pNext(dedicatedAllocateInfo);
             }
-            throwFromCode(vkAllocateMemory(device, allocInfo, null, longPtr));
+            checkVkCode(vkAllocateMemory(device, allocInfo, null, longPtr));
             final var newBlock = new AllocationBlock(this, longPtr.get(0), allocInfo.allocationSize(), dedicated);
             if (dedicated) {
                 dedicatedBlocks.add(newBlock);

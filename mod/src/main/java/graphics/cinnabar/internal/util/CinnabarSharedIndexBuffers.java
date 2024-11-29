@@ -1,17 +1,17 @@
 package graphics.cinnabar.internal.util;
 
 import com.mojang.blaze3d.vertex.VertexFormat;
+import graphics.cinnabar.api.annotations.NotNullDefault;
 import graphics.cinnabar.internal.CinnabarRenderer;
 import graphics.cinnabar.internal.vulkan.memory.HostMemoryVkBuffer;
 import graphics.cinnabar.internal.vulkan.memory.VulkanBuffer;
 import graphics.cinnabar.internal.vulkan.util.VulkanQueueHelper;
 import org.lwjgl.system.MemoryStack;
-import org.lwjgl.system.NonnullDefault;
 import org.lwjgl.vulkan.VkBufferCopy;
 
 import static org.lwjgl.vulkan.VK10.*;
 
-@NonnullDefault
+@NotNullDefault
 public class CinnabarSharedIndexBuffers {
     
     private static VulkanBuffer sequentialIndices = new VulkanBuffer(1, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT);

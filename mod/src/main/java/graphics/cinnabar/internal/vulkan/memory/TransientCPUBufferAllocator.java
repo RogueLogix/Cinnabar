@@ -1,26 +1,26 @@
 package graphics.cinnabar.internal.vulkan.memory;
 
 import graphics.cinnabar.internal.CinnabarRenderer;
-import graphics.cinnabar.internal.memory.MagicNumbers;
-import graphics.cinnabar.internal.memory.PointerWrapper;
+import graphics.cinnabar.api.memory.MagicMemorySizes;
+import graphics.cinnabar.api.memory.PointerWrapper;
 import graphics.cinnabar.internal.util.MemoryRange;
 import graphics.cinnabar.internal.vulkan.Destroyable;
 import graphics.cinnabar.internal.vulkan.util.LiveHandles;
 import it.unimi.dsi.fastutil.longs.LongArrayList;
 import graphics.cinnabar.api.annotations.ThreadSafety;
-import net.roguelogix.phosphophyllite.util.NonnullDefault;
-import net.roguelogix.phosphophyllite.util.Pair;
+import graphics.cinnabar.api.annotations.NotNullDefault;
+import graphics.cinnabar.lib.util.Pair;
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.vulkan.*;
 
 import static org.lwjgl.vulkan.VK10.*;
 import static org.lwjgl.vulkan.VK11.vkGetPhysicalDeviceMemoryProperties2;
 
-@NonnullDefault
+@NotNullDefault
 public class TransientCPUBufferAllocator implements Destroyable {
     private static final VkDevice device = CinnabarRenderer.device();
 
-    private static final long TRANSIENT_BUFFER_ALLOCATION_SIZE = 16 * MagicNumbers.MiB;
+    private static final long TRANSIENT_BUFFER_ALLOCATION_SIZE = 16 * MagicMemorySizes.MiB;
 
     private final int memoryTypeIndex;
 

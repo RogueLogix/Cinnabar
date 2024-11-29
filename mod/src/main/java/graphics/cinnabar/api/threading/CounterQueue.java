@@ -1,8 +1,8 @@
 package graphics.cinnabar.api.threading;
 
-import graphics.cinnabar.internal.util.threading.ResizingRingBuffer;
+import graphics.cinnabar.lib.datastructures.ResizingRingBuffer;
 import graphics.cinnabar.internal.vulkan.Destroyable;
-import net.roguelogix.phosphophyllite.util.API;
+import graphics.cinnabar.api.annotations.API;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
@@ -46,8 +46,18 @@ public class CounterQueue implements Destroyable {
             }
         }
         
+        private void increment() {
+            if (!enqueuingItems) {
+                throw new IllegalStateException("Must be enqueuing items to increment counter");
+            }
+            if (value.incrementAndGet() <= 0) {
+                throw new IllegalStateException("Counter over decremented");
+            }
+        }
+        
         private void decrement() {
-            if (value.decrementAndGet() == 0) {
+            final var newVal = value.decrementAndGet();
+            if (newVal == 0) {
                 // if we hit zero, attempt to call the callback
                 // if the atomic compare exchange fails, then items are still being added and will catch if all items completed before adding finished
                 final var expectedCallCount = maximumCallbackCount.get() - 1;
@@ -55,14 +65,7 @@ public class CounterQueue implements Destroyable {
                     // counter finished, run callback
                     callback.run();
                 }
-            }
-        }
-        
-        private void increment() {
-            if (!enqueuingItems) {
-                throw new IllegalStateException("Must be enqueuing items to increment counter");
-            }
-            if (value.incrementAndGet() <= 0) {
+            } else if (newVal < 0){
                 throw new IllegalStateException("Counter over decremented");
             }
         }

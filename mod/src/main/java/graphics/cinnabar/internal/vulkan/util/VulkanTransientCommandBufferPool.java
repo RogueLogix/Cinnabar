@@ -1,23 +1,23 @@
 package graphics.cinnabar.internal.vulkan.util;
 
 import graphics.cinnabar.internal.CinnabarRenderer;
-import graphics.cinnabar.internal.memory.MagicNumbers;
-import graphics.cinnabar.internal.memory.PointerWrapper;
+import graphics.cinnabar.api.memory.MagicMemorySizes;
+import graphics.cinnabar.api.memory.PointerWrapper;
 import graphics.cinnabar.internal.vulkan.Destroyable;
-import net.roguelogix.phosphophyllite.util.NonnullDefault;
+import graphics.cinnabar.api.annotations.NotNullDefault;
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.vulkan.VkCommandBuffer;
 import org.lwjgl.vulkan.VkCommandBufferAllocateInfo;
 import org.lwjgl.vulkan.VkCommandPoolCreateInfo;
 import org.lwjgl.vulkan.VkDevice;
 
-import static graphics.cinnabar.internal.vulkan.exceptions.VkException.throwFromCode;
+import static graphics.cinnabar.api.exceptions.VkException.checkVkCode;
 import static org.lwjgl.vulkan.VK10.*;
 
-@NonnullDefault
+@NotNullDefault
 public class VulkanTransientCommandBufferPool implements Destroyable {
     private static final int COMMAND_BUFFER_ALLOC_SIZE = 128;
-    private static final int BUFFER_LIST_SIZE_INCREMENTS = 1024 * MagicNumbers.LONG_BYTE_SIZE;
+    private static final int BUFFER_LIST_SIZE_INCREMENTS = 1024 * MagicMemorySizes.LONG_BYTE_SIZE;
     
     private final VkDevice device = CinnabarRenderer.device();
     
@@ -33,7 +33,7 @@ public class VulkanTransientCommandBufferPool implements Destroyable {
             createInfo.flags(VK_COMMAND_POOL_CREATE_TRANSIENT_BIT);
             createInfo.queueFamilyIndex(queueFamily);
             final var ptr = stack.mallocLong(1);
-            throwFromCode(vkCreateCommandPool(device, createInfo, null, ptr));
+            checkVkCode(vkCreateCommandPool(device, createInfo, null, ptr));
             commandPool = ptr.get(0);
         }
         allocInfo.clear();
@@ -62,7 +62,7 @@ public class VulkanTransientCommandBufferPool implements Destroyable {
             allocatedBuffers = 0;
             commandBuffers.clear();
         }
-        throwFromCode(vkResetCommandPool(device, commandPool, releaseToSystem ? VK_COMMAND_POOL_RESET_RELEASE_RESOURCES_BIT : 0));
+        checkVkCode(vkResetCommandPool(device, commandPool, releaseToSystem ? VK_COMMAND_POOL_RESET_RELEASE_RESOURCES_BIT : 0));
         nextBuffer = 0;
     }
     
@@ -75,11 +75,11 @@ public class VulkanTransientCommandBufferPool implements Destroyable {
         }
         final var newBufferCount = allocatedBuffers + COMMAND_BUFFER_ALLOC_SIZE;
         // not enough space to store the new handles
-        if (commandBuffers.size() < ((long) newBufferCount * MagicNumbers.LONG_BYTE_SIZE)) {
+        if (commandBuffers.size() < ((long) newBufferCount * MagicMemorySizes.LONG_BYTE_SIZE)) {
             commandBuffers = commandBuffers.realloc(commandBuffers.size() + BUFFER_LIST_SIZE_INCREMENTS);
         }
-        final var newBuffersPtr = commandBuffers.pointer() + ((long) allocatedBuffers * MagicNumbers.LONG_BYTE_SIZE);
-        throwFromCode(nvkAllocateCommandBuffers(device, allocInfo.pointer(), newBuffersPtr));
+        final var newBuffersPtr = commandBuffers.pointer() + ((long) allocatedBuffers * MagicMemorySizes.LONG_BYTE_SIZE);
+        checkVkCode(nvkAllocateCommandBuffers(device, allocInfo.pointer(), newBuffersPtr));
         allocatedBuffers += COMMAND_BUFFER_ALLOC_SIZE;
         return alloc();
     }

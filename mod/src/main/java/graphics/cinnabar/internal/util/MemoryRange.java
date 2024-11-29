@@ -1,9 +1,9 @@
 package graphics.cinnabar.internal.util;
 
-import net.roguelogix.phosphophyllite.util.NonnullDefault;
-import net.roguelogix.phosphophyllite.util.Pair;
+import graphics.cinnabar.api.annotations.NotNullDefault;
+import graphics.cinnabar.lib.util.Pair;
 
-@NonnullDefault
+@NotNullDefault
 public record MemoryRange(long offset, long size) implements Comparable<MemoryRange> {
     public MemoryRange(MemoryRange a, MemoryRange b) {
         this(a.offset, a.size + b.size);

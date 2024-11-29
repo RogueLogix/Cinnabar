@@ -77,6 +77,7 @@ dependencies {
     compileOnly("cpw.mods:securejarhandler:3.0.8")
     compileOnly("org.jetbrains:annotations:24.1.0")
     compileOnly("org.lwjgl:lwjgl-glfw:3.3.3")
+    compileOnly("org.lwjgl:lwjgl-tinyfd:3.3.3")
     jijMod(project(path: ":cinnabar", configuration: "builtModJar"))
 
     modLibsToAdd.add("org.lwjgl:lwjgl-vulkan:$lwjglVersion")

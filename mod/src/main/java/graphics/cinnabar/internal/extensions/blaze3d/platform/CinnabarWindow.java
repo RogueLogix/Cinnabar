@@ -1,46 +1,37 @@
 package graphics.cinnabar.internal.extensions.blaze3d.platform;
 
-import com.mojang.blaze3d.pipeline.MainTarget;
 import com.mojang.blaze3d.platform.DisplayData;
 import com.mojang.blaze3d.platform.ScreenManager;
 import com.mojang.blaze3d.platform.Window;
 import com.mojang.blaze3d.platform.WindowEventHandler;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.Tesselator;
-import graphics.cinnabar.Cinnabar;
+import graphics.cinnabar.api.annotations.NotNullDefault;
+import graphics.cinnabar.core.CinnabarCore;
 import graphics.cinnabar.internal.CinnabarRenderer;
 import graphics.cinnabar.internal.vulkan.MagicNumbers;
 import graphics.cinnabar.internal.vulkan.util.VulkanQueueHelper;
 import it.unimi.dsi.fastutil.longs.LongArrayList;
 import net.minecraft.client.Minecraft;
 import net.neoforged.fml.loading.ImmediateWindowHandler;
-import net.roguelogix.phosphophyllite.util.NonnullDefault;
 import org.jetbrains.annotations.Nullable;
 import org.joml.Vector2i;
 import org.lwjgl.system.MemoryStack;
-import org.lwjgl.system.NativeType;
 import org.lwjgl.vulkan.*;
 
-import java.nio.LongBuffer;
-
 import static com.mojang.blaze3d.systems.RenderSystem.replayQueue;
+import static graphics.cinnabar.api.exceptions.VkException.checkVkCode;
 import static graphics.cinnabar.internal.vulkan.MagicNumbers.NoSyncPresentModeOrder;
 import static graphics.cinnabar.internal.vulkan.MagicNumbers.VSyncPresentModeOrder;
-import static graphics.cinnabar.internal.vulkan.exceptions.VkException.throwFromCode;
+import static graphics.cinnabar.lib.helpers.GLFWClassloadHelper.glfwExtCreateWindowSurface;
 import static org.lwjgl.glfw.GLFW.*;
-import static org.lwjgl.glfw.GLFWVulkan.nglfwCreateWindowSurface;
 import static org.lwjgl.opengl.GL11C.GL_COLOR_BUFFER_BIT;
-import static org.lwjgl.system.Checks.CHECKS;
-import static org.lwjgl.system.Checks.check;
-import static org.lwjgl.system.MemoryUtil.memAddress;
-import static org.lwjgl.system.MemoryUtil.memAddressSafe;
 import static org.lwjgl.vulkan.KHRSurface.*;
 import static org.lwjgl.vulkan.KHRSwapchain.*;
 import static org.lwjgl.vulkan.VK10.*;
-import static org.lwjgl.vulkan.VK12.VK_SEMAPHORE_TYPE_TIMELINE;
 import static org.lwjgl.vulkan.VK13.vkCmdPipelineBarrier2;
 
-@NonnullDefault
+@NotNullDefault
 public class CinnabarWindow extends Window {
     
     private final VkDevice device = CinnabarRenderer.device();
@@ -64,7 +55,7 @@ public class CinnabarWindow extends Window {
         super(eventHandler, screenManager, displayData, preferredFullscreenVideoMode, title);
         try (final var stack = MemoryStack.stackPush()) {
             final var longPtr = stack.mallocLong(1);
-            glfwCreateWindowSurface(CinnabarRenderer.instance(), this.getWindow(), null, longPtr);
+            glfwExtCreateWindowSurface(CinnabarRenderer.instance(), this.getWindow(), null, longPtr);
             surface = longPtr.get(0);
             
             createSwapchain(getWidth(), getHeight());
@@ -101,6 +92,7 @@ public class CinnabarWindow extends Window {
         vkDestroySwapchainKHR(device, swapchain, null);
         vkDestroySurfaceKHR(CinnabarRenderer.instance(), surface, null);
         CinnabarRenderer.destroy();
+        CinnabarCore.shutdown();
     }
     
     // called from mixin redirection in super constructor
@@ -122,7 +114,7 @@ public class CinnabarWindow extends Window {
         RenderSystem.assertOnRenderThreadOrInit();
         this.vsync = vsync;
         CinnabarRenderer.waitIdle();
-        throwFromCode(vkWaitForFences(device, frameAcquisitionFence, true, Long.MAX_VALUE));
+        checkVkCode(vkWaitForFences(device, frameAcquisitionFence, true, Long.MAX_VALUE));
         recreateSwapchain(false);
     }
     
@@ -202,7 +194,7 @@ public class CinnabarWindow extends Window {
             createInfo.clipped(true);
             createInfo.oldSwapchain(swapchain);
             
-            throwFromCode(vkCreateSwapchainKHR(device, createInfo, null, longPtr));
+            checkVkCode(vkCreateSwapchainKHR(device, createInfo, null, longPtr));
             vkDestroySwapchainKHR(device, swapchain, null);
             swapchain = longPtr.get(0);
             vkGetSwapchainImagesKHR(device, swapchain, intPtr, null);
@@ -217,7 +209,7 @@ public class CinnabarWindow extends Window {
             final var semaphoreCreateInfo = VkSemaphoreCreateInfo.calloc(stack).sType$Default();
             final var handleReturn = stack.mallocLong(1);
             for (int i = swapchainImageSemaphores.size(); i < swapchainImageCount; i++) {
-                throwFromCode(vkCreateSemaphore(device, semaphoreCreateInfo, null, handleReturn));
+                checkVkCode(vkCreateSemaphore(device, semaphoreCreateInfo, null, handleReturn));
                 swapchainImageSemaphores.add(handleReturn.get(0));
             }
         }
@@ -239,7 +231,7 @@ public class CinnabarWindow extends Window {
     }
     
     public long getImageForBlit() {
-        throwFromCode(vkWaitForFences(device, frameAcquisitionFence, true, Long.MAX_VALUE));
+        checkVkCode(vkWaitForFences(device, frameAcquisitionFence, true, Long.MAX_VALUE));
         final var colorImageHandle = swapchainImages.getLong(currentSwapchainFrame);
         if(!resetImage){
             return colorImageHandle;
@@ -292,7 +284,7 @@ public class CinnabarWindow extends Window {
 
                 CinnabarRenderer.queueHelper.submit(false);
                 // wait for last acquire
-                throwFromCode(vkWaitForFences(device, frameAcquisitionFence, true, Long.MAX_VALUE));
+                checkVkCode(vkWaitForFences(device, frameAcquisitionFence, true, Long.MAX_VALUE));
                 
                 final var swapchainPtr = stack.mallocLong(1);
                 swapchainPtr.put(0, swapchain);
@@ -304,7 +296,7 @@ public class CinnabarWindow extends Window {
                 presentInfo.pWaitSemaphores(stack.longs(semaphore));
                 presentInfo.pSwapchains(swapchainPtr);
                 presentInfo.pImageIndices(imageIndexPtr);
-                throwFromCode(vkQueuePresentKHR(CinnabarRenderer.graphicsQueue(), presentInfo));
+                checkVkCode(vkQueuePresentKHR(CinnabarRenderer.graphicsQueue(), presentInfo));
                 currentSwapchainFrame = -1;
             }
         }
@@ -317,15 +309,15 @@ public class CinnabarWindow extends Window {
             final var intPtr = stack.mallocInt(1);
             intPtr.put(0, -1);
 
-            throwFromCode(vkResetFences(device, frameAcquisitionFence));
+            checkVkCode(vkResetFences(device, frameAcquisitionFence));
             int returnCode = vkAcquireNextImageKHR(device, swapchain, Long.MAX_VALUE, VK_NULL_HANDLE, frameAcquisitionFence, intPtr);
             resetImage = true;
-            throwFromCode(returnCode);
+            checkVkCode(returnCode);
             if (returnCode == VK_SUBOPTIMAL_KHR && !recursing) {
                 // acquire wasn't happy, rebuild the swapchain
                 // its probably a resolution change
-                throwFromCode(vkWaitForFences(device, frameAcquisitionFence, true, Long.MAX_VALUE));
-                throwFromCode(vkResetFences(device, frameAcquisitionFence));
+                checkVkCode(vkWaitForFences(device, frameAcquisitionFence, true, Long.MAX_VALUE));
+                checkVkCode(vkResetFences(device, frameAcquisitionFence));
                 currentSwapchainFrame = -1;
                 swapchainImages.clear();
                 recreateSwapchain(true);
@@ -358,13 +350,5 @@ public class CinnabarWindow extends Window {
         imageBarrier.newLayout(VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
         
         vkCmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, null, null, imageBarrier);
-    }
-    
-    @NativeType("VkResult")
-    public static int glfwCreateWindowSurface(VkInstance instance, @NativeType("GLFWwindow *") long window, @javax.annotation.Nullable @NativeType("VkAllocationCallbacks const *") VkAllocationCallbacks allocator, @NativeType("VkSurfaceKHR *") LongBuffer surface) {
-        if (CHECKS) {
-            check(surface, 1);
-        }
-        return nglfwCreateWindowSurface(instance.address(), window, memAddressSafe(allocator), memAddress(surface));
     }
 }
