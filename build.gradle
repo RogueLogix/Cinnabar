@@ -86,14 +86,12 @@ dependencies {
 
     for (lib in lwjglJavaLibs) {
         var baseLibName = "org.lwjgl:lwjgl-$lib:$lwjglVersion"
-        println(baseLibName)
         modLibsToAdd.add(baseLibName)
         jijLib(baseLibName)
         runtimeOnly(baseLibName)
     }
     for (lib in lwjglNativeLibs) {
         var baseLibName = "org.lwjgl:lwjgl-$lib:$lwjglVersion"
-        println(baseLibName)
         modLibsToAdd.add(baseLibName)
         jijLib(baseLibName)
         runtimeOnly(baseLibName)
