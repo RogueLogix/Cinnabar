@@ -33,7 +33,7 @@ public class CinnabarCoreConfig {
     public final int ForcedVulkanDeviceIndex;
     
     {
-        ManualDeviceSelection = true;
+        ManualDeviceSelection = false;
         ForcedVulkanDeviceIndex = -1;
     }
 }
