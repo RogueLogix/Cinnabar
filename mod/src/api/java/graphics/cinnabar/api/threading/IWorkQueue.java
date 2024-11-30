@@ -18,14 +18,14 @@ public interface IWorkQueue {
     IWorkQueue MAIN_THREAD = Bootstrapper.MAIN_THREAD;
     
     @API(note = """
-            Work and callbacks may run on any thread including the main thread
+            Work and callbacks may run on any thread including the main and cleanup thread
             May be the same queue as MAIN_THREAD
             Work is started in order, but may complete out of order
             """)
     IWorkQueue BACKGROUND_THREADS = Bootstrapper.BACKGROUND_THREADS;
     
     @API(note = """
-            Work and callbacks will run from cleaner thread
+            Work and callbacks will run from cleanup thread
             Anything enqueued this CPU frame will be run after the CPU has finished the current frame
             
             CPU frame end is defined as main window present, this runs
@@ -33,10 +33,11 @@ public interface IWorkQueue {
     IWorkQueue AFTER_END_OF_CPU_FRAME = Bootstrapper.AFTER_END_OF_CPU_FRAME;
     
     @API(note = """
-            Work and callbacks will run from cleaner thread
+            Work and callbacks will run from cleanup thread
             Anything enqueued this GPU frame will be run after the GPU has finished the current frame
+            Any work enqueued for end of the same CPU frame will be executed first
             
-            GPU frame end is defined as after the GPU signals the present semaphore, and does not include the present itself
+            GPU frame end is defined as after the GPU signals the semaphore for present, and does not include the present itself
             """)
     IWorkQueue AFTER_END_OF_GPU_FRAME = Bootstrapper.AFTER_END_OF_GPU_FRAME;
     

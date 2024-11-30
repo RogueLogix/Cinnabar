@@ -1,6 +1,5 @@
 package graphics.cinnabar.lib.vulkan;
 
-import graphics.cinnabar.api.annotations.NotNullDefault;
 import graphics.cinnabar.api.exceptions.VkException;
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.vulkan.VkDebugUtilsMessengerCallbackDataEXT;
@@ -83,7 +82,6 @@ public class VulkanDebug extends VkDebugUtilsMessengerCallbackEXT {
         return VK_FALSE;
     }
     
-    @NotNullDefault
     public enum MessageSeverity {
         ERROR(VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT),
         WARNING(VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT),
@@ -98,7 +96,6 @@ public class VulkanDebug extends VkDebugUtilsMessengerCallbackEXT {
         }
     }
     
-    @NotNullDefault
     public enum MessageType {
         GENERAL(VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT),
         VALIDATION(VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT),

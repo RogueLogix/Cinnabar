@@ -3,23 +3,15 @@ package graphics.cinnabar.api;
 import com.mojang.logging.LogUtils;
 import graphics.cinnabar.api.annotations.API;
 import graphics.cinnabar.api.annotations.Internal;
-import net.neoforged.bus.api.BusBuilder;
-import net.neoforged.bus.api.IEventBus;
-import org.jetbrains.annotations.Nullable;
 import org.lwjgl.vulkan.VkDevice;
 import org.lwjgl.vulkan.VkInstance;
 import org.slf4j.Logger;
-
-import java.util.Objects;
 
 @API
 public class CinnabarAPI {
     
     @API
     public static final String MOD_ID = "cinnabar";
-    
-    @API
-    public static final IEventBus EVENT_BUS = BusBuilder.builder().allowPerPhasePost().build();
     
     @API(note = """
             Defines if Cinnabar is in debug mode

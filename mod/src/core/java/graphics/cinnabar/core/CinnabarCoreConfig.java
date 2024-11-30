@@ -6,15 +6,15 @@ import net.neoforged.fml.loading.FMLLoader;
 
 public class CinnabarCoreConfig {
     
-    @ConfigValue
+    @ConfigValue(comment = "Enables additional runtime debugging features\nEXPECT LARGE PERFORMANCE IMPACT")
     public final boolean Debug;
-    @ConfigValue(comment = "Always enabled with debug mode")
+    @ConfigValue(comment = "Always enabled with debug mode\nEXPECT LARGE PERFORMANCE IMPACT")
     public final boolean EnableValidationLayers;
     @ConfigValue
     public final VulkanDebug.MessageSeverity[] MessageSeverities;
     @ConfigValue
     public final VulkanDebug.MessageType[] MessageTypes;
-    @ConfigValue
+    @ConfigValue(comment = "Enables VK_LAYER_MESA_overlay if available")
     public final boolean EnableMesaOverlay;
     
     {
@@ -27,9 +27,9 @@ public class CinnabarCoreConfig {
         EnableMesaOverlay = false;
     }
     
-    @ConfigValue
+    @ConfigValue(comment = "Shows a popup when iterating through devices to allow manual selection, only shows capable devices")
     public final boolean ManualDeviceSelection;
-    @ConfigValue
+    @ConfigValue(comment = "Skips all other devices except the index selected here, use 'vulkaninfo' command to find devices")
     public final int ForcedVulkanDeviceIndex;
     
     {

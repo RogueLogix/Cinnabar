@@ -1,7 +1,6 @@
 package graphics.cinnabar.api.annotations;
 
 // informational annotations
-@NotNullDefault
 public @interface ThreadSafety {
     
     // functions annotated with this can only be called on the main graphics thread

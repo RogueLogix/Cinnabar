@@ -5,12 +5,11 @@ import com.mojang.logging.LogUtils;
 import graphics.cinnabar.api.CinnabarAPI;
 import graphics.cinnabar.api.CinnabarAPIBootstrapper;
 import graphics.cinnabar.api.annotations.UsedFromReflection;
-import graphics.cinnabar.api.memory.LeakDetection;
 import graphics.cinnabar.lib.CinnabarLibBootstrapper;
 import graphics.cinnabar.lib.config.ConfigManager;
 import graphics.cinnabar.lib.config.ConfigType;
 import graphics.cinnabar.lib.config.RegisterConfig;
-import graphics.cinnabar.lib.threading.WorkQueue;
+import graphics.cinnabar.lib.threading.CleanupThread;
 import graphics.cinnabar.lib.util.Pair;
 import graphics.cinnabar.lib.vulkan.VulkanDebug;
 import it.unimi.dsi.fastutil.ints.IntArrayList;
@@ -112,6 +111,7 @@ public class CinnabarCore {
     }
     
     public static void shutdown() {
+        CleanupThread.shutdown();
         vkDestroyDevice(vkDevice, null);
         vkDestroyDebugUtilsMessengerEXT(vkInstance, debugCallback, null);
         vkDestroyInstance(vkInstance, null);
@@ -367,7 +367,7 @@ public class CinnabarCore {
                 }
                 
                 final var currentDeviceType = deviceProperties.deviceType();
-                if (CONFIG.ManualDeviceSelection) {
+                if (CONFIG.ManualDeviceSelection && CONFIG.ForcedVulkanDeviceIndex == -1) {
                     
                     final var deviceName = deviceProperties.deviceNameString();
                     final var deviceTypeStr = switch (deviceProperties.deviceType()) {

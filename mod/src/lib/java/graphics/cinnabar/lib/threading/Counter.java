@@ -1,11 +1,13 @@
 package graphics.cinnabar.lib.threading;
 
+import graphics.cinnabar.api.annotations.API;
+import graphics.cinnabar.api.annotations.Internal;
+import graphics.cinnabar.api.annotations.ThreadSafety;
 import graphics.cinnabar.api.threading.IWorkQueue;
 import graphics.cinnabar.api.threading.ThreadIndex;
 
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.function.Consumer;
 
 public class Counter implements IWorkQueue.ICounter {
     
@@ -22,11 +24,16 @@ public class Counter implements IWorkQueue.ICounter {
     }
     
     
+    @API
     @Override
+    @ThreadSafety.Many
     public void setCallback(IWorkQueue.Work callback) {
         this.callback = callback;
     }
     
+    @API
+    @Override
+    @ThreadSafety.Any
     public void beginEnqueuing() {
         enqueuingItems = true;
         if (callbackCount.get() != maximumCallbackCount.get()) {
@@ -34,6 +41,9 @@ public class Counter implements IWorkQueue.ICounter {
         }
     }
     
+    @API
+    @Override
+    @ThreadSafety.Any
     public void endEnqueuing() {
         if (!enqueuingItems) {
             return;
@@ -50,6 +60,7 @@ public class Counter implements IWorkQueue.ICounter {
         }
     }
     
+    @ThreadSafety.Many
     private void increment() {
         if (!enqueuingItems) {
             throw new IllegalStateException("Must be enqueuing items to increment counter");
@@ -59,7 +70,9 @@ public class Counter implements IWorkQueue.ICounter {
         }
     }
     
+    @Internal
     @Override
+    @ThreadSafety.Many
     public void decrement() {
         if (value.decrementAndGet() == 0) {
             // if we hit zero, attempt to call the callback
@@ -72,21 +85,50 @@ public class Counter implements IWorkQueue.ICounter {
         }
     }
     
+    @API
     @Override
+    @ThreadSafety.Many
     public void enqueue(Item work) {
         if (work.counter() != this) {
             throw new IllegalArgumentException("Cannot enqueue work item for a different counter");
         }
+        increment();
+        queue.enqueue(work);
     }
     
-    
+    @API
     @Override
+    @ThreadSafety.Many
     public boolean isComplete() {
-        return false;
+        return value.get() == 0;
     }
     
     @Override
     public void waitComplete() {
-    
+        final var currentThreadIndex = ThreadIndex.currentThreadIndex();
+        final var isMainQueueAndMainThread = queue instanceof WorkQueue.SingleThread.Main && currentThreadIndex.isMainThread();
+        final var isBackgroundQueue = queue instanceof WorkQueue.BackgroundThreads && currentThreadIndex.valid();
+        // TODO: may want to prohibit the main thread from running work on the background queue
+        if (isMainQueueAndMainThread || isBackgroundQueue) {
+            // this thread is allowed to execute work on this queue, so execute work while we wait
+            while (!isComplete()) {
+                while (true) {
+                    if (!queue.runOne(currentThreadIndex)) {
+                        break;
+                    }
+                }
+                // yield to allow other threads to use this core
+                Thread.yield();
+            }
+        } else {
+            // this thread cannot execute work on this queue, just wait for the work to complete
+            // this can lead to a deadlock if the execution thread is waiting on this work to complete
+            while (!isComplete()) {
+                // yield to allow other threads to use this core
+                // TODO: potentially wait on a lock?
+                //       that requires the waking thread to grab that lock though, which is less than ideal
+                Thread.yield();
+            }
+        }
     }
 }

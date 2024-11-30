@@ -7,7 +7,7 @@ import org.jetbrains.annotations.NotNull;
 import java.util.function.Supplier;
 
 /*
- * Thread block orderig is
+ * Thread block ordering is
  * main render thread, always index 0
  * cleaner thread, always index 1
  * background work threads remainder of indices
@@ -17,6 +17,9 @@ public record ThreadIndex(@API(note = "will be in range [0, threadCount)") int i
     
     @API
     public static final ThreadIndex MAIN = new ThreadIndex(0);
+    
+    @API
+    public static final ThreadIndex CLEANUP = new ThreadIndex(1);
     
     @Internal
     static final ThreadIndex INVALID = new ThreadIndex(-1);
