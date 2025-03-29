@@ -36,4 +36,10 @@ public @interface ThreadSafety {
     @interface ItDepends {
         String note() default "";
     }
+    
+    // usages of this function must be synchronized with other uses of the underlying vulkan object
+    // refer to Vulkan specification for details
+    @interface VulkanObjectHandle {
+    
+    }
 }

@@ -1,10 +1,5 @@
 package graphics.cinnabar.lib.threading;
 
-import graphics.cinnabar.api.annotations.ThreadSafety;
-import graphics.cinnabar.api.events.EndOfFrame;
-
-import static graphics.cinnabar.api.CinnabarEventBus.CINNABAR_EVENT_BUS;
-
 public class CleanupThread {
     
     public static WorkQueue.SingleThread EndOfCPUFrameQueue = new WorkQueue.SingleThread();
@@ -18,8 +13,8 @@ public class CleanupThread {
     public static void startup() {
         thread.setDaemon(true);
         thread.start();
-        CINNABAR_EVENT_BUS.addListener(CleanupThread::endOfCPUFrameEndEvent);
-        CINNABAR_EVENT_BUS.addListener(CleanupThread::endOfGPUFrameEndEvent);
+//        CINNABAR_EVENT_BUS.addListener(CleanupThread::endOfCPUFrameEndEvent);
+//        CINNABAR_EVENT_BUS.addListener(CleanupThread::endOfGPUFrameEndEvent);
     }
     
     public static void shutdown() {
@@ -31,19 +26,19 @@ public class CleanupThread {
         }
     }
     
-    @ThreadSafety.MainGraphics
-    private static void endOfCPUFrameEndEvent(EndOfFrame.CPU event) {
-        EndOfCPUFrameQueue.insertBreakpoint();
-        lastFinishedCPUFrame = event.frameNum;
-        wakeThread();
-    }
-    
-    @ThreadSafety.MainGraphics
-    private static void endOfGPUFrameEndEvent(EndOfFrame.GPU event) {
-        EndOfGPUFrameQueue.insertBreakpoint();
-        lastFinishedGPUFrame = event.frameNum;
-        wakeThread();
-    }
+//    @ThreadSafety.MainGraphics
+//    private static void endOfCPUFrameEndEvent(Frame.End.CPU event) {
+//        EndOfCPUFrameQueue.insertBreakpoint();
+//        lastFinishedCPUFrame = event.frameNum;
+//        wakeThread();
+//    }
+//
+//    @ThreadSafety.MainGraphics
+//    private static void endOfGPUFrameEndEvent(Frame.End.GPU event) {
+//        EndOfGPUFrameQueue.insertBreakpoint();
+//        lastFinishedGPUFrame = event.frameNum;
+//        wakeThread();
+//    }
     
     private static void threadFunc() {
         while (running) {

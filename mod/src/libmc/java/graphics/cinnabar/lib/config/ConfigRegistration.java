@@ -4,7 +4,7 @@ import it.unimi.dsi.fastutil.objects.ObjectArrayList;
 import graphics.cinnabar.lib.config.spec.ConfigOptionsDefaults;
 import graphics.cinnabar.lib.config.spec.SpecObjectNode;
 import graphics.cinnabar.lib.parsers.Element;
-import graphics.cinnabar.lib.util.Pair;
+import graphics.cinnabar.api.util.Pair;
 
 import org.jetbrains.annotations.Nullable;
 import java.io.File;

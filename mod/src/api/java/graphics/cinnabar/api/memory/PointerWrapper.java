@@ -11,7 +11,7 @@ import sun.misc.Unsafe;
 import javax.annotation.Nonnull;
 import java.lang.Math;
 
-import static graphics.cinnabar.api.CinnabarAPI.CINNABAR_API_LOG;
+import static graphics.cinnabar.api.CinnabarAPI.Internals.CINNABAR_API_LOG;
 import static graphics.cinnabar.api.memory.LeakDetection.*;
 
 @API

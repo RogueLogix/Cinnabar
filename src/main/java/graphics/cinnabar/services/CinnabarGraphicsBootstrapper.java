@@ -11,12 +11,6 @@ public class CinnabarGraphicsBootstrapper implements GraphicsBootstrapper {
         LOGGER.trace("CinnabarGraphicsBootstrapper LOADED!");
     }
     
-    private static boolean inIDE = false;
-    
-    public static boolean inIDE() {
-        return inIDE;
-    }
-    
     @Override
     public String name() {
         return "CinnabarGraphicsBootstrapper";
@@ -24,11 +18,6 @@ public class CinnabarGraphicsBootstrapper implements GraphicsBootstrapper {
     
     @Override
     public void bootstrap(String[] arguments) {
-        for (String argument : arguments) {
-            if(argument.equals("--CinnabarLaunchedFromIDE")) {
-                inIDE = true;
-            }
-        }
         CinnabarEarlyWindowProvider.attemptConfigInit();
         CinnabarLaunchPlugin.attemptInject();
     }

@@ -57,7 +57,10 @@ sourceSets {
         }
     }
     // internal library, parts that need access to MC
-    libmc {
+    mclib {
+        java {
+            srcDirs = ['src/libmc/java']
+        }
         compileClasspath += api.output
         compileClasspath += lib.output
         compileClasspath += main.compileClasspath.filter { File element ->
@@ -69,16 +72,12 @@ sourceSets {
         }
     }
     // the main renderer core
-    // operates independent of MC itself
     core {
+        resources.srcDirs = []
         compileClasspath += api.output
         compileClasspath += lib.output
-        compileClasspath += libmc.output
+        compileClasspath += mclib.output
         compileClasspath += main.compileClasspath.filter { File element ->
-            // MC and all related classes
-            if (element.name.startsWith("neoforge")) {
-                return false
-            }
             // javax.annotation
             if (element.name.startsWith("annotations-3.0.1") || element.name.startsWith("jsr305")) {
                 return false
@@ -86,12 +85,15 @@ sourceSets {
             return true
         }
     }
-    // adapts MC to use the renderer core
     main {
+        java {
+            srcDirs = ["src/mod/java"]
+        }
+        resources.srcDirs = ["src/mod/resources"]
         compileClasspath += api.output
         compileClasspath += core.output
         compileClasspath += lib.output
-        compileClasspath += libmc.output
+        compileClasspath += mclib.output
     }
 }
 
@@ -105,7 +107,7 @@ neoForge {
     }
 
     // This line is optional. Access Transformers are automatically detected
-    // accessTransformers = project.files('src/main/resources/META-INF/accesstransformer.cfg')
+     accessTransformers = project.files('src/mod/resources/META-INF/accesstransformer.cfg')
 
     // Default run configurations.
     // These can be tweaked, removed, or duplicated as needed.
@@ -116,16 +118,6 @@ neoForge {
             // Comma-separated list of namespaces to load gametests from. Empty = all namespaces.
             systemProperty 'neoforge.enabledGameTestNamespaces', project.mod_id
             programArguments.addAll "--CinnabarLaunchedFromIDE"
-        }
-
-        data {
-            data()
-
-            // example of overriding the workingDirectory set in configureEach above, uncomment if you want to use it
-            // gameDirectory = project.file('run-data')
-
-            // Specify the modid for data generation, where to output the resulting resource, and where to look for existing resources.
-            programArguments.addAll '--mod', project.mod_id, '--all', '--output', file('src/generated/resources/').getAbsolutePath(), '--existing', file('src/main/resources/').getAbsolutePath()
         }
 
         // applies to all the run configs above
@@ -153,7 +145,7 @@ neoForge {
             sourceSet(sourceSets.api)
             sourceSet(sourceSets.core)
             sourceSet(sourceSets.lib)
-            sourceSet(sourceSets.libmc)
+            sourceSet(sourceSets.mclib)
             sourceSet(sourceSets.main)
         }
     }
@@ -202,7 +194,7 @@ var generateModMetadata = tasks.register("generateModMetadata", ProcessResources
     ]
     inputs.properties replaceProperties
     expand replaceProperties
-    from "src/main/templates"
+    from "src/mod/templates"
     into "build/generated/sources/modMetadata"
 }
 // Include the output of "generateModMetadata" as an input directory for the build
@@ -246,5 +238,9 @@ idea {
 
 tasks.named('jar', Jar).configure { Jar jar ->
     jar.duplicatesStrategy(DuplicatesStrategy.FAIL)
-    jar.from([sourceSets.api.output, sourceSets.lib.output, sourceSets.core.output, sourceSets.main.output])
+    jar.from([
+            sourceSets.api.output,
+            sourceSets.lib.output,
+            sourceSets.core.output,
+            sourceSets.main.output])
 }

@@ -1,9 +1,13 @@
+import net.darkhax.curseforgegradle.TaskPublishCurseForge
+
 plugins {
     id 'java-library'
+    id 'idea'
+    id("net.darkhax.curseforgegradle") version "1.1.26"
 }
 
 allprojects {
-    version = mod_version
+    version = mod_version + (release_type != "release" ? "-$release_type" : "")
     group = mod_group_id
 }
 
@@ -78,7 +82,10 @@ dependencies {
     compileOnly("org.jetbrains:annotations:24.1.0")
     compileOnly("org.lwjgl:lwjgl-glfw:3.3.3")
     compileOnly("org.lwjgl:lwjgl-tinyfd:3.3.3")
-    jijMod(project(path: ":cinnabar", configuration: "builtModJar"))
+    // removed in sync because it creates a dependency on a compiling build for sync to work
+    if (System.getProperty("idea.sync.active") == null) {
+        jijMod(project(path: ":cinnabar", configuration: "builtModJar"))
+    }
 
     modLibsToAdd.add("org.lwjgl:lwjgl-vulkan:$lwjglVersion")
     modLibsToAdd.add("org.lwjgl:lwjgl-spvc:$lwjglVersion")
@@ -96,7 +103,7 @@ dependencies {
         jijLib(baseLibName)
         runtimeOnly(baseLibName)
         runtimeOnly(baseLibName + ":$lwjglNatives")
-        for (nativePlatform in lwjglNativePlatforms){
+        for (nativePlatform in lwjglNativePlatforms) {
             jijLib(baseLibName + ":$nativePlatform")
         }
     }
@@ -139,4 +146,33 @@ tasks.named('wrapper', Wrapper).configure {
     // file size for Gradle. If you do switch this to ALL, run the Gradle wrapper task twice afterwards.
     // (Verify by checking gradle/wrapper/gradle-wrapper.properties to see if distributionUrl now points to `-all`)
     distributionType = Wrapper.DistributionType.BIN
+}
+
+def curseforgeToken = System.getenv("curseforge_token")
+
+def changelog = """
+[https://github.com/RogueLogix/Cinnabar/blob/$version/changelog.md](https://github.com/RogueLogix/Cinnabar/blob/$version/changelog.md)
+"""
+
+// only enable this if we are the root project
+// prevents accidentally publishing as submodule project
+if (curseforgeToken != null && this.project == this.rootProject) {
+    tasks.register('publishCurseForge', TaskPublishCurseForge) {
+
+        debugMode = true
+
+        apiToken = curseforgeToken
+        def projectId = "552238"
+
+        def mainFile = upload(projectId, jar)
+        mainFile.changelog = changelog
+        mainFile.changelogType = 'markdown'
+        mainFile.releaseType = release_type
+        mainFile.gameVersions.clear()
+        mainFile.addGameVersion(minecraft_version)
+        mainFile.addJavaVersion('Java 21')
+        mainFile.addModLoader('NeoForge')
+
+        mainFile.curseFileId
+    }
 }

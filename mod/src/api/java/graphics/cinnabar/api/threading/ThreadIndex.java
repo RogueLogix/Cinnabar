@@ -2,7 +2,9 @@ package graphics.cinnabar.api.threading;
 
 import graphics.cinnabar.api.annotations.API;
 import graphics.cinnabar.api.annotations.Internal;
-import org.jetbrains.annotations.NotNull;
+import graphics.cinnabar.api.annotations.ThreadSafety;
+import graphics.cinnabar.api.exceptions.InvalidThread;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.function.Supplier;
 
@@ -28,23 +30,31 @@ public record ThreadIndex(@API(note = "will be in range [0, threadCount)") int i
     public static int threadCount = Bootstrapper.threadCount;
     
     @Internal
-    static Supplier<@NotNull ThreadIndex> registryLookupFunc = () -> INVALID;
+    static Supplier<@Nullable ThreadIndex> registryLookupFunc = () -> INVALID;
     
     @Internal
     public ThreadIndex {
     }
     
     @API
+    @ThreadSafety.Many
     public static ThreadIndex currentThreadIndex() {
-        return registryLookupFunc.get();
+        @Nullable
+        final var threadIndex = registryLookupFunc.get();
+        if (threadIndex == null) {
+            throw new InvalidThread();
+        }
+        return threadIndex;
     }
     
     @API
+    @ThreadSafety.Many
     public boolean isMainThread() {
         return this.index == MAIN.index;
     }
     
     @API
+    @ThreadSafety.Many
     public boolean valid() {
         return 0 <= index && index < threadCount;
     }

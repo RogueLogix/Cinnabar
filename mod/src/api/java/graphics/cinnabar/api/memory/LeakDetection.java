@@ -9,6 +9,8 @@ import it.unimi.dsi.fastutil.objects.ObjectArraySet;
 
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
+import static graphics.cinnabar.api.CinnabarAPI.Internals.CINNABAR_API_LOG;
+
 public class LeakDetection {
     
     private static class MemoryLeak extends Exception {
@@ -63,7 +65,7 @@ public class LeakDetection {
         if (CinnabarAPI.DEBUG_MODE) {
             System.out.println("Logging memory leaks");
             for (final var value : liveAllocations.values()) {
-                value.printStackTrace();
+                CINNABAR_API_LOG.warn(value.getMessage());
             }
             System.out.println("Memory leaks logged");
         }

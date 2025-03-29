@@ -19,7 +19,7 @@ import static org.lwjgl.system.MemoryUtil.memAddressSafe;
  * org.lwjgl.glfw _cannot_ reference any org.lwjgl.vulkan class
  * this is a limitation of how modlauncher handles loading modules, there is no way around it
  *
- * luckily, the native function pointers are public, so i can copy the alls in GLFWVulkan into my own module, that _can_ read org.lwjgl.vulkan without issue
+ * luckily, the native function pointers are public, so i can copy the calls in GLFWVulkan into my own module, that _can_ read org.lwjgl.vulkan without issue
  */
 public class GLFWClassloadHelper {
     @NativeType("int")

@@ -5,6 +5,9 @@ public class MagicMemorySizes {
     public static final long MiB = KiB * 1024;
     public static final long GiB = MiB * 1024;
     
+    public static final long VK_PERSISTENT_BLOCK_SIZE = 256 * MiB;
+    public static final long VK_TRANSIENT_BLOCK_SIZE = 256 * MiB;
+    
     public static final int FLOAT_BYTE_SIZE = 4;
     public static final int DOUBLE_BYTE_SIZE = 8;
     public static final int SHORT_BYTE_SIZE = 2;
@@ -17,4 +20,19 @@ public class MagicMemorySizes {
     
     public static final int GLSL_MATRIX_3F_BYTE_SIZE = 48;
     public static final int MATRIX_4F_BYTE_SIZE = 64;
+    
+    public static long sizeofGLSLType(String type) {
+        return switch (type) {
+            // TODO: there are more types
+            case "int8_t", "uint8_t" -> 1;
+            case "int16_t", "uint16_t" -> 2;
+            case "float", "int", "uint" -> 4;
+            case "vec2", "ivec2", "uvec2" -> 8;
+            case "vec3", "ivec3", "uvec3" -> 12; // sizeof, not alignof
+            case "vec4", "ivec4", "uvec4" -> 16;
+            case "mat3" -> MagicMemorySizes.GLSL_MATRIX_3F_BYTE_SIZE;
+            case "mat4" -> MagicMemorySizes.MATRIX_4F_BYTE_SIZE;
+            default -> throw new IllegalStateException("Unexpected value: " + type);
+        };
+    }
 }

@@ -1,0 +1,16 @@
+{
+  "required": true,
+  "minVersion": "0.8.5",
+  "package": "graphics.cinnabar.core.mixin.mixins",
+  "compatibilityLevel": "JAVA_21",
+  "refmap": "cinnabar.refmap.json",
+  "mixins": [
+  ],
+  "client": [
+    "RenderSystemMixin",
+    "GameRendererMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

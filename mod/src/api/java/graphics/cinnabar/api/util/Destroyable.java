@@ -11,7 +11,7 @@ public interface Destroyable {
      * Some implementations may allow multiple calls, using this more as a reset function than an actual destroy
      * that is the exception, not the rule, check with exact implementation first
      *
-     * Any native resources (ie: vulkan objects) should be cleaned up after this function returns
+     * Any native resources (ie: vulkan objects) should be cleaned up by the time this function returns
      */
     @ThreadSafety.Any
     void destroy();

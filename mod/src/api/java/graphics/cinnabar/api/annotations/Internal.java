@@ -12,4 +12,5 @@ import java.lang.annotation.Target;
 public @interface Internal {
     // mark things as internal, even if they are public in the api package
     // don't use things with this annotation, even if accessible
+    String note() default "";
 }

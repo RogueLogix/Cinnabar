@@ -5,19 +5,21 @@ import graphics.cinnabar.api.annotations.Internal;
 import graphics.cinnabar.api.annotations.ThreadSafety;
 import graphics.cinnabar.api.threading.IWorkQueue;
 import graphics.cinnabar.api.threading.ThreadIndex;
+import org.jetbrains.annotations.Nullable;
 
-import java.util.Objects;
 import java.util.concurrent.atomic.AtomicLong;
 
 public class Counter implements IWorkQueue.ICounter {
     
     private final WorkQueue queue;
     
+    @Nullable
+    private Counter parent;
     private final AtomicLong value = new AtomicLong();
-    private final AtomicLong maximumCallbackCount = new AtomicLong();
-    private final AtomicLong callbackCount = new AtomicLong();
+    @Nullable
     private IWorkQueue.Work callback;
-    private boolean enqueuingItems = false;
+    private boolean callbackPending = false;
+    private boolean runningCallback = false;
     
     public Counter(WorkQueue queue) {
         this.queue = queue;
@@ -27,45 +29,51 @@ public class Counter implements IWorkQueue.ICounter {
     @API
     @Override
     @ThreadSafety.Many
-    public void setCallback(IWorkQueue.Work callback) {
+    public void setCallback(@Nullable IWorkQueue.Work callback) {
+        if (!isComplete()) {
+            throw new IllegalStateException("Cannot change callback while pending");
+        }
         this.callback = callback;
+    }
+    
+    @Override
+    public void setParent(IWorkQueue.ICounter iCounter) {
+        if (!isComplete()) {
+            throw new IllegalStateException("Cannot change parent while pending");
+        }
+        if (!(iCounter instanceof Counter counter)) {
+            throw new IllegalArgumentException();
+        }
+        this.parent = counter;
     }
     
     @API
     @Override
     @ThreadSafety.Any
     public void beginEnqueuing() {
-        enqueuingItems = true;
-        if (callbackCount.get() != maximumCallbackCount.get()) {
-            throw new IllegalStateException("Cannot begin enqueuing items until counter has been completed");
-        }
+        // no check is done on beginEnqueuing to allow multiple calls to it
+        // ie: begin begin end begin end end, is a valid pattern, and a callback will only be run once
+        callbackPending = true;
+        increment();
     }
     
     @API
     @Override
     @ThreadSafety.Any
     public void endEnqueuing() {
-        if (!enqueuingItems) {
-            return;
-        }
         queue.wakeThreads(true);
-        final var expectedCallCount = maximumCallbackCount.getAndIncrement();
-        enqueuingItems = false;
-        if (value.decrementAndGet() == 0) {
-            // if we hit zero, attempt to call the callback
-            if (callbackCount.compareAndExchange(expectedCallCount, expectedCallCount + 1) == expectedCallCount) {
-                // jobs finished before pushing completed, call callback here
-                callback.accept(Objects.requireNonNull(ThreadIndex.currentThreadIndex()));
-            }
-        }
+        decrement();
     }
     
     @ThreadSafety.Many
     private void increment() {
-        if (!enqueuingItems) {
-            throw new IllegalStateException("Must be enqueuing items to increment counter");
+        // increment without pending callback is allowed, for aggregation counters
+        final var newValue = value.incrementAndGet();
+        if (newValue == 1 && parent != null) {
+            // first increment, also increment the parent (if we have one)
+            parent.increment();
         }
-        if (value.incrementAndGet() <= 0) {
+        if (newValue <= 0) {
             throw new IllegalStateException("Counter over decremented");
         }
     }
@@ -77,10 +85,15 @@ public class Counter implements IWorkQueue.ICounter {
         if (value.decrementAndGet() == 0) {
             // if we hit zero, attempt to call the callback
             // if the atomic compare exchange fails, then items are still being added and will catch if all items completed before adding finished
-            final var expectedCallCount = maximumCallbackCount.get() - 1;
-            if (callbackCount.compareAndExchange(expectedCallCount, expectedCallCount + 1) == expectedCallCount) {
-                // counter finished, run callback
-                callback.accept(Objects.requireNonNull(ThreadIndex.currentThreadIndex()));
+            if (callbackPending && callback != null) {
+                runningCallback = true;
+                callbackPending = false;
+                callback.accept(ThreadIndex.currentThreadIndex());
+            }
+            if (parent != null) {
+                // last decrement, also decrement parent
+                // this is done after the callback so that if this counter was re-incremented, the parent will never hit 0 until this counter is fully complete
+                parent.decrement();
             }
         }
     }
@@ -100,7 +113,7 @@ public class Counter implements IWorkQueue.ICounter {
     @Override
     @ThreadSafety.Many
     public boolean isComplete() {
-        return value.get() == 0;
+        return value.get() == 0 && !callbackPending && !runningCallback;
     }
     
     @Override

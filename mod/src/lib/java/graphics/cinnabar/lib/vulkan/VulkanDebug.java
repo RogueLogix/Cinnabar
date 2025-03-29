@@ -44,18 +44,6 @@ public class VulkanDebug extends VkDebugUtilsMessengerCallbackEXT {
         final var callbackData = VkDebugUtilsMessengerCallbackDataEXT.create(pCallbackData);
         final var prefix = new StringBuilder();
         boolean printStackTrace = false;
-        if ((messageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT) != 0) {
-            prefix.append("ERROR ");
-        }
-        if ((messageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) != 0) {
-            prefix.append("WARNING ");
-        }
-        if ((messageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT) != 0) {
-            prefix.append("INFO ");
-        }
-        if ((messageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT) != 0) {
-            prefix.append("VERBOSE ");
-        }
         if ((messageTypes & VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT) != 0) {
             prefix.append("GENERAL ");
         }
@@ -68,6 +56,21 @@ public class VulkanDebug extends VkDebugUtilsMessengerCallbackEXT {
         }
         if (prefix.isEmpty()) {
             prefix.append("UNKNOWN ");
+        }
+        
+        if ((messageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT) != 0) {
+            prefix.append("ERROR ");
+        }
+        if ((messageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) != 0) {
+            prefix.append("WARNING ");
+        }
+        if ((messageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT) != 0) {
+            prefix.append("INFO ");
+            printStackTrace = false;
+        }
+        if ((messageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT) != 0) {
+            prefix.append("VERBOSE ");
+            printStackTrace = false;
         }
         
         final var messageString = callbackData.pMessageString();

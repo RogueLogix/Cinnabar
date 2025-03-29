@@ -3,9 +3,7 @@ package graphics.cinnabar.api.threading;
 import graphics.cinnabar.api.annotations.API;
 import graphics.cinnabar.api.annotations.Internal;
 import graphics.cinnabar.api.annotations.ThreadSafety;
-import org.jetbrains.annotations.Nullable;
 
-import java.util.Objects;
 import java.util.function.Consumer;
 
 @API
@@ -14,6 +12,7 @@ public interface IWorkQueue {
     @API(note = """
             Work and callbacks will always only ever be called by the main thread
             FIFO execution order as its inherently single threaded
+            no guarantee that execution will be this frame
             """)
     IWorkQueue MAIN_THREAD = Bootstrapper.MAIN_THREAD;
     
@@ -109,6 +108,9 @@ public interface IWorkQueue {
          */
         @ThreadSafety.Any
         void setCallback(Work callback);
+        
+        @ThreadSafety.Any
+        void setParent(ICounter counter);
         
         @API
         @ThreadSafety.Any
