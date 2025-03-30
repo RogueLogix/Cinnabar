@@ -15,7 +15,6 @@ import graphics.cinnabar.api.memory.MagicMemorySizes;
 import graphics.cinnabar.api.util.Destroyable;
 import graphics.cinnabar.api.util.Triple;
 import graphics.cinnabar.core.b3d.buffers.PersistentWriteBuffer;
-import graphics.cinnabar.core.b3d.buffers.TransientWriteBuffer;
 import graphics.cinnabar.core.b3d.command.CinnabarCommandEncoder;
 import graphics.cinnabar.core.b3d.pipeline.CinnabarPipeline;
 import graphics.cinnabar.core.b3d.texture.CinnabarGpuTexture;
@@ -159,7 +158,7 @@ public class CinnabarDevice implements CinnabarGpuDevice {
         deviceTransientMemoryPool.destroy();
         devicePersistentMemoryPool.destroy();
         
-        toDestroy.forEach(Destroyable::destroy);
+        toDestroy.forEach(list -> list.forEach(Destroyable::destroy));
         toDestroy.clear();
         shutdownDestroy.forEach(Destroyable::destroy);
         shutdownDestroy.clear();
@@ -169,15 +168,20 @@ public class CinnabarDevice implements CinnabarGpuDevice {
         CINNABAR_CORE_LOG.info("CinnabarDevice Shutdown");
     }
     
-    ReferenceArrayList<Destroyable> toDestroy = new ReferenceArrayList<>();
+    ReferenceArrayList<ReferenceArrayList<Destroyable>> toDestroy = new ReferenceArrayList<>();
     ReferenceArrayList<Destroyable> shutdownDestroy = new ReferenceArrayList<>();
+    {
+        for (int i = 0; i < MagicNumbers.MaximumFramesInFlight; i++) {
+            toDestroy.add(new ReferenceArrayList<>());
+        }
+    }
     
     public void newFrame() {
         currentFrame++;
         currentFrame %= MagicNumbers.MaximumFramesInFlight;
-        vkDeviceWaitIdle(vkDevice);
-        toDestroy.forEach(Destroyable::destroy);
-        toDestroy.clear();
+        vkDeviceWaitIdle(vkDevice); // TODO: wait on a semaphore for this frame index instead
+        toDestroy.get(currentFrameIndex()).forEach(Destroyable::destroy);
+        toDestroy.get(currentFrameIndex()).clear();
     }
     
     public int currentFrameIndex() {
@@ -185,7 +189,7 @@ public class CinnabarDevice implements CinnabarGpuDevice {
     }
     
     public <T extends Destroyable> T destroyEndOfFrame(T destroyable) {
-        toDestroy.add(destroyable);
+        toDestroy.get(currentFrameIndex()).add(destroyable);
         return destroyable;
     }
     

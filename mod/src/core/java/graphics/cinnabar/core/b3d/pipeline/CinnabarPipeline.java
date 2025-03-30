@@ -169,11 +169,14 @@ public class CinnabarPipeline implements CompiledRenderPipeline, VulkanObject {
             rasterizationState.flags(0);
             rasterizationState.depthClampEnable(false);
             rasterizationState.rasterizerDiscardEnable(false);
-            rasterizationState.polygonMode(VK_POLYGON_MODE_FILL);
+            rasterizationState.polygonMode(switch (pipeline.getPolygonMode()) {
+                case FILL -> VK_POLYGON_MODE_FILL;
+                case WIREFRAME -> VK_POLYGON_MODE_LINE;
+            });
             rasterizationState.cullMode(pipeline.isCull() ? VK_CULL_MODE_BACK_BIT : VK_CULL_MODE_NONE);
             // negative viewport height, this is fine
             rasterizationState.frontFace(VK_FRONT_FACE_COUNTER_CLOCKWISE);
-            rasterizationState.depthBiasEnable(false);
+            rasterizationState.depthBiasEnable(pipeline.getDepthBiasConstant() != 0.0f || pipeline.getDepthBiasScaleFactor() != 0.0f);
             rasterizationState.depthBiasConstantFactor(pipeline.getDepthBiasConstant());
             rasterizationState.depthBiasClamp(0);
             rasterizationState.depthBiasSlopeFactor(pipeline.getDepthBiasScaleFactor());
@@ -195,7 +198,6 @@ public class CinnabarPipeline implements CompiledRenderPipeline, VulkanObject {
                 case LESS_DEPTH_TEST -> VK_COMPARE_OP_LESS;
                 case GREATER_DEPTH_TEST -> VK_COMPARE_OP_GREATER;
             });
-            depthStencilState.depthCompareOp(VK_COMPARE_OP_ALWAYS);
             
             
             final var blendAttachment = VkPipelineColorBlendAttachmentState.calloc(1, stack);
@@ -210,8 +212,8 @@ public class CinnabarPipeline implements CompiledRenderPipeline, VulkanObject {
                 blendAttachment.srcAlphaBlendFactor(vkFactor(blendFunc.sourceAlpha()));
                 blendAttachment.dstAlphaBlendFactor(vkFactor(blendFunc.destAlpha()));
                 blendAttachment.alphaBlendOp(VK_BLEND_OP_ADD);
-                blendAttachment.colorWriteMask((pipeline.isWriteColor() ? (VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT) : 0) | (pipeline.isWriteAlpha() ? VK_COLOR_COMPONENT_A_BIT : 0));
             }
+            blendAttachment.colorWriteMask((pipeline.isWriteColor() ? (VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT) : 0) | (pipeline.isWriteAlpha() ? VK_COLOR_COMPONENT_A_BIT : 0));
             
             final var blendState = VkPipelineColorBlendStateCreateInfo.calloc(stack).sType$Default();
             blendState.logicOpEnable(pipeline.getColorLogic() != LogicOp.NONE);

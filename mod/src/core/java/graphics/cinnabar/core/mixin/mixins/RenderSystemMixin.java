@@ -35,10 +35,10 @@ public class RenderSystemMixin {
         
         try (ByteBufferBuilder bytebufferbuilder = new ByteBufferBuilder(DefaultVertexFormat.POSITION.getVertexSize() * 4)) {
             BufferBuilder bufferbuilder = new BufferBuilder(bytebufferbuilder, VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION);
-            bufferbuilder.addVertex(0.0F, 0.0F, 0.0F);
-            bufferbuilder.addVertex(1.0F, 0.0F, 0.0F);
             bufferbuilder.addVertex(1.0F, 1.0F, 0.0F);
             bufferbuilder.addVertex(0.0F, 1.0F, 0.0F);
+            bufferbuilder.addVertex(0.0F, 0.0F, 0.0F);
+            bufferbuilder.addVertex(1.0F, 0.0F, 0.0F);
             
             try (MeshData meshdata = bufferbuilder.buildOrThrow()) {
                 QUAD_VERTEX_BUFFER = RenderSystem.getDevice().createBuffer(() -> "Quad", BufferType.VERTICES, BufferUsage.STATIC_WRITE, meshdata.vertexBuffer());

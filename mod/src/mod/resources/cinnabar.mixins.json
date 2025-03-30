@@ -8,7 +8,8 @@
   ],
   "client": [
     "RenderSystemMixin",
-    "GameRendererMixin"
+    "GameRendererMixin",
+    "TimerQueryMixin"
   ],
   "injectors": {
     "defaultRequire": 1

@@ -400,7 +400,7 @@ public class CinnabarCommandEncoder implements CommandEncoder, Destroyable {
         }
         
         device.newFrame();
-        vkDeviceWaitIdle(device.vkDevice);
         beginCommandBuffers();
+        fullBarrier(beginFrameTransferCommandBuffer);
     }
 }
