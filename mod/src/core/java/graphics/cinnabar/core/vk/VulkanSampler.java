@@ -66,7 +66,7 @@ public class VulkanSampler {
         
         createInfo.magFilter(samplerInfo.minMagLinear ? VK_FILTER_LINEAR : VK_FILTER_NEAREST);
         createInfo.minFilter(samplerInfo.minMagLinear ? VK_FILTER_LINEAR : VK_FILTER_NEAREST);
-        createInfo.mipmapMode(samplerInfo.minMagLinear ? VK_SAMPLER_MIPMAP_MODE_LINEAR : VK_SAMPLER_MIPMAP_MODE_NEAREST);
+        createInfo.mipmapMode(VK_SAMPLER_MIPMAP_MODE_LINEAR);
         createInfo.addressModeU(samplerInfo.edgeMode);
         createInfo.addressModeV(samplerInfo.edgeMode);
         createInfo.mipLodBias(samplerInfo.lodBias);
