@@ -48,7 +48,7 @@ public class VulkanStartup {
     );
     
     
-    public static Triple<VkInstance, Long, List<String>> createVkInstance(boolean debug, VulkanDebug.MessageSeverity[] messageSeverities, VulkanDebug.MessageType[] messageTypes) {
+    public static Triple<VkInstance, Long, List<String>> createVkInstance(boolean validationLayers, VulkanDebug.MessageSeverity[] messageSeverities, VulkanDebug.MessageType[] messageTypes) {
         try (var stack = MemoryStack.stackPush()) {
             final var appInfo = VkApplicationInfo.calloc(stack);
             final var appName = stack.UTF8("Minecraft");
@@ -72,7 +72,7 @@ public class VulkanStartup {
             
             @Nullable
             VkDebugUtilsMessengerCreateInfoEXT debugCreateInfo = null;
-            if (FMLLoader.isProduction() && debug) {
+            if (FMLLoader.isProduction() && validationLayers) {
                 TinyFileDialogs.tinyfd_messageBox("Minecraft: Cinnabar", """
                         Debug mode enabled
                         Enabling this option significantly hurts performance, and may result in crashes due to debug checks
@@ -89,7 +89,7 @@ public class VulkanStartup {
             final var extensionProperties = VkExtensionProperties.calloc(extensionCount.get(0), stack);
             vkEnumerateInstanceExtensionProperties((String) null, extensionCount, extensionProperties);
             
-            if (debug) {
+            if (validationLayers) {
                 CINNABAR_CORE_LOG.info("Vulkan validation layers requested");
                 boolean hasKHRValidation = false;
                 for (int i = 0; i < layerProperties.capacity(); i++) {

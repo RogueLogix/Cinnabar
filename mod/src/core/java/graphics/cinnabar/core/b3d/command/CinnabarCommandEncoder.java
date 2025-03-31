@@ -6,10 +6,12 @@ import com.mojang.blaze3d.systems.CommandEncoder;
 import com.mojang.blaze3d.systems.RenderPass;
 import com.mojang.blaze3d.textures.GpuTexture;
 import graphics.cinnabar.api.exceptions.NotImplemented;
+import graphics.cinnabar.api.memory.PointerWrapper;
 import graphics.cinnabar.api.util.Destroyable;
 import graphics.cinnabar.core.b3d.CinnabarDevice;
 import graphics.cinnabar.core.b3d.buffers.CinnabarGpuBuffer;
 import graphics.cinnabar.core.b3d.buffers.PersistentWriteBuffer;
+import graphics.cinnabar.core.b3d.buffers.TransientWriteBuffer;
 import graphics.cinnabar.core.b3d.renderpass.CinnabarRenderPass;
 import graphics.cinnabar.core.b3d.texture.CinnabarGpuTexture;
 import graphics.cinnabar.core.b3d.window.CinnabarWindow;
@@ -26,9 +28,11 @@ import org.lwjgl.vulkan.*;
 
 import java.nio.ByteBuffer;
 import java.nio.IntBuffer;
+import java.util.List;
 import java.util.OptionalDouble;
 import java.util.OptionalInt;
 
+import static graphics.cinnabar.api.exceptions.VkException.checkVkCode;
 import static org.lwjgl.vulkan.KHRSwapchain.VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
 import static org.lwjgl.vulkan.VK13.*;
 
@@ -44,17 +48,31 @@ public class CinnabarCommandEncoder implements CommandEncoder, Destroyable {
     private VkCommandBuffer mainDrawCommandBuffer;
     private VkCommandBuffer blitCommandBuffer;
     
+    private final long interFrameSemaphore;
+    private long currentFrameNumber = MagicNumbers.MaximumFramesInFlight;
+    
     public CinnabarCommandEncoder(CinnabarDevice device) {
         this.device = device;
         for (int i = 0; i < MagicNumbers.MaximumFramesInFlight; i++) {
             commandPools.add(new VulkanTransientCommandBufferPool(device, device.graphicsQueueFamily));
         }
         beginCommandBuffers();
+        
+        try (final var stack = memoryStack.push()){
+            final var typeCreateInfo = VkSemaphoreTypeCreateInfo.calloc(stack).sType$Default();
+            typeCreateInfo.semaphoreType(VK_SEMAPHORE_TYPE_TIMELINE);
+            typeCreateInfo.initialValue(MagicNumbers.MaximumFramesInFlight - 1);
+            final var createInfo = VkSemaphoreCreateInfo.calloc(stack).sType$Default().pNext(typeCreateInfo);
+            final var semaphoreVal = stack.longs(0);
+            checkVkCode(vkCreateSemaphore(device.vkDevice, createInfo, null, semaphoreVal));
+            interFrameSemaphore = semaphoreVal.get(0);
+        }
     }
     
     @Override
     public void destroy() {
         commandPools.forEach(VulkanTransientCommandBufferPool::destroy);
+        vkDestroySemaphore(device.vkDevice, interFrameSemaphore, null);
     }
     
     private VulkanTransientCommandBufferPool currentCommandPool() {
@@ -62,10 +80,10 @@ public class CinnabarCommandEncoder implements CommandEncoder, Destroyable {
     }
     
     private void beginCommandBuffers() {
-        currentCommandPool().reset(true, false);
-        beginFrameTransferCommandBuffer = currentCommandPool().alloc();
-        mainDrawCommandBuffer = currentCommandPool().alloc();
-        blitCommandBuffer = currentCommandPool().alloc();
+        currentCommandPool().reset(true, true);
+        beginFrameTransferCommandBuffer = currentCommandPool().alloc("beginFrameTransfer" + currentFrameNumber);
+        mainDrawCommandBuffer = currentCommandPool().alloc("mainDraw" + currentFrameNumber);
+        blitCommandBuffer = currentCommandPool().alloc("blit" + currentFrameNumber);
         try (final var stack = this.memoryStack.push()) {
             final var beginInfo = VkCommandBufferBeginInfo.calloc(stack).sType$Default();
             vkBeginCommandBuffer(beginFrameTransferCommandBuffer, beginInfo);
@@ -167,30 +185,35 @@ public class CinnabarCommandEncoder implements CommandEncoder, Destroyable {
     public void writeToBuffer(GpuBuffer buffer, ByteBuffer data, int offset) {
         // the transient write buffer will create a new GPU-side buffer for every upload.
         // those can all always be done at the beginning of the frame
-        writeToBuffer((CinnabarGpuBuffer) buffer, data, offset, buffer instanceof PersistentWriteBuffer);
+        writeToBuffer((CinnabarGpuBuffer) buffer, new PointerWrapper(MemoryUtil.memAddress(data), data.remaining()), offset);
     }
     
-    public void writeToBuffer(CinnabarGpuBuffer buffer, ByteBuffer data, int offset, boolean inlineUpload) {
+    public void writeToBuffer(CinnabarGpuBuffer buffer, PointerWrapper data, int offset) {
         
         try (final var stack = this.memoryStack.push()) {
-            final var commandBuffer = inlineUpload ? mainDrawCommandBuffer : beginFrameTransferCommandBuffer;
+            final var commandBuffer = buffer instanceof PersistentWriteBuffer ? mainDrawCommandBuffer : beginFrameTransferCommandBuffer;
             
             // TODO: sync last buffer write, if a persistent buffer
             //       generally those aren't used for multi-write things, so that should be rare enough
             final var targetBuffer = buffer.getBufferForWrite();
-            final var uploadBuffer = new VkBuffer(device, data.remaining() - offset, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, device.hostTransientMemoryPool());
+            final var uploadBuffer = new VkBuffer(device, data.size() - offset, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, device.hostTransientMemoryPool());
             device.destroyEndOfFrame(uploadBuffer);
             
             // TODO: memory checking? requires registering the data ByteBuffer
-            LibCString.nmemcpy(uploadBuffer.allocation.cpu().hostPointer.pointer(), MemoryUtil.memAddress(data) + offset, data.remaining() - offset);
+            LibCString.nmemcpy(uploadBuffer.allocation.cpu().hostPointer.pointer(), data.pointer() + offset, data.size() - offset);
             
             final var copyRegion = VkBufferCopy.calloc(1, stack);
             copyRegion.srcOffset(0);
             copyRegion.dstOffset(0);
-            copyRegion.size(data.remaining() - offset);
+            copyRegion.size(data.size() - offset);
             copyRegion.limit(1);
             vkCmdCopyBuffer(commandBuffer, uploadBuffer.handle, targetBuffer.handle, copyRegion);
-            fullBarrier(commandBuffer);
+            
+            if (buffer instanceof TransientWriteBuffer transientWriteBuffer) {
+                transientWriteBuffer.write(uploadBuffer.allocation.cpu());
+            } else {
+                fullBarrier(commandBuffer);
+            }
             
             // because of limitations/guarantees from B3D, I can barrier only at renderpass start (or command buffer end for the begin frame transfer
             // there is no buffer to buffer copy (yet), nor buffer to texture copy
@@ -312,8 +335,43 @@ public class CinnabarCommandEncoder implements CommandEncoder, Destroyable {
     }
     
     @Override
-    public void copyTextureToTexture(GpuTexture p_410347_, GpuTexture p_410302_, int p_410741_, int p_409745_, int p_409805_, int p_409992_, int p_409918_, int p_409592_, int p_410300_) {
-        throw new NotImplemented();
+    public void copyTextureToTexture(GpuTexture src, GpuTexture dst, int mip, int srcX, int srcY, int dstX, int dstY, int width, int height) {
+        final var cinnabarSrc = (CinnabarGpuTexture) src;
+        final var cinnabarDst = (CinnabarGpuTexture) dst;
+        try (final var stack = memoryStack.push()) {
+            
+            final var blits = VkImageBlit.calloc(1, stack);
+            
+            final var subresource = blits.srcSubresource();
+            
+            int aspectMask = 0;
+            if (src.getFormat().hasColorAspect()) {
+                aspectMask |= VK_IMAGE_ASPECT_COLOR_BIT;
+            }
+            
+            if (src.getFormat().hasDepthAspect()) {
+                aspectMask |= VK_IMAGE_ASPECT_DEPTH_BIT;
+            }
+            
+            if (src.getFormat().hasStencilAspect()) {
+                aspectMask |= VK_IMAGE_ASPECT_STENCIL_BIT;
+            }
+            
+            subresource.aspectMask(aspectMask);
+            subresource.mipLevel(mip);
+            subresource.baseArrayLayer(0);
+            subresource.layerCount(1);
+            blits.dstSubresource(subresource);
+            
+            blits.srcOffsets(0).set(srcX, srcY, 0);
+            blits.srcOffsets(1).set(width, height, 1);
+            blits.dstOffsets(0).set(dstX, dstY, 0);
+            blits.dstOffsets(1).set(width, height, 1);
+            
+            fullBarrier(mainDrawCommandBuffer);
+            vkCmdBlitImage(mainDrawCommandBuffer, cinnabarSrc.imageHandle, VK_IMAGE_LAYOUT_GENERAL, cinnabarDst.imageHandle, VK_IMAGE_LAYOUT_GENERAL, blits,VK_FILTER_NEAREST);
+            fullBarrier(mainDrawCommandBuffer);
+        }
     }
     
     @Override
@@ -388,19 +446,50 @@ public class CinnabarCommandEncoder implements CommandEncoder, Destroyable {
         // only the blit needs to wait
         try (final var stack = memoryStack.push()) {
             final var submitInfo = VkSubmitInfo.calloc(2, stack).sType$Default();
+            
             submitInfo.pCommandBuffers(stack.pointers(beginFrameTransferCommandBuffer, mainDrawCommandBuffer));
+            
             submitInfo.position(1).sType$Default();
+            final var timelineSubmitInfo = VkTimelineSemaphoreSubmitInfo.calloc(stack).sType$Default();
+            submitInfo.pNext(timelineSubmitInfo);
+            
             submitInfo.pWaitSemaphores(stack.longs(swapchain.semaphore()));
             submitInfo.pWaitDstStageMask(stack.ints(VK_PIPELINE_STAGE_TRANSFER_BIT));
             submitInfo.waitSemaphoreCount(1);
+            
             submitInfo.pCommandBuffers(stack.pointers(blitCommandBuffer));
-            submitInfo.pSignalSemaphores(stack.longs(swapchain.semaphore()));
+            
+            timelineSubmitInfo.pSignalSemaphoreValues(stack.longs(currentFrameNumber, 0));
+            submitInfo.pSignalSemaphores(stack.longs(interFrameSemaphore, swapchain.semaphore()));
+            
             submitInfo.position(0);
             vkQueueSubmit(device.graphicsQueue, submitInfo, VK_NULL_HANDLE);
+            
+            final var waitInfo = VkSemaphoreWaitInfo.calloc(stack).sType$Default();
+            waitInfo.semaphoreCount(1);
+            waitInfo.pSemaphores(stack.longs(interFrameSemaphore));
+            // wait for the last time this frame index was submitted
+            // the semaphore starts at MaximumFramesInFlight, so this returns immediately for the first few frames
+            waitInfo.pValues(stack.longs(currentFrameNumber - (MagicNumbers.MaximumFramesInFlight - 1)));
+            if(checkVkCode(vkWaitSemaphores(device.vkDevice, waitInfo, -1)) != VK_SUCCESS) {
+                throw new IllegalStateException();
+            }
         }
         
+        currentFrameNumber++;
         device.newFrame();
         beginCommandBuffers();
+        device.startFrame();
         fullBarrier(beginFrameTransferCommandBuffer);
+    }
+    
+    public List<String> debugStrings() {
+        int allocatedBuffers = 0;
+        int usedBuffers = 0;
+        for (VulkanTransientCommandBufferPool commandPool : commandPools) {
+            allocatedBuffers += commandPool.allocatedBuffers();
+            usedBuffers += commandPool.usedBuffers();
+        }
+        return List.of(String.format("Command Buffers %s/%s", usedBuffers, allocatedBuffers));
     }
 }

@@ -88,6 +88,16 @@ public class TransientPool implements VkMemoryPool, VkMemoryPool.Transient {
     }
     
     @Override
+    public long totalAllocatedFromVulkan() {
+        return memoryBlocks.size() * blockSize;
+    }
+    
+    @Override
+    public long liveAllocated() {
+        return currentMemoryBlock * blockSize + currentMemoryBlockOffset;
+    }
+    
+    @Override
     public void reset() {
         currentMemoryBlock = 0;
         currentMemoryBlockOffset = 0;

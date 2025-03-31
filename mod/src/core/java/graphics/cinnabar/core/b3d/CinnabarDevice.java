@@ -6,7 +6,6 @@ import com.mojang.blaze3d.buffers.GpuBuffer;
 import com.mojang.blaze3d.pipeline.CompiledRenderPipeline;
 import com.mojang.blaze3d.pipeline.RenderPipeline;
 import com.mojang.blaze3d.shaders.ShaderType;
-import com.mojang.blaze3d.systems.CommandEncoder;
 import com.mojang.blaze3d.textures.GpuTexture;
 import com.mojang.blaze3d.textures.TextureFormat;
 import graphics.cinnabar.api.CinnabarGpuDevice;
@@ -14,7 +13,9 @@ import graphics.cinnabar.api.exceptions.NotImplemented;
 import graphics.cinnabar.api.memory.MagicMemorySizes;
 import graphics.cinnabar.api.util.Destroyable;
 import graphics.cinnabar.api.util.Triple;
+import graphics.cinnabar.core.CinnabarCore;
 import graphics.cinnabar.core.b3d.buffers.PersistentWriteBuffer;
+import graphics.cinnabar.core.b3d.buffers.TransientWriteBuffer;
 import graphics.cinnabar.core.b3d.command.CinnabarCommandEncoder;
 import graphics.cinnabar.core.b3d.pipeline.CinnabarPipeline;
 import graphics.cinnabar.core.b3d.texture.CinnabarGpuTexture;
@@ -31,6 +32,10 @@ import it.unimi.dsi.fastutil.ints.IntReferencePair;
 import it.unimi.dsi.fastutil.objects.ReferenceArrayList;
 import net.minecraft.client.Minecraft;
 import net.minecraft.resources.ResourceLocation;
+import net.neoforged.bus.api.SubscribeEvent;
+import net.neoforged.fml.loading.FMLEnvironment;
+import net.neoforged.neoforge.client.event.CustomizeGuiOverlayEvent;
+import net.neoforged.neoforge.common.NeoForge;
 import org.jetbrains.annotations.Nullable;
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.vulkan.*;
@@ -86,9 +91,13 @@ public class CinnabarDevice implements CinnabarGpuDevice {
     private final BiFunction<ResourceLocation, ShaderType, String> shaderSourceProvider;
     
     public CinnabarDevice(long windowHandle, int debugLevel, boolean syncDebug, BiFunction<ResourceLocation, ShaderType, String> shaderSourceProvider, boolean debugLabels) {
+        if (CinnabarCore.cinnabarDeviceSingleton != null) {
+            throw new IllegalStateException("Cannot have more that one CinnabarDevice active at a time");
+        }
+        CinnabarCore.cinnabarDeviceSingleton = this;
         this.shaderSourceProvider = shaderSourceProvider;
         CINNABAR_CORE_LOG.info("Initializing CinnabarDevice");
-        final var instanceAndDebugCallback = VulkanStartup.createVkInstance(true, new VulkanDebug.MessageSeverity[]{VulkanDebug.MessageSeverity.ERROR, VulkanDebug.MessageSeverity.WARNING, VulkanDebug.MessageSeverity.INFO}, new VulkanDebug.MessageType[]{VulkanDebug.MessageType.GENERAL, VulkanDebug.MessageType.VALIDATION});
+        final var instanceAndDebugCallback = VulkanStartup.createVkInstance(false, new VulkanDebug.MessageSeverity[]{VulkanDebug.MessageSeverity.ERROR, VulkanDebug.MessageSeverity.WARNING, VulkanDebug.MessageSeverity.INFO}, new VulkanDebug.MessageType[]{VulkanDebug.MessageType.GENERAL, VulkanDebug.MessageType.VALIDATION});
         vkInstance = instanceAndDebugCallback.first();
         debugCallback = instanceAndDebugCallback.second();
         enabledLayersAndInstanceExtensions = instanceAndDebugCallback.third();
@@ -141,14 +150,20 @@ public class CinnabarDevice implements CinnabarGpuDevice {
         hostTransientMemoryPools = List.of(hostTransientPools);
         
         commandEncoder = new CinnabarCommandEncoder(this);
-        ((CinnabarWindow)Minecraft.getInstance().getWindow()).attachDevice(this);
+        ((CinnabarWindow) Minecraft.getInstance().getWindow()).attachDevice(this);
+        
+        NeoForge.EVENT_BUS.register(this);
     }
     
     @Override
     public void close() {
+        NeoForge.EVENT_BUS.unregister(this);
+        
         clearPipelineCache();
         
-        ((CinnabarWindow)Minecraft.getInstance().getWindow()).detachDevice();
+        vkDeviceWaitIdle(vkDevice);
+        
+        ((CinnabarWindow) Minecraft.getInstance().getWindow()).detachDevice();
         
         VulkanSampler.shutdown();
         
@@ -163,13 +178,18 @@ public class CinnabarDevice implements CinnabarGpuDevice {
         shutdownDestroy.forEach(Destroyable::destroy);
         shutdownDestroy.clear();
         vkDestroyDevice(vkDevice, null);
-        vkDestroyDebugUtilsMessengerEXT(vkInstance, debugCallback, null);
+        if (debugCallback != -1) {
+            vkDestroyDebugUtilsMessengerEXT(vkInstance, debugCallback, null);
+        }
         vkDestroyInstance(vkInstance, null);
+        CinnabarCore.cinnabarDeviceSingleton = null;
         CINNABAR_CORE_LOG.info("CinnabarDevice Shutdown");
     }
     
+    ReferenceArrayList<Destroyable> submitDestroy = new ReferenceArrayList<>();
     ReferenceArrayList<ReferenceArrayList<Destroyable>> toDestroy = new ReferenceArrayList<>();
     ReferenceArrayList<Destroyable> shutdownDestroy = new ReferenceArrayList<>();
+    
     {
         for (int i = 0; i < MagicNumbers.MaximumFramesInFlight; i++) {
             toDestroy.add(new ReferenceArrayList<>());
@@ -178,14 +198,24 @@ public class CinnabarDevice implements CinnabarGpuDevice {
     
     public void newFrame() {
         currentFrame++;
-        currentFrame %= MagicNumbers.MaximumFramesInFlight;
-        vkDeviceWaitIdle(vkDevice); // TODO: wait on a semaphore for this frame index instead
+    }
+    
+    public void startFrame() {
+        submitDestroy.forEach(Destroyable::destroy);
+        submitDestroy.clear();
         toDestroy.get(currentFrameIndex()).forEach(Destroyable::destroy);
         toDestroy.get(currentFrameIndex()).clear();
+        hostTransientMemoryPools.get(currentFrameIndex()).reset();
+        deviceTransientMemoryPool.reset();
     }
     
     public int currentFrameIndex() {
-        return currentFrame;
+        return currentFrame % MagicNumbers.MaximumFramesInFlight;
+    }
+    
+    public <T extends Destroyable> T destroyAfterSubmit(T destroyable) {
+        submitDestroy.add(destroyable);
+        return destroyable;
     }
     
     public <T extends Destroyable> T destroyEndOfFrame(T destroyable) {
@@ -252,8 +282,24 @@ public class CinnabarDevice implements CinnabarGpuDevice {
         return hostTransientMemoryPools.get(currentFrameIndex());
     }
     
-    // --------- CinnabarGpuDevice ---------
+    @SubscribeEvent
+    private void handleDebugTextEvent(CustomizeGuiOverlayEvent.DebugText event) {
+        final var list = event.getRight();
+        list.add("");
+        if (validationLayersEnabled()) {
+            list.add("Validation layers enabled");
+        } else if (!FMLEnvironment.production) {
+            list.add("Validation layers disabled");
+        }
+        list.add(String.format("Pending destroys: %05d", toDestroy.stream().mapToInt(ReferenceArrayList::size).sum() + submitDestroy.size()));
+        list.add(String.format("Device persistent memory: %d/%dMB", MathUtil.BtoMB(devicePersistentMemoryPool.liveAllocated()), MathUtil.BtoMB(devicePersistentMemoryPool.totalAllocatedFromVulkan())));
+        list.add(String.format("Device transient memory: %d/%dMB", MathUtil.BtoMB(deviceTransientMemoryPool.liveAllocated()), MathUtil.BtoMB(deviceTransientMemoryPool.totalAllocatedFromVulkan())));
+        list.add(String.format("Host persistent memory: %d/%dMB", MathUtil.BtoMB(hostPersistentMemoryPool.liveAllocated()), MathUtil.BtoMB(hostPersistentMemoryPool.totalAllocatedFromVulkan())));
+        list.add(String.format("Host transient memory: %d/%dMB", MathUtil.BtoMB(hostTransientMemoryPools.stream().mapToLong(VkMemoryPool::liveAllocated).sum()), MathUtil.BtoMB(hostTransientMemoryPools.stream().mapToLong(VkMemoryPool::totalAllocatedFromVulkan).sum())));
+        list.addAll(commandEncoder.debugStrings());
+    }
     
+    // --------- CinnabarGpuDevice ---------
     
     @Override
     public VkInstance vkInstance() {
@@ -265,6 +311,18 @@ public class CinnabarDevice implements CinnabarGpuDevice {
         return vkDevice;
     }
     
+    public boolean cinnabarDebugModeEnabled() {
+        return false;
+    }
+    
+    public boolean validationLayersEnabled() {
+        return enabledLayersAndInstanceExtensions.contains("VK_LAYER_KHRONOS_validation");
+    }
+    
+    public boolean debugMarkerEnabled() {
+        return debugMarkerEnabled;
+    }
+    
     // --------- NeoGpuDevice ---------
     
     // --------- Vanilla GpuDevice ---------
@@ -272,7 +330,7 @@ public class CinnabarDevice implements CinnabarGpuDevice {
     private final CinnabarCommandEncoder commandEncoder;
     
     @Override
-    public CommandEncoder createCommandEncoder() {
+    public CinnabarCommandEncoder createCommandEncoder() {
         return commandEncoder;
     }
     
@@ -338,7 +396,7 @@ public class CinnabarDevice implements CinnabarGpuDevice {
     
     @Override
     public String getBackendName() {
-        return "Cinnabar VK";
+        return "CinnabarVK";
     }
     
     @Override

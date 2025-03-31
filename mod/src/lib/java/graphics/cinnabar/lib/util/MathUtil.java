@@ -20,4 +20,12 @@ public class MathUtil {
         }
         return size;
     }
+    
+    public static long BtoKB(long bytes) {
+        return bytes / 1024;
+    }
+    
+    public static long BtoMB(long bytes) {
+        return BtoKB(bytes) / 1024;
+    }
 }

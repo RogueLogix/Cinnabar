@@ -36,6 +36,7 @@ public class PersistentPool implements VkMemoryPool.Dedicated, VkMemoryPool.Req2
     protected final int memoryType;
     protected final int memoryTypeBit;
     protected final long blockSize;
+    protected long liveAllocations = 0;
     
     protected final Long2ReferenceMap<@Nullable AllocationBlock> memoryToBlockMap = new Long2ReferenceOpenHashMap<>();
     private final ReferenceArrayList<AllocationBlock> blocks = new ReferenceArrayList<>();
@@ -77,6 +78,16 @@ public class PersistentPool implements VkMemoryPool.Dedicated, VkMemoryPool.Req2
     
     public VkMemoryAllocation alloc(VkMemoryRequirements memoryRequirements) {
         return alloc(memoryRequirements, false);
+    }
+    
+    @Override
+    public long totalAllocatedFromVulkan() {
+        return blockSize * blocks.size() + dedicatedBlocks.stream().mapToLong(block -> block.size).sum();
+    }
+    
+    @Override
+    public long liveAllocated() {
+        return liveAllocations;
     }
     
     public VkMemoryAllocation alloc(VkMemoryRequirements memoryRequirements, boolean dedicated) {
@@ -176,7 +187,7 @@ public class PersistentPool implements VkMemoryPool.Dedicated, VkMemoryPool.Req2
         // TODO:
     }
     
-    public static class CPU extends PersistentPool implements VkMemoryPool.Transient.CPU, VkMemoryPool.Dedicated.CPU, Req2.Dedicated.CPU {
+    public static class CPU extends PersistentPool implements VkMemoryPool.CPU, VkMemoryPool.Dedicated.CPU, Req2.Dedicated.CPU {
         public CPU(CinnabarDevice device, int memoryType, long blockSize) {
             super(device, memoryType, blockSize);
         }
@@ -205,7 +216,6 @@ public class PersistentPool implements VkMemoryPool.Dedicated, VkMemoryPool.Req2
         public VkMemoryAllocation.CPU alloc(VkMemoryRequirements memoryRequirements, boolean dedicated) {
             return attachHostPtr(super.alloc(memoryRequirements, dedicated));
         }
-        
         
     }
     
@@ -286,6 +296,7 @@ public class PersistentPool implements VkMemoryPool.Dedicated, VkMemoryPool.Req2
             if (allocatedSpace == null) {
                 throw new IllegalStateException("Failed to make allocation in block");
             }
+            allocator.liveAllocations += size;
             return new VkMemoryAllocation(handle, new MemoryRange(allocatedSpace.offset(), size), allocator::free);
         }
         
@@ -328,6 +339,7 @@ public class PersistentPool implements VkMemoryPool.Dedicated, VkMemoryPool.Req2
             if (dedicated) {
                 throw new IllegalStateException();
             }
+            allocator.liveAllocations -= allocation.range.size();
             var info = new MemoryRange(allocation.range.offset(), allocation.range.size());
             freeAllocations.add(info);
             var index = freeAllocations.indexOf(info);

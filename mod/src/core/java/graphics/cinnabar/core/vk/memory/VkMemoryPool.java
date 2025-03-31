@@ -1,9 +1,7 @@
 package graphics.cinnabar.core.vk.memory;
 
 import graphics.cinnabar.api.annotations.API;
-import graphics.cinnabar.api.annotations.Constant;
 import graphics.cinnabar.api.annotations.ThreadSafety;
-import graphics.cinnabar.api.exceptions.RedirectImplemented;
 import graphics.cinnabar.api.util.Destroyable;
 import graphics.cinnabar.core.vk.VulkanNameable;
 import org.jetbrains.annotations.ApiStatus;
@@ -19,6 +17,10 @@ public interface VkMemoryPool extends Destroyable, VulkanNameable {
     @ThreadSafety.Any
     VkMemoryAllocation alloc(VkMemoryRequirements memoryRequirements);
     
+    long totalAllocatedFromVulkan();
+    
+    long liveAllocated();
+    
     interface CPU extends VkMemoryPool {
         @ThreadSafety.Any
         VkMemoryAllocation.CPU alloc(VkMemoryRequirements memoryRequirements);
@@ -28,7 +30,7 @@ public interface VkMemoryPool extends Destroyable, VulkanNameable {
         @ThreadSafety.Any
         void reset();
         
-        interface CPU extends VkMemoryPool, VkMemoryPool.CPU {
+        interface CPU extends Transient, VkMemoryPool.CPU {
         }
     }
     
