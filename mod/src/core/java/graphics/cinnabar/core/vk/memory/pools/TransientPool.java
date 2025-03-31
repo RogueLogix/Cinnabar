@@ -133,7 +133,7 @@ public class TransientPool implements VkMemoryPool, VkMemoryPool.Transient {
         @Override
         public VkMemoryAllocation.CPU alloc(VkMemoryRequirements memoryRequirements) {
             final var internalAlloc = internalAlloc(memoryRequirements);
-            return new VkMemoryAllocation.CPU(internalAlloc.firstLong(), internalAlloc.second(), null, mappedMemory.get(internalAlloc.first()).slice(internalAlloc.second().offset(), internalAlloc.second().size()));
+            return new VkMemoryAllocation.CPU(internalAlloc.firstLong(), internalAlloc.second(), null, mappedMemory.get(internalAlloc.firstLong()).slice(internalAlloc.second().offset(), internalAlloc.second().size()));
         }
     }
 }
