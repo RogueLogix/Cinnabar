@@ -33,11 +33,6 @@ public class GameRendererMixin {
     }
     
     @Overwrite
-    private void tryTakeScreenshotIfNeeded() {
-        // TODO: implement this properly
-    }
-    
-    @Overwrite
     public Matrix4f getProjectionMatrix(float fov) {
         Matrix4f matrix4f = new Matrix4f();
         if (this.zoom != 1.0F) {

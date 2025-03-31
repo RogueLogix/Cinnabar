@@ -127,10 +127,10 @@ public class CinnabarRenderPass implements RenderPass {
             
             final var viewport = VkViewport.calloc(1, stack);
             viewport.x(0);
-            viewport.y(renderExtent.height());
+            viewport.y(0);
             viewport.width(renderWidth);
             // flips the view, consistent with OpenGL
-            viewport.height(-renderHeight);
+            viewport.height(renderHeight);
             viewport.minDepth(0.0f);
             viewport.maxDepth(1.0f);
             vkCmdSetViewport(commandBuffer, 0, viewport);
@@ -191,9 +191,9 @@ public class CinnabarRenderPass implements RenderPass {
     }
     
     @Override
-    public void enableScissor(int x, int lowerY, int width, int height) {
+    public void enableScissor(int x, int y, int width, int height) {
         // VK defines scissor as top left, GL as bottom left
-        int y = renderHeight - (lowerY + height);
+//        int y = renderHeight - (lowerY + height);
         try (final var stack = memoryStack.push()) {
             final var scissor = VkRect2D.calloc(1, stack);
             scissor.offset().set(x, y);

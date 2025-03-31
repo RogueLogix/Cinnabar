@@ -125,6 +125,7 @@ jar {
         from(configurations.jijLib) {
             exclude("lwjgl-3.3.3.jar")
             exclude("annotations-3.0.1.jar")
+            exclude("jcip-annotations-1.0.jar")
             exclude("jsr305-3.0.1.jar")
             exclude("slf4j-api-1.7.12.jar")
             exclude("ant-1.7.0.jar")
@@ -134,7 +135,6 @@ jar {
             exclude("jopt-simple-4.7.jar")
             exclude("icu4j-72.1.jar")
             exclude("antlr-runtime-3.5.3.jar")
-            exclude("antlr4-runtime-4.13.2.jar")
         }
     }
 }

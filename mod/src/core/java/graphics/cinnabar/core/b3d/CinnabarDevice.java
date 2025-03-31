@@ -15,6 +15,7 @@ import graphics.cinnabar.api.util.Destroyable;
 import graphics.cinnabar.api.util.Triple;
 import graphics.cinnabar.core.CinnabarCore;
 import graphics.cinnabar.core.b3d.buffers.PersistentWriteBuffer;
+import graphics.cinnabar.core.b3d.buffers.ReadBuffer;
 import graphics.cinnabar.core.b3d.buffers.TransientWriteBuffer;
 import graphics.cinnabar.core.b3d.command.CinnabarCommandEncoder;
 import graphics.cinnabar.core.b3d.pipeline.CinnabarPipeline;
@@ -359,7 +360,7 @@ public class CinnabarDevice implements CinnabarGpuDevice {
             // multiple gpu buffers, uploads at beginning of frame
             case DYNAMIC_WRITE, STREAM_WRITE -> new PersistentWriteBuffer(this, bufferType, bufferUsage, bufferSize, name);
             // TODO: readback buffer
-            case STATIC_READ, DYNAMIC_READ, STREAM_READ -> throw new NotImplemented(); // reading is equally shit regardless of hints, so same buffer type for them all
+            case STATIC_READ, DYNAMIC_READ, STREAM_READ -> new ReadBuffer(this, bufferType, bufferUsage, bufferSize, name); // reading is equally shit regardless of hints, so same buffer type for them all
             // these are unused, and idk how they should get used really
             case DYNAMIC_COPY -> throw new NotImplemented();
             case STATIC_COPY -> throw new NotImplemented();

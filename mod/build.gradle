@@ -241,6 +241,7 @@ tasks.named('jar', Jar).configure { Jar jar ->
     jar.from([
             sourceSets.api.output,
             sourceSets.lib.output,
+            sourceSets.mclib.output,
             sourceSets.core.output,
             sourceSets.main.output])
 }

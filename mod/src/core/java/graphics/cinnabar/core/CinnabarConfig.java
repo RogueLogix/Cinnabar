@@ -1,6 +1,5 @@
 package graphics.cinnabar.core;
 
-import graphics.cinnabar.api.CinnabarAPI;
 import graphics.cinnabar.lib.config.*;
 import org.jetbrains.annotations.Contract;
 

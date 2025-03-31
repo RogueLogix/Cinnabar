@@ -5,12 +5,12 @@ import com.mojang.blaze3d.platform.NativeImage;
 import com.mojang.blaze3d.systems.CommandEncoder;
 import com.mojang.blaze3d.systems.RenderPass;
 import com.mojang.blaze3d.textures.GpuTexture;
-import graphics.cinnabar.api.exceptions.NotImplemented;
 import graphics.cinnabar.api.memory.PointerWrapper;
 import graphics.cinnabar.api.util.Destroyable;
 import graphics.cinnabar.core.b3d.CinnabarDevice;
 import graphics.cinnabar.core.b3d.buffers.CinnabarGpuBuffer;
 import graphics.cinnabar.core.b3d.buffers.PersistentWriteBuffer;
+import graphics.cinnabar.core.b3d.buffers.ReadBuffer;
 import graphics.cinnabar.core.b3d.buffers.TransientWriteBuffer;
 import graphics.cinnabar.core.b3d.renderpass.CinnabarRenderPass;
 import graphics.cinnabar.core.b3d.texture.CinnabarGpuTexture;
@@ -58,7 +58,7 @@ public class CinnabarCommandEncoder implements CommandEncoder, Destroyable {
         }
         beginCommandBuffers();
         
-        try (final var stack = memoryStack.push()){
+        try (final var stack = memoryStack.push()) {
             final var typeCreateInfo = VkSemaphoreTypeCreateInfo.calloc(stack).sType$Default();
             typeCreateInfo.semaphoreType(VK_SEMAPHORE_TYPE_TIMELINE);
             typeCreateInfo.initialValue(MagicNumbers.MaximumFramesInFlight - 1);
@@ -221,13 +221,27 @@ public class CinnabarCommandEncoder implements CommandEncoder, Destroyable {
     }
     
     @Override
-    public GpuBuffer.ReadView readBuffer(GpuBuffer p_410459_) {
-        throw new NotImplemented();
+    public GpuBuffer.ReadView readBuffer(GpuBuffer buffer) {
+        return readBuffer(buffer, 0, buffer.size());
     }
     
     @Override
-    public GpuBuffer.ReadView readBuffer(GpuBuffer p_410280_, int p_410832_, int p_410411_) {
-        throw new NotImplemented();
+    public GpuBuffer.ReadView readBuffer(GpuBuffer buffer, int offset, int size) {
+        vkDeviceWaitIdle(device.vkDevice);
+        assert buffer instanceof ReadBuffer;
+        final var readBuffer = (ReadBuffer) buffer;
+        return new GpuBuffer.ReadView() {
+            @Override
+            public ByteBuffer data() {
+                final var hostPtr = readBuffer.getBufferForRead().allocation.cpu().hostPointer;
+                return MemoryUtil.memByteBuffer(hostPtr.pointer(), (int) hostPtr.size());
+            }
+            
+            @Override
+            public void close() {
+                // N/A, VK uses persistent mappings
+            }
+        };
     }
     
     public void setupTexture(CinnabarGpuTexture texture) {
@@ -325,13 +339,32 @@ public class CinnabarCommandEncoder implements CommandEncoder, Destroyable {
     }
     
     @Override
-    public void copyTextureToBuffer(GpuTexture p_409709_, GpuBuffer p_409653_, int p_409654_, Runnable p_409606_, int p_409664_) {
-        throw new NotImplemented();
+    public void copyTextureToBuffer(GpuTexture texture, GpuBuffer buffer, int offset, Runnable callback, int mip) {
+        this.copyTextureToBuffer(texture, buffer, offset, callback, mip, 0, 0, texture.getWidth(mip), texture.getHeight(mip));
     }
     
     @Override
-    public void copyTextureToBuffer(GpuTexture p_409732_, GpuBuffer p_410694_, int p_409794_, Runnable p_410116_, int p_410787_, int p_410381_, int p_409938_, int p_410237_, int p_410626_) {
-        throw new NotImplemented();
+    public void copyTextureToBuffer(GpuTexture texture, GpuBuffer buffer, int offset, Runnable callback, int mip, int xOffset, int yOffset, int width, int height) {
+        
+        final var cinnabarTexture = (CinnabarGpuTexture) texture;
+        final var readBuffer = (ReadBuffer) buffer;
+        
+        try (final var stack = memoryStack.push()) {
+            final var copy = VkBufferImageCopy.calloc(1, stack);
+            copy.bufferOffset(offset);
+            final var subresource = copy.imageSubresource();
+            subresource.aspectMask(cinnabarTexture.aspectMask());
+            subresource.mipLevel(mip);
+            subresource.baseArrayLayer(0);
+            subresource.layerCount(1);
+            copy.imageOffset().set(xOffset, yOffset, 0);
+            copy.imageExtent().set(width, height, 1);
+            
+            fullBarrier(mainDrawCommandBuffer);
+            vkCmdCopyImageToBuffer(mainDrawCommandBuffer, cinnabarTexture.imageHandle, VK_IMAGE_LAYOUT_GENERAL, readBuffer.getBufferForWrite().handle, copy);
+            fullBarrier(mainDrawCommandBuffer);
+            device.destroyEndOfFrame(callback::run);
+        }
     }
     
     @Override
@@ -343,21 +376,7 @@ public class CinnabarCommandEncoder implements CommandEncoder, Destroyable {
             final var blits = VkImageBlit.calloc(1, stack);
             
             final var subresource = blits.srcSubresource();
-            
-            int aspectMask = 0;
-            if (src.getFormat().hasColorAspect()) {
-                aspectMask |= VK_IMAGE_ASPECT_COLOR_BIT;
-            }
-            
-            if (src.getFormat().hasDepthAspect()) {
-                aspectMask |= VK_IMAGE_ASPECT_DEPTH_BIT;
-            }
-            
-            if (src.getFormat().hasStencilAspect()) {
-                aspectMask |= VK_IMAGE_ASPECT_STENCIL_BIT;
-            }
-            
-            subresource.aspectMask(aspectMask);
+            subresource.aspectMask(cinnabarSrc.aspectMask());
             subresource.mipLevel(mip);
             subresource.baseArrayLayer(0);
             subresource.layerCount(1);
@@ -369,7 +388,7 @@ public class CinnabarCommandEncoder implements CommandEncoder, Destroyable {
             blits.dstOffsets(1).set(width, height, 1);
             
             fullBarrier(mainDrawCommandBuffer);
-            vkCmdBlitImage(mainDrawCommandBuffer, cinnabarSrc.imageHandle, VK_IMAGE_LAYOUT_GENERAL, cinnabarDst.imageHandle, VK_IMAGE_LAYOUT_GENERAL, blits,VK_FILTER_NEAREST);
+            vkCmdBlitImage(mainDrawCommandBuffer, cinnabarSrc.imageHandle, VK_IMAGE_LAYOUT_GENERAL, cinnabarDst.imageHandle, VK_IMAGE_LAYOUT_GENERAL, blits, VK_FILTER_NEAREST);
             fullBarrier(mainDrawCommandBuffer);
         }
     }
@@ -409,9 +428,9 @@ public class CinnabarCommandEncoder implements CommandEncoder, Destroyable {
             srcOffsets.position(0);
             
             final var dstOffsets = VkOffset3D.calloc(2, stack);
-            dstOffsets.x(0).y(0).z(0);
+            dstOffsets.x(0).y(swapchain.height).z(0);
             dstOffsets.position(1);
-            dstOffsets.x(swapchain.width).y(swapchain.height).z(1);
+            dstOffsets.x(swapchain.width).y(0).z(1);
             dstOffsets.position(0);
             
             final var imageSubresource = VkImageSubresourceLayers.calloc();
@@ -471,7 +490,7 @@ public class CinnabarCommandEncoder implements CommandEncoder, Destroyable {
             // wait for the last time this frame index was submitted
             // the semaphore starts at MaximumFramesInFlight, so this returns immediately for the first few frames
             waitInfo.pValues(stack.longs(currentFrameNumber - (MagicNumbers.MaximumFramesInFlight - 1)));
-            if(checkVkCode(vkWaitSemaphores(device.vkDevice, waitInfo, -1)) != VK_SUCCESS) {
+            if (checkVkCode(vkWaitSemaphores(device.vkDevice, waitInfo, -1)) != VK_SUCCESS) {
                 throw new IllegalStateException();
             }
         }

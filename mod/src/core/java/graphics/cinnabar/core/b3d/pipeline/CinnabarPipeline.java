@@ -175,7 +175,7 @@ public class CinnabarPipeline implements CompiledRenderPipeline, VulkanObject {
             });
             rasterizationState.cullMode(pipeline.isCull() ? VK_CULL_MODE_BACK_BIT : VK_CULL_MODE_NONE);
             // negative viewport height, this is fine
-            rasterizationState.frontFace(VK_FRONT_FACE_COUNTER_CLOCKWISE);
+            rasterizationState.frontFace(VK_FRONT_FACE_CLOCKWISE);
             rasterizationState.depthBiasEnable(pipeline.getDepthBiasConstant() != 0.0f || pipeline.getDepthBiasScaleFactor() != 0.0f);
             rasterizationState.depthBiasConstantFactor(pipeline.getDepthBiasConstant());
             rasterizationState.depthBiasClamp(0);
