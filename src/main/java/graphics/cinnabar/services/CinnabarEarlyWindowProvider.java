@@ -77,7 +77,9 @@ public class CinnabarEarlyWindowProvider implements ImmediateWindowProvider {
     
     @Override
     public long takeOverGlfwWindow() {
-        glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
+        if (CinnabarLaunchPlugin.initCompleted()) {
+            glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
+        }
         return glfwCreateWindow(854, 480, "Cinnabar", 0, 0);
     }
     

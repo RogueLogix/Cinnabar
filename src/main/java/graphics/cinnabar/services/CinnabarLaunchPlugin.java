@@ -6,6 +6,7 @@ import cpw.mods.modlauncher.Launcher;
 import cpw.mods.modlauncher.api.NamedPath;
 import cpw.mods.modlauncher.serviceapi.ILaunchPluginService;
 import net.neoforged.fml.loading.FMLLoader;
+import org.jetbrains.annotations.Nullable;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.Type;
 import org.objectweb.asm.tree.*;
@@ -54,7 +55,23 @@ public class CinnabarLaunchPlugin implements ILaunchPluginService {
     
     @Override
     public void initializeLaunch(ITransformerLoader transformerLoader, NamedPath[] specialPaths) {
-        final var cinnabarScanResults = FMLLoader.getLoadingModList().getModFileById("cinnabar").getFile().getScanResult();
+        validateAndInitializeRedirectAnnotations();
+    }
+    
+    private static boolean redirectInitDone = false;
+    
+    public static boolean initCompleted() {
+        return redirectInitDone;
+    }
+    
+    public void validateAndInitializeRedirectAnnotations() {
+        @Nullable
+        final var cinnabarModFile = FMLLoader.getLoadingModList().getModFileById("cinnabar");
+        if (cinnabarModFile == null) {
+            return;
+        }
+        @SuppressWarnings("UnstableApiUsage")
+        final var cinnabarScanResults = cinnabarModFile.getFile().getScanResult();
         final Map<String, String> functionCallRedirectDestinations = new HashMap<>();
         
         for (final var annotation : cinnabarScanResults.getAnnotations()) {
@@ -104,6 +121,8 @@ public class CinnabarLaunchPlugin implements ILaunchPluginService {
         functionCallRedirectDestinations.forEach((dst, src) -> {
             throw new IllegalStateException("Missing Src annotation for impl redirect " + dst + " expected one at " + src);
         });
+        
+        redirectInitDone = true;
     }
     
     @Override
