@@ -5,8 +5,7 @@ public class MagicMemorySizes {
     public static final long MiB = KiB * 1024;
     public static final long GiB = MiB * 1024;
     
-    public static final long VK_PERSISTENT_BLOCK_SIZE = 256 * MiB;
-    public static final long VK_TRANSIENT_BLOCK_SIZE = 256 * MiB;
+    public static final long MEMORY_POOL_BLOCK_SIZE = 16 * MiB;
     
     public static final int FLOAT_BYTE_SIZE = 4;
     public static final int DOUBLE_BYTE_SIZE = 8;

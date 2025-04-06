@@ -40,6 +40,7 @@ public class PersistentPool implements VkMemoryPool.Dedicated, VkMemoryPool.Req2
     
     protected final Long2ReferenceMap<@Nullable AllocationBlock> memoryToBlockMap = new Long2ReferenceOpenHashMap<>();
     private final ReferenceArrayList<AllocationBlock> blocks = new ReferenceArrayList<>();
+    private final ReferenceArrayList<AllocationBlock> freeBlocks = new ReferenceArrayList<>();
     private final ReferenceArrayList<AllocationBlock> dedicatedBlocks = new ReferenceArrayList<>();
     
     public PersistentPool(CinnabarDevice device, int memoryType, long blockSize) {
@@ -47,6 +48,13 @@ public class PersistentPool implements VkMemoryPool.Dedicated, VkMemoryPool.Req2
         this.memoryType = memoryType;
         this.memoryTypeBit = 1 << memoryType;
         this.blockSize = Math.max(MINIMUM_SUBALLOC_SIZE, MathUtil.roundUpPo2(blockSize));
+    }
+    
+    @Override
+    public void destroy() {
+        blocks.forEach(AllocationBlock::destroy);
+        freeBlocks.forEach(AllocationBlock::destroy);
+        dedicatedBlocks.forEach(AllocationBlock::destroy);
     }
     
     public VkMemoryAllocation alloc(VkMemoryRequirements2 memoryRequirements2) {
@@ -82,7 +90,7 @@ public class PersistentPool implements VkMemoryPool.Dedicated, VkMemoryPool.Req2
     
     @Override
     public long totalAllocatedFromVulkan() {
-        return blockSize * blocks.size() + dedicatedBlocks.stream().mapToLong(block -> block.size).sum();
+        return blockSize * (blocks.size() + freeBlocks.size()) + dedicatedBlocks.stream().mapToLong(block -> block.size).sum();
     }
     
     @Override
@@ -113,6 +121,15 @@ public class PersistentPool implements VkMemoryPool.Dedicated, VkMemoryPool.Req2
                     return block.alloc(roundedUpSize, roundedUpAlignment);
                 }
             }
+            if (!freeBlocks.isEmpty()) {
+                final var newBlock = freeBlocks.pop();
+                memoryToBlockMap.put(newBlock.handle, newBlock);
+                blocks.add(newBlock);
+                if (!newBlock.canFit(roundedUpSize, roundedUpAlignment)) {
+                    throw new IllegalStateException();
+                }
+                return newBlock.alloc(roundedUpSize, roundedUpAlignment);
+            }
         }
         
         try (final var stack = MemoryStack.stackPush()) {
@@ -135,7 +152,7 @@ public class PersistentPool implements VkMemoryPool.Dedicated, VkMemoryPool.Req2
             final var allocInfo = VkMemoryAllocateInfo.calloc(stack).sType$Default();
             allocInfo.memoryTypeIndex(memoryType);
             if (dedicated) {
-                allocInfo.allocationSize(size);
+                allocInfo.allocationSize(roundedUpSize);
             } else {
                 allocInfo.allocationSize(blockSize);
             }
@@ -169,6 +186,7 @@ public class PersistentPool implements VkMemoryPool.Dedicated, VkMemoryPool.Req2
                 memoryToBlockMap.remove(block.handle);
                 dedicatedBlocks.remove(block);
                 block.destroy();
+                liveAllocations -= allocation.range.size();
             } else {
                 block.free(allocation);
                 // non-dedicated blocks are never freed back to VK, even if they no longer have any live allocations in them
@@ -176,10 +194,16 @@ public class PersistentPool implements VkMemoryPool.Dedicated, VkMemoryPool.Req2
         }
     }
     
-    @Override
-    public void destroy() {
-        blocks.forEach(AllocationBlock::destroy);
-        dedicatedBlocks.forEach(AllocationBlock::destroy);
+    private void free(AllocationBlock allocationBlock) {
+        assert !allocationBlock.dedicated;
+        memoryToBlockMap.remove(allocationBlock.handle);
+        blocks.remove(allocationBlock);
+        freeBlocks.add(allocationBlock);
+        // keep at most 1 free block for every 16 that are allocated, ~6% free
+        // also won't free the last block
+        while (freeBlocks.size() > (blocks.size() / 16)) {
+            freeBlocks.pop().destroy();
+        }
     }
     
     @Override
@@ -237,7 +261,6 @@ public class PersistentPool implements VkMemoryPool.Dedicated, VkMemoryPool.Req2
                 return true;
             }
         };
-        
         
         
         public final PersistentPool allocator;
@@ -345,6 +368,10 @@ public class PersistentPool implements VkMemoryPool.Dedicated, VkMemoryPool.Req2
             var index = freeAllocations.indexOf(info);
             collapseFreeAllocationWithNext(index - 1);
             collapseFreeAllocationWithNext(index);
+            if (freeAllocations.size() == 1 && freeAllocations.getFirst().size() == size) {
+                // entire block has been freed, release it back to vulkan
+                allocator.free(this);
+            }
         }
         
         private void collapseFreeAllocationWithNext(int freeAllocationIndex) {

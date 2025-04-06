@@ -16,7 +16,6 @@ import graphics.cinnabar.api.util.Triple;
 import graphics.cinnabar.core.CinnabarCore;
 import graphics.cinnabar.core.b3d.buffers.PersistentWriteBuffer;
 import graphics.cinnabar.core.b3d.buffers.ReadBuffer;
-import graphics.cinnabar.core.b3d.buffers.TransientWriteBuffer;
 import graphics.cinnabar.core.b3d.command.CinnabarCommandEncoder;
 import graphics.cinnabar.core.b3d.pipeline.CinnabarPipeline;
 import graphics.cinnabar.core.b3d.texture.CinnabarGpuTexture;
@@ -141,12 +140,12 @@ public class CinnabarDevice implements CinnabarGpuDevice {
         driverVersion = String.format("%d.%d.%d", VK_VERSION_MAJOR(driverVersionEncoded), VK_VERSION_MINOR(driverVersionEncoded), VK_VERSION_PATCH(driverVersionEncoded));
         renderer = String.format("%s", physicalDeviceProperties.deviceNameString());
         
-        devicePersistentMemoryPool = createMemoryPool(false, VK_MEMORY_HEAP_DEVICE_LOCAL_BIT, 0, 0);
-        deviceTransientMemoryPool = (VkMemoryPool.Transient) createMemoryPool(true, VK_MEMORY_HEAP_DEVICE_LOCAL_BIT, 0, 0);
-        hostPersistentMemoryPool = (VkMemoryPool.CPU) createMemoryPool(false, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, 0, 0);
+        devicePersistentMemoryPool = createMemoryPool(false, VK_MEMORY_HEAP_DEVICE_LOCAL_BIT, 0);
+        deviceTransientMemoryPool = (VkMemoryPool.Transient) createMemoryPool(true, VK_MEMORY_HEAP_DEVICE_LOCAL_BIT, 0);
+        hostPersistentMemoryPool = (VkMemoryPool.CPU) createMemoryPool(false, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, 0);
         final var hostTransientPools = new VkMemoryPool.Transient.CPU[MagicNumbers.MaximumFramesInFlight];
         for (int i = 0; i < hostTransientPools.length; i++) {
-            hostTransientPools[i] = (VkMemoryPool.Transient.CPU) createMemoryPool(true, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, 0, 0);
+            hostTransientPools[i] = (VkMemoryPool.Transient.CPU) createMemoryPool(true, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, 0);
         }
         hostTransientMemoryPools = List.of(hostTransientPools);
         
@@ -229,9 +228,13 @@ public class CinnabarDevice implements CinnabarGpuDevice {
         return destroyable;
     }
     
+    public VkMemoryPool createMemoryPool(boolean transientPool, int requiredProperties, int preferredProperties) {
+        return createMemoryPool(transientPool, requiredProperties, preferredProperties, 0);
+    }
+    
     public VkMemoryPool createMemoryPool(boolean transientPool, int requiredProperties, int preferredProperties, long blockSize) {
         if (blockSize <= 0) {
-            blockSize = MagicMemorySizes.VK_PERSISTENT_BLOCK_SIZE;
+            blockSize = MagicMemorySizes.MEMORY_POOL_BLOCK_SIZE;
         }
         blockSize = MathUtil.roundUpPo2(blockSize);
         final int selectedMemoryType;
