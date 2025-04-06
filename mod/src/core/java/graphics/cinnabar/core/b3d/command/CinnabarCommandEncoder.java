@@ -191,7 +191,8 @@ public class CinnabarCommandEncoder implements CommandEncoder, Destroyable {
     public void writeToBuffer(CinnabarGpuBuffer buffer, PointerWrapper data, int offset) {
         
         try (final var stack = this.memoryStack.push()) {
-            final var commandBuffer = buffer instanceof PersistentWriteBuffer ? mainDrawCommandBuffer : beginFrameTransferCommandBuffer;
+            final var uploadBeginningOfFrame = buffer.uploadBeginningOfFrame();
+            final var commandBuffer = uploadBeginningOfFrame ? beginFrameTransferCommandBuffer : mainDrawCommandBuffer;
             
             // TODO: sync last buffer write, if a persistent buffer
             //       generally those aren't used for multi-write things, so that should be rare enough
@@ -207,11 +208,16 @@ public class CinnabarCommandEncoder implements CommandEncoder, Destroyable {
             copyRegion.dstOffset(0);
             copyRegion.size(data.size() - offset);
             copyRegion.limit(1);
+            
+            if (!uploadBeginningOfFrame) {
+                fullBarrier(commandBuffer);
+            }
+            
             vkCmdCopyBuffer(commandBuffer, uploadBuffer.handle, targetBuffer.handle, copyRegion);
             
             if (buffer instanceof TransientWriteBuffer transientWriteBuffer) {
                 transientWriteBuffer.write(uploadBuffer.allocation.cpu());
-            } else {
+            } else if (!uploadBeginningOfFrame) {
                 fullBarrier(commandBuffer);
             }
             
@@ -242,6 +248,17 @@ public class CinnabarCommandEncoder implements CommandEncoder, Destroyable {
                 // N/A, VK uses persistent mappings
             }
         };
+    }
+    
+    public void copyBufferToBuffer(VkBuffer src, VkBuffer dst) {
+        assert src.size == dst.size;
+        try (final var stack = memoryStack.push()) {
+            final var copyRange = VkBufferCopy.calloc(1, stack);
+            copyRange.srcOffset(0);
+            copyRange.dstOffset(0);
+            copyRange.size(src.size);
+            vkCmdCopyBuffer(beginFrameTransferCommandBuffer, src.handle, dst.handle, copyRange);
+        }
     }
     
     public void setupTexture(CinnabarGpuTexture texture) {

@@ -5,10 +5,13 @@ import graphics.cinnabar.api.annotations.ThreadSafety;
 import graphics.cinnabar.api.memory.PointerWrapper;
 import graphics.cinnabar.api.util.Destroyable;
 import graphics.cinnabar.core.b3d.CinnabarDevice;
+import graphics.cinnabar.core.b3d.command.CinnabarCommandEncoder;
 import graphics.cinnabar.core.vk.memory.VkBuffer;
 import graphics.cinnabar.core.vk.memory.VkMemoryPool;
 import it.unimi.dsi.fastutil.objects.ReferenceImmutableList;
 import org.jetbrains.annotations.Nullable;
+import org.lwjgl.system.MemoryStack;
+import org.lwjgl.vulkan.VkBufferCopy;
 import org.lwjgl.vulkan.VkDescriptorSetLayoutBinding;
 
 import java.util.List;
@@ -36,12 +39,12 @@ public class UBOBinding implements DescriptorSetBinding {
 
     @Override
     public int type() {
-        return VK_DESCRIPTOR_TYPE_INLINE_UNIFORM_BLOCK;
+        return VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
     }
 
     @Override
     public int count() {
-        return size;
+        return 1;
     }
 
     @API
@@ -94,7 +97,7 @@ public class UBOBinding implements DescriptorSetBinding {
         @ThreadSafety.Any
         public boolean isDirty() {
             final var currentFrame = device.currentFrameIndex();
-            return dirty || lastUploadFrame < currentFrame || lastUploadBuffer == null;
+            return dirty || lastUploadFrame != currentFrame || lastUploadBuffer == null;
         }
 
         @ThreadSafety.Any
@@ -124,7 +127,7 @@ public class UBOBinding implements DescriptorSetBinding {
         public final VkBuffer buffer;
 
         Buffer(PointerWrapper data) {
-            this(data, device.hostTransientMemoryPool(), device.devicePersistentMemoryPool);
+            this(data, device.hostTransientMemoryPool(), device.deviceTransientMemoryPool);
         }
 
         Buffer(PointerWrapper data, VkMemoryPool.CPU stagingPool, VkMemoryPool gpuPool) {
@@ -132,19 +135,8 @@ public class UBOBinding implements DescriptorSetBinding {
             final var stagingBuffer = new VkBuffer(device, size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, stagingPool);
             device.destroyEndOfFrame(stagingBuffer);
             data.copyTo(stagingBuffer.allocation.cpu().hostPointer);
-
-//            final var commandBuffer = CinnabarRenderer.transientCommandBuffer();
-//
-//            try (final var stack = MemoryStack.stackPush()){
-//                final var copyRange = VkBufferCopy.calloc(1, stack);
-//                copyRange.srcOffset(0);
-//                copyRange.dstOffset(0);
-//                copyRange.size(size);
-//                vkCmdCopyBuffer(commandBuffer, stagingBuffer.handle, buffer.handle, copyRange);
-//            }
-//
-//            vkEndCommandBuffer(commandBuffer);
-//            CinnabarRenderer.injectTransferCommandBuffer(commandBuffer);
+            
+            device.createCommandEncoder().copyBufferToBuffer(stagingBuffer, buffer);
         }
 
         @Override

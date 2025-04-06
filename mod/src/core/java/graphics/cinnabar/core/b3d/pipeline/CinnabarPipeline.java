@@ -9,7 +9,6 @@ import com.mojang.blaze3d.platform.SourceFactor;
 import com.mojang.blaze3d.preprocessor.GlslPreprocessor;
 import com.mojang.blaze3d.shaders.ShaderType;
 import com.mojang.blaze3d.vertex.VertexFormat;
-import graphics.cinnabar.api.util.Destroyable;
 import graphics.cinnabar.api.util.Pair;
 import graphics.cinnabar.core.b3d.CinnabarDevice;
 import graphics.cinnabar.core.util.MagicNumbers;
@@ -18,8 +17,8 @@ import graphics.cinnabar.core.vk.descriptors.UBOBinding;
 import graphics.cinnabar.core.vk.shaders.ShaderProcessing;
 import graphics.cinnabar.core.vk.shaders.ShaderSet;
 import graphics.cinnabar.core.vk.shaders.vertex.VertexInputState;
-import it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.objects.Object2ReferenceOpenHashMap;
+import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.resources.ResourceLocation;
 import org.jetbrains.annotations.Nullable;
 import org.lwjgl.system.MemoryStack;
@@ -41,6 +40,14 @@ public class CinnabarPipeline implements CompiledRenderPipeline, VulkanObject {
     
     public final ShaderSet shaderSet;
     public final long pipelineHandle;
+    
+    // anything not specified here will be dumped into a single UBO
+    private static final List<List<String>> ubos = List.of(
+            RenderPipelines.MATRICES_SNIPPET.uniforms().get().stream().map(RenderPipeline.UniformDescription::name).toList(),
+            RenderPipelines.FOG_SNIPPET.uniforms().get().stream().map(RenderPipeline.UniformDescription::name).toList()
+    );
+    
+    private static final List<String> pushConstants = List.of("ModelOffset");
     
     @Override
     public long handle() {
@@ -67,9 +74,6 @@ public class CinnabarPipeline implements CompiledRenderPipeline, VulkanObject {
         final var glVertexGLSL = GlslPreprocessor.injectDefines(shaderSourceCache.computeIfAbsent(new ShaderSourceCacheKey(pipeline.getVertexShader(), ShaderType.VERTEX), key -> shaderSourceProvider.apply(key.location, key.type)), pipeline.getShaderDefines());
         final var glFragmentGLSL = GlslPreprocessor.injectDefines(shaderSourceCache.computeIfAbsent(new ShaderSourceCacheKey(pipeline.getFragmentShader(), ShaderType.FRAGMENT), key -> shaderSourceProvider.apply(key.location, key.type)), pipeline.getShaderDefines());
         
-        // all uniforms are shoved into push constants, for now
-        final var uniformNames = pipeline.getUniforms().stream().map(RenderPipeline.UniformDescription::name).toList();
-        
         final var pipelineName = pipeline.getLocation().toString();
         final var vertexShaderName = pipeline.getVertexShader().toString();
         final var fragmentShaderName = pipeline.getFragmentShader().toString();
@@ -78,7 +82,7 @@ public class CinnabarPipeline implements CompiledRenderPipeline, VulkanObject {
         final Pair<String, String> processedShaders;
         {
             long start = System.nanoTime();
-            processedShaders = ShaderProcessing.processShaders(glVertexGLSL, glFragmentGLSL, vertexShaderName, fragmentShaderName, uniformNames, List.of());
+            processedShaders = ShaderProcessing.processShaders(glVertexGLSL, glFragmentGLSL, vertexShaderName, fragmentShaderName, pushConstants, ubos);
             long end = System.nanoTime();
             long time = end - start;
             CINNABAR_CORE_LOG.debug("{}us taken to process shaders for {}", time / (1_000), pipelineName);

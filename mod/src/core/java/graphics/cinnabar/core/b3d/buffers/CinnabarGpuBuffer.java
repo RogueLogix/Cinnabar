@@ -46,4 +46,8 @@ public abstract class CinnabarGpuBuffer extends GpuBuffer implements Destroyable
             case PIXEL_PACK, PIXEL_UNPACK -> 0; // pixel (un)pack also counts as just transfer
         };
     }
+    
+    public boolean uploadBeginningOfFrame() {
+        return false;
+    }
 }

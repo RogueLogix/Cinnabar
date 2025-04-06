@@ -8,6 +8,7 @@ import org.jetbrains.annotations.Nullable;
 
 public class PersistentWriteBuffer extends CinnabarGpuBuffer {
     private final VkBuffer gpuBuffer;
+    private long lastAccessFrame = -1;
     
     public PersistentWriteBuffer(CinnabarDevice device, BufferType type, BufferUsage usage, int size, @Nullable String name) {
         super(device, type, usage, size);
@@ -18,16 +19,23 @@ public class PersistentWriteBuffer extends CinnabarGpuBuffer {
     
     @Override
     public VkBuffer getBufferForWrite() {
+        lastAccessFrame = device.currentFrameIndex();
         return gpuBuffer;
     }
     
     @Override
     public VkBuffer getBufferForRead() {
+        lastAccessFrame = device.currentFrameIndex();
         return gpuBuffer;
     }
     
     @Override
     public void destroy() {
         gpuBuffer.destroy();
+    }
+    
+    @Override
+    public boolean uploadBeginningOfFrame() {
+        return lastAccessFrame != device.currentFrameIndex();
     }
 }
