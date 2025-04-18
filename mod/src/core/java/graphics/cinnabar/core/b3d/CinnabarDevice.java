@@ -16,6 +16,7 @@ import graphics.cinnabar.api.util.Triple;
 import graphics.cinnabar.core.CinnabarCore;
 import graphics.cinnabar.core.b3d.buffers.PersistentWriteBuffer;
 import graphics.cinnabar.core.b3d.buffers.ReadBuffer;
+import graphics.cinnabar.core.b3d.buffers.TransientWriteBuffer;
 import graphics.cinnabar.core.b3d.command.CinnabarCommandEncoder;
 import graphics.cinnabar.core.b3d.pipeline.CinnabarPipeline;
 import graphics.cinnabar.core.b3d.texture.CinnabarGpuTexture;
@@ -365,12 +366,14 @@ public class CinnabarDevice implements CinnabarGpuDevice {
     public GpuBuffer createBuffer(@Nullable Supplier<@Nullable String> bufferNameSupplier, BufferType bufferType, BufferUsage bufferUsage, int bufferSize) {
         @Nullable
         final var name = bufferNameSupplier != null ? bufferNameSupplier.get() : null;
+        if (bufferUsage == BufferUsage.DYNAMIC_WRITE && (name == null || !name.startsWith("Immediate vertex buffer for"))) {
+            bufferUsage = BufferUsage.STATIC_WRITE;
+        }
         return switch (bufferUsage) {
             // single GPU buffer, barriers mid-frame
             case STATIC_WRITE -> new PersistentWriteBuffer(this, bufferType, bufferUsage, bufferSize, name);
             // multiple gpu buffers, uploads at beginning of frame
-            case DYNAMIC_WRITE, STREAM_WRITE -> new PersistentWriteBuffer(this, bufferType, bufferUsage, bufferSize, name);
-            // TODO: readback buffer
+            case DYNAMIC_WRITE, STREAM_WRITE -> new TransientWriteBuffer(this, bufferType, bufferUsage, bufferSize, name);
             case STATIC_READ, DYNAMIC_READ, STREAM_READ -> new ReadBuffer(this, bufferType, bufferUsage, bufferSize, name); // reading is equally shit regardless of hints, so same buffer type for them all
             // these are unused, and idk how they should get used really
             case DYNAMIC_COPY -> throw new NotImplemented();

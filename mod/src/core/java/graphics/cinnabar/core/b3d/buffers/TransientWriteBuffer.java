@@ -30,14 +30,15 @@ public class TransientWriteBuffer extends CinnabarGpuBuffer {
         currentBuffer = new VkBuffer(device, size, typeUsageBits(type()), device.deviceTransientMemoryPool);
         currentBuffer.setVulkanName(name);
         device.destroyEndOfFrame(currentBuffer);
-        device.destroyAfterSubmit(this::copyBackLastWrite);
+//        device.destroyAfterSubmit(this::copyBackLastWrite);
         return currentBuffer;
     }
     
     @Override
     public VkBuffer getBufferForRead() {
         if (currentBuffer == null || lastWrittenFrame != device.currentFrameIndex()) {
-            device.createCommandEncoder().writeToBuffer(this, lastWritten, 0);
+//            device.createCommandEncoder().writeToBuffer(this, lastWritten, 0);
+            throw new IllegalStateException();
         }
         assert currentBuffer != null;
         return currentBuffer;
@@ -59,5 +60,10 @@ public class TransientWriteBuffer extends CinnabarGpuBuffer {
     @Override
     public void destroy() {
         lastWritten.free();
+    }
+    
+    @Override
+    public boolean uploadBeginningOfFrame() {
+        return true;
     }
 }
