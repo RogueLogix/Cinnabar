@@ -82,6 +82,7 @@ dependencies {
     compileOnly("org.jetbrains:annotations:24.1.0")
     compileOnly("org.lwjgl:lwjgl-glfw:3.3.3")
     compileOnly("org.lwjgl:lwjgl-tinyfd:3.3.3")
+    compileOnly("net.sf.jopt-simple:jopt-simple:5.0.4")
     // removed in sync because it creates a dependency on a compiling build for sync to work
     if (System.getProperty("idea.sync.active") == null) {
         jijMod(project(path: ":cinnabar", configuration: "builtModJar"))

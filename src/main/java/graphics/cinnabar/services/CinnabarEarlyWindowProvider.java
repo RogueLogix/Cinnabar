@@ -1,8 +1,10 @@
 package graphics.cinnabar.services;
 
 import com.mojang.logging.LogUtils;
+import joptsimple.OptionParser;
 import net.neoforged.fml.loading.FMLConfig;
 import net.neoforged.neoforgespi.earlywindow.ImmediateWindowProvider;
+import org.lwjgl.system.Configuration;
 import org.lwjgl.util.tinyfd.TinyFileDialogs;
 import org.slf4j.Logger;
 
@@ -19,6 +21,8 @@ public class CinnabarEarlyWindowProvider implements ImmediateWindowProvider {
     
     private static boolean nameQueried = false;
     private static boolean configInjected = false;
+    private int winWidth;
+    private int winHeight;
     
     public static void attemptConfigInit() {
         if (nameQueried || configInjected) {
@@ -47,6 +51,7 @@ public class CinnabarEarlyWindowProvider implements ImmediateWindowProvider {
     
     @Override
     public Runnable initialize(String[] arguments) {
+        Configuration.STACK_SIZE.set(256);
         if (!glfwInit()) {
             final var msg = """
                     Unrecoverable error
@@ -56,6 +61,20 @@ public class CinnabarEarlyWindowProvider implements ImmediateWindowProvider {
             TinyFileDialogs.tinyfd_messageBox("Minecraft: Cinnabar", msg, "ok", "error", false);
             System.exit(1);
         }
+        final OptionParser parser = new OptionParser();
+        var widthopt = parser.accepts("width")
+                               .withRequiredArg().ofType(Integer.class)
+                               .defaultsTo(FMLConfig.getIntConfigValue(FMLConfig.ConfigValue.EARLY_WINDOW_WIDTH));
+        var heightopt = parser.accepts("height")
+                                .withRequiredArg().ofType(Integer.class)
+                                .defaultsTo(FMLConfig.getIntConfigValue(FMLConfig.ConfigValue.EARLY_WINDOW_HEIGHT));
+        parser.allowsUnrecognizedOptions();
+        var parsed = parser.parse(arguments);
+        winWidth = parsed.valueOf(widthopt);
+        winHeight = parsed.valueOf(heightopt);
+        FMLConfig.updateConfig(FMLConfig.ConfigValue.EARLY_WINDOW_WIDTH, winWidth);
+        FMLConfig.updateConfig(FMLConfig.ConfigValue.EARLY_WINDOW_HEIGHT, winHeight);
+        
         return () -> {
         };
     }
@@ -80,7 +99,7 @@ public class CinnabarEarlyWindowProvider implements ImmediateWindowProvider {
         if (CinnabarLaunchPlugin.initCompleted()) {
             glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
         }
-        return glfwCreateWindow(854, 480, "Cinnabar", 0, 0);
+        return glfwCreateWindow(winWidth, winHeight, "Cinnabar", 0, 0);
     }
     
     @Override
