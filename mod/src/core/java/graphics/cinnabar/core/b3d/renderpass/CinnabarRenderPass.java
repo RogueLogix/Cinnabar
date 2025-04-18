@@ -16,6 +16,8 @@ import graphics.cinnabar.core.b3d.buffers.CinnabarGpuBuffer;
 import graphics.cinnabar.core.b3d.pipeline.CinnabarPipeline;
 import graphics.cinnabar.core.b3d.texture.CinnabarGpuTexture;
 import graphics.cinnabar.core.vk.descriptors.*;
+import it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap;
+import it.unimi.dsi.fastutil.objects.ObjectArraySet;
 import it.unimi.dsi.fastutil.objects.ReferenceArrayList;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.FogParameters;
@@ -28,8 +30,6 @@ import org.lwjgl.vulkan.*;
 
 import java.util.*;
 import java.util.function.Consumer;
-import java.util.function.Function;
-import java.util.stream.Collectors;
 
 import static org.lwjgl.vulkan.KHRPushDescriptor.vkCmdPushDescriptorSetKHR;
 import static org.lwjgl.vulkan.VK13.*;
@@ -46,11 +46,11 @@ public class CinnabarRenderPass implements RenderPass {
     @Nullable
     private CinnabarPipeline boundPipeline;
     
-    protected final HashMap<String, Runnable> uniformWriteFunctions = new HashMap<>();
-    protected final HashMap<String, Object> uniforms = new HashMap<>();
-    protected final HashMap<String, GpuTexture> samplers = new HashMap<>();
-    protected final Set<String> dirtyUniforms = new HashSet<>();
-    protected final Set<String> dirtySamplers = new HashSet<>();
+    protected final Map<String, Runnable> uniformWriteFunctions = new Object2ObjectOpenHashMap<>();
+    protected final Map<String, Object> uniforms = new Object2ObjectOpenHashMap<>();
+    protected final Map<String, GpuTexture> samplers = new Object2ObjectOpenHashMap<>();
+    protected final Set<String> dirtyUniforms = new ObjectArraySet<>();
+    protected final Set<String> dirtySamplers = new ObjectArraySet<>();
     
     private final VkWriteDescriptorSet.Buffer descriptorWrites;
     private final VkDescriptorBufferInfo.Buffer descriptorBufferInfos;
