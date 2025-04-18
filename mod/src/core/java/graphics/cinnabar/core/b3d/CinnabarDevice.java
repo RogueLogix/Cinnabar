@@ -135,7 +135,13 @@ public class CinnabarDevice implements CinnabarGpuDevice {
         
         final var APIVersionEncoded = physicalDeviceProperties.apiVersion();
         final var driverVersionEncoded = physicalDeviceProperties.driverVersion();
-        vendorString = String.format("%x", physicalDeviceProperties.vendorID()); // TODO: pcie id to string map/switch
+        vendorString = switch (physicalDeviceProperties.vendorID()) {
+            case 0x1002, 0x1022 -> "AMD";
+            case 0x8086 -> "Intel";
+            case 0x10DE, 0x12D2 -> "Nvidia";
+            case 0x1969, 0x168c, 0x17CB, 0x5143 -> "Qualcomm";
+            default -> String.format("0x%x", physicalDeviceProperties.vendorID());
+        };
         apiVersionUsed = String.format("Vulkan %d.%d.%d", VK_VERSION_MAJOR(APIVersionEncoded), VK_VERSION_MINOR(APIVersionEncoded), VK_VERSION_PATCH(APIVersionEncoded));
         driverVersion = String.format("%d.%d.%d", VK_VERSION_MAJOR(driverVersionEncoded), VK_VERSION_MINOR(driverVersionEncoded), VK_VERSION_PATCH(driverVersionEncoded));
         renderer = String.format("%s", physicalDeviceProperties.deviceNameString());
