@@ -13,18 +13,22 @@ import graphics.cinnabar.api.memory.MagicMemorySizes;
 import graphics.cinnabar.api.memory.PointerWrapper;
 import graphics.cinnabar.core.b3d.CinnabarDevice;
 import graphics.cinnabar.core.b3d.buffers.CinnabarGpuBuffer;
+import graphics.cinnabar.core.b3d.buffers.RenderChunkVertexBufferPool;
 import graphics.cinnabar.core.b3d.pipeline.CinnabarPipeline;
 import graphics.cinnabar.core.b3d.texture.CinnabarGpuTexture;
 import graphics.cinnabar.core.vk.descriptors.*;
+import graphics.cinnabar.core.vk.memory.VkBuffer;
 import it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.objects.ObjectArraySet;
 import it.unimi.dsi.fastutil.objects.ReferenceArrayList;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.FogParameters;
+import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.util.ARGB;
 import net.neoforged.neoforge.client.stencil.StencilTest;
 import org.jetbrains.annotations.Nullable;
 import org.joml.Matrix4f;
+import org.joml.Vector3f;
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.vulkan.*;
 
@@ -35,6 +39,10 @@ import static org.lwjgl.vulkan.KHRPushDescriptor.vkCmdPushDescriptorSetKHR;
 import static org.lwjgl.vulkan.VK13.*;
 
 public class CinnabarRenderPass implements RenderPass {
+    
+    private static final RenderPipeline SOLID_INSTANCED = RenderPipeline.builder(RenderPipelines.TERRAIN_SNIPPET).withVertexShader("core/terrain_instanced").withLocation("pipeline/solid_instanced").build();
+    public static final RenderPipeline CUTOUT_MIPPED_INSTANCED = RenderPipeline.builder(RenderPipelines.TERRAIN_SNIPPET).withVertexShader("core/terrain_instanced").withLocation("pipeline/cutout_mipped_instanced").withShaderDefine("ALPHA_CUTOUT", 0.5F).build();
+    public static final RenderPipeline CUTOUT_INSTANCED = RenderPipeline.builder(RenderPipelines.TERRAIN_SNIPPET).withVertexShader("core/terrain_instanced").withLocation("pipeline/cutout_instanced").withShaderDefine("ALPHA_CUTOUT", 0.1F).build();
     
     private final CinnabarDevice device;
     private final VkCommandBuffer commandBuffer;
@@ -350,16 +358,14 @@ public class CinnabarRenderPass implements RenderPass {
     
     @Override
     public void setVertexBuffer(int bindingIndex, GpuBuffer buffer) {
-        final var cinnabarBuffer = (CinnabarGpuBuffer) buffer;
-        // TODO: binding offset
-        vkCmdBindVertexBuffers(commandBuffer, bindingIndex, new long[]{(cinnabarBuffer).getBufferForRead().handle}, new long[]{0});
+        final var bufferPair = ((CinnabarGpuBuffer) buffer).getBufferForRead();
+        vkCmdBindVertexBuffers(commandBuffer, bindingIndex, new long[]{bufferPair.first().handle}, new long[]{bufferPair.second().offset()});
     }
     
     @Override
     public void setIndexBuffer(GpuBuffer buffer, VertexFormat.IndexType indexType) {
-        final var cinnabarBuffer = (CinnabarGpuBuffer) buffer;
-        // TODO: index buffer offset (the draw command can also do this though)
-        vkCmdBindIndexBuffer(commandBuffer, cinnabarBuffer.getBufferForRead().handle, 0, switch (indexType) {
+        final var bufferPair = ((CinnabarGpuBuffer) buffer).getBufferForRead();
+        vkCmdBindIndexBuffer(commandBuffer, bufferPair.first().handle, bufferPair.second().offset(), switch (indexType) {
             case SHORT -> VK_INDEX_TYPE_UINT16;
             case INT -> VK_INDEX_TYPE_UINT32;
         });
@@ -482,6 +488,34 @@ public class CinnabarRenderPass implements RenderPass {
     @Override
     public void drawMultipleIndexed(Collection<Draw> draws, @Nullable GpuBuffer indexBuffer, @Nullable VertexFormat.IndexType indexType) {
         assert boundPipeline != null;
+        
+        if (draws.isEmpty()) {
+            return;
+        }
+        
+        final var drawList = (List<Draw>) draws;
+        
+        if (drawList.getFirst().vertexBuffer() instanceof RenderChunkVertexBufferPool.Buffer) {
+            final RenderPipeline oldPipeline = boundPipeline.info;
+            RenderPipeline newPipeline = null;
+            if (boundPipeline.info == RenderPipelines.SOLID) {
+                newPipeline = SOLID_INSTANCED;
+            } else if (boundPipeline.info == RenderPipelines.CUTOUT_MIPPED) {
+                newPipeline = CUTOUT_MIPPED_INSTANCED;
+            } else if (boundPipeline.info == RenderPipelines.CUTOUT) {
+                newPipeline = CUTOUT_INSTANCED;
+            }
+            if(newPipeline != null) {
+                // special case where special shit is done
+                assert indexBuffer != null;
+                assert indexType != null;
+                setPipeline(newPipeline);
+                fastishDrawMultipleIndexed(drawList, indexBuffer, indexType);
+                setPipeline(oldPipeline);
+                return;
+            }
+        }
+        
         setupDraw();
         
         @Nullable
@@ -507,6 +541,96 @@ public class CinnabarRenderPass implements RenderPass {
             updateUniforms();
             vkCmdDrawIndexed(commandBuffer, draw.indexCount(), 1, draw.firstIndex(), 0, 0);
         }
+    }
+    
+    private void fastishDrawMultipleIndexed(List<Draw> draws, GpuBuffer indexBuffer, VertexFormat.IndexType indexType) {
+        setupDraw();
+        
+        final var offsetsCPUBuffer = new VkBuffer(device, (long) draws.size() * MagicMemorySizes.VEC3_BYTE_SIZE, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, device.hostTransientMemoryPool());
+        device.destroyEndOfFrame(offsetsCPUBuffer);
+        final var offsetPtr = offsetsCPUBuffer.allocation.cpu().hostPointer;
+        
+        final var drawsCPUBuffer = new VkBuffer(device, (long) draws.size() * VkDrawIndexedIndirectCommand.SIZEOF, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, device.hostTransientMemoryPool());
+        device.destroyEndOfFrame(drawsCPUBuffer);
+        final var drawsPtr = drawsCPUBuffer.allocation.cpu().hostPointer;
+        final var drawCommands = VkDrawIndexedIndirectCommand.create(drawsPtr.pointer(), draws.size());
+        
+        for (int i = 0; i < draws.size(); i++) {
+            final var draw = draws.get(i);
+            final int drawIndex = i;
+            if (!(draw.vertexBuffer() instanceof RenderChunkVertexBufferPool.Buffer pooledBuffer) || draw.indexBuffer() != null) {
+                throw new IllegalStateException();
+            }
+            assert draw.uniformUploaderConsumer() != null;
+            draw.uniformUploaderConsumer().accept((name, val) -> {
+                offsetPtr.putFloat((long) drawIndex * MagicMemorySizes.VEC3_BYTE_SIZE, val[0]);
+                offsetPtr.putFloat(((long) drawIndex * MagicMemorySizes.VEC3_BYTE_SIZE) + MagicMemorySizes.FLOAT_BYTE_SIZE, val[1]);
+                offsetPtr.putFloat(((long) drawIndex * MagicMemorySizes.VEC3_BYTE_SIZE) + (MagicMemorySizes.FLOAT_BYTE_SIZE * 2), val[2]);
+            });
+            drawCommands.position(i);
+            drawCommands.indexCount(draw.indexCount());
+            drawCommands.instanceCount(1);
+            drawCommands.firstIndex(draw.firstIndex());
+            drawCommands.vertexOffset(pooledBuffer.vertexOffset());
+            drawCommands.firstInstance(i);
+        }
+        
+        final var offsetsGPUBuffer = new VkBuffer(device, (long) draws.size() * MagicMemorySizes.VEC3_BYTE_SIZE, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, device.deviceTransientMemoryPool);
+        device.destroyEndOfFrame(offsetsGPUBuffer);
+        final var drawsGPUBuffer = new VkBuffer(device, (long) draws.size() * VkDrawIndexedIndirectCommand.SIZEOF, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT, device.deviceTransientMemoryPool);
+        device.destroyEndOfFrame(drawsGPUBuffer);
+        
+        device.createCommandEncoder().copyBufferToBuffer(offsetsCPUBuffer, offsetsGPUBuffer);
+        device.createCommandEncoder().copyBufferToBuffer(drawsCPUBuffer, drawsGPUBuffer);
+        
+        final var cinnabarVertexBuffer = (RenderChunkVertexBufferPool.Buffer) draws.getFirst().vertexBuffer();
+        // 0 offset because the vertexOffset used above does the offsetting
+        vkCmdBindVertexBuffers(commandBuffer, 0, new long[]{cinnabarVertexBuffer.getBufferForRead().first().handle, offsetsGPUBuffer.handle}, new long[]{0, 0});
+        
+        vkCmdDrawIndexedIndirect(commandBuffer, drawsGPUBuffer.handle, 0, draws.size(), VkDrawIndexedIndirectCommand.SIZEOF);
+    }
+    
+    private void fastDrawMultipleIndexed(List<Draw> draws, GpuBuffer indexBuffer, VertexFormat.IndexType indexType) {
+        setupDraw();
+        setIndexBuffer(indexBuffer, indexType);
+        
+        final var offsetsCPUBuffer = new VkBuffer(device, (long) draws.size() * MagicMemorySizes.VEC3_BYTE_SIZE, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, device.hostTransientMemoryPool());
+        device.destroyEndOfFrame(offsetsCPUBuffer);
+        final var offsetPtr = offsetsCPUBuffer.allocation.cpu().hostPointer;
+        
+        final var drawsCPUBuffer = new VkBuffer(device, (long) draws.size() * VkDrawIndexedIndirectCommand.SIZEOF, VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT, device.hostTransientMemoryPool());
+        device.destroyEndOfFrame(drawsCPUBuffer);
+        final var drawsPtr = drawsCPUBuffer.allocation.cpu().hostPointer;
+        final var drawCommands = VkDrawIndexedIndirectCommand.create(drawsPtr.pointer(), draws.size());
+        
+        for (int i = 0; i < draws.size(); i++) {
+            final var draw = draws.get(i);
+            final int drawIndex = i;
+            if (!(draw.vertexBuffer() instanceof RenderChunkVertexBufferPool.Buffer pooledBuffer) || draw.indexBuffer() != null) {
+                throw new IllegalStateException();
+            }
+            assert draw.uniformUploaderConsumer() != null;
+            draw.uniformUploaderConsumer().accept((name, val) -> {
+                offsetPtr.putVector3f((long) drawIndex * MagicMemorySizes.VEC3_BYTE_SIZE, new Vector3f(val));
+            });
+            drawCommands.position(i);
+            drawCommands.indexCount(draw.indexCount());
+            drawCommands.instanceCount(1);
+            drawCommands.firstIndex(draw.firstIndex());
+            drawCommands.vertexOffset(pooledBuffer.vertexOffset());
+            drawCommands.firstInstance(i);
+        }
+        
+        final var offsetsGPUBuffer = new VkBuffer(device, (long) draws.size() * MagicMemorySizes.VEC3_BYTE_SIZE, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, device.deviceTransientMemoryPool);
+        device.destroyEndOfFrame(offsetsGPUBuffer);
+        
+        device.createCommandEncoder().copyBufferToBuffer(offsetsCPUBuffer, offsetsGPUBuffer);
+        
+        final var cinnabarVertexBuffer = (RenderChunkVertexBufferPool.Buffer) draws.getFirst().vertexBuffer();
+        // 0 offset because the vertexOffset used above does the offsetting
+        vkCmdBindVertexBuffers(commandBuffer, 0, new long[]{cinnabarVertexBuffer.getBufferForRead().first().handle, offsetsGPUBuffer.handle}, new long[]{0, 0});
+        
+        vkCmdDrawIndexedIndirect(commandBuffer, drawsCPUBuffer.handle, 0, draws.size(), VkDrawIndexedIndirectCommand.SIZEOF);
     }
     
     @Override

@@ -205,7 +205,7 @@ public class CinnabarCommandEncoder implements CommandEncoder, Destroyable {
             
             final var copyRegion = VkBufferCopy.calloc(1, stack);
             copyRegion.srcOffset(0);
-            copyRegion.dstOffset(0);
+            copyRegion.dstOffset(targetBuffer.second().offset());
             copyRegion.size(data.size() - offset);
             copyRegion.limit(1);
             
@@ -213,7 +213,7 @@ public class CinnabarCommandEncoder implements CommandEncoder, Destroyable {
                 fullBarrier(commandBuffer);
             }
             
-            vkCmdCopyBuffer(commandBuffer, uploadBuffer.handle, targetBuffer.handle, copyRegion);
+            vkCmdCopyBuffer(commandBuffer, uploadBuffer.handle, targetBuffer.first().handle, copyRegion);
             
             if (buffer instanceof TransientWriteBuffer transientWriteBuffer) {
                 transientWriteBuffer.write(uploadBuffer.allocation.cpu());
@@ -239,7 +239,7 @@ public class CinnabarCommandEncoder implements CommandEncoder, Destroyable {
         return new GpuBuffer.ReadView() {
             @Override
             public ByteBuffer data() {
-                final var hostPtr = readBuffer.getBufferForRead().allocation.cpu().hostPointer;
+                final var hostPtr = readBuffer.getBufferForRead().first().allocation.cpu().hostPointer;
                 return MemoryUtil.memByteBuffer(hostPtr.pointer(), (int) hostPtr.size());
             }
             
@@ -378,7 +378,7 @@ public class CinnabarCommandEncoder implements CommandEncoder, Destroyable {
             copy.imageExtent().set(width, height, 1);
             
             fullBarrier(mainDrawCommandBuffer);
-            vkCmdCopyImageToBuffer(mainDrawCommandBuffer, cinnabarTexture.imageHandle, VK_IMAGE_LAYOUT_GENERAL, readBuffer.getBufferForWrite().handle, copy);
+            vkCmdCopyImageToBuffer(mainDrawCommandBuffer, cinnabarTexture.imageHandle, VK_IMAGE_LAYOUT_GENERAL, readBuffer.getBufferForWrite().first().handle, copy);
             fullBarrier(mainDrawCommandBuffer);
             device.destroyEndOfFrame(callback::run);
         }

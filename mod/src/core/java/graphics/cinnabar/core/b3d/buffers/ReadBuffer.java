@@ -2,6 +2,8 @@ package graphics.cinnabar.core.b3d.buffers;
 
 import com.mojang.blaze3d.buffers.BufferType;
 import com.mojang.blaze3d.buffers.BufferUsage;
+import graphics.cinnabar.api.memory.MemoryRange;
+import graphics.cinnabar.api.util.Pair;
 import graphics.cinnabar.core.b3d.CinnabarDevice;
 import graphics.cinnabar.core.vk.memory.VkBuffer;
 import org.jetbrains.annotations.Nullable;
@@ -16,13 +18,13 @@ public class ReadBuffer extends CinnabarGpuBuffer {
     }
     
     @Override
-    public VkBuffer getBufferForWrite() {
-        return buffer;
+    public Pair<VkBuffer, MemoryRange> getBufferForWrite() {
+        return new Pair<>(buffer, new MemoryRange(0, buffer.size));
     }
     
     @Override
-    public VkBuffer getBufferForRead() {
-        return buffer;
+    public Pair<VkBuffer, MemoryRange> getBufferForRead() {
+        return new Pair<>(buffer, new MemoryRange(0, buffer.size));
     }
     
     @Override

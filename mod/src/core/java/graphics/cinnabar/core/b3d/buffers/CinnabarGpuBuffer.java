@@ -3,7 +3,9 @@ package graphics.cinnabar.core.b3d.buffers;
 import com.mojang.blaze3d.buffers.BufferType;
 import com.mojang.blaze3d.buffers.BufferUsage;
 import com.mojang.blaze3d.buffers.GpuBuffer;
+import graphics.cinnabar.api.memory.MemoryRange;
 import graphics.cinnabar.api.util.Destroyable;
+import graphics.cinnabar.api.util.Pair;
 import graphics.cinnabar.core.b3d.CinnabarDevice;
 import graphics.cinnabar.core.vk.memory.VkBuffer;
 
@@ -32,9 +34,9 @@ public abstract class CinnabarGpuBuffer extends GpuBuffer implements Destroyable
         device.destroyEndOfFrame(this);
     }
     
-    public abstract VkBuffer getBufferForWrite();
+    public abstract Pair<VkBuffer, MemoryRange> getBufferForWrite();
     
-    public abstract VkBuffer getBufferForRead();
+    public abstract Pair<VkBuffer, MemoryRange> getBufferForRead();
     
     private static final int defaultUsageBits = VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
     protected static int typeUsageBits(BufferType bufferType) {

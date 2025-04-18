@@ -2,7 +2,9 @@ package graphics.cinnabar.core.b3d.buffers;
 
 import com.mojang.blaze3d.buffers.BufferType;
 import com.mojang.blaze3d.buffers.BufferUsage;
+import graphics.cinnabar.api.memory.MemoryRange;
 import graphics.cinnabar.api.memory.PointerWrapper;
+import graphics.cinnabar.api.util.Pair;
 import graphics.cinnabar.core.b3d.CinnabarDevice;
 import graphics.cinnabar.core.vk.memory.VkBuffer;
 import graphics.cinnabar.core.vk.memory.VkMemoryAllocation;
@@ -26,22 +28,20 @@ public class TransientWriteBuffer extends CinnabarGpuBuffer {
     }
     
     @Override
-    public VkBuffer getBufferForWrite() {
+    public Pair<VkBuffer, MemoryRange> getBufferForWrite() {
         currentBuffer = new VkBuffer(device, size, typeUsageBits(type()), device.deviceTransientMemoryPool);
         currentBuffer.setVulkanName(name);
         device.destroyEndOfFrame(currentBuffer);
-//        device.destroyAfterSubmit(this::copyBackLastWrite);
-        return currentBuffer;
+        return new Pair<>(currentBuffer, new MemoryRange(0, currentBuffer.size));
     }
     
     @Override
-    public VkBuffer getBufferForRead() {
+    public Pair<VkBuffer, MemoryRange> getBufferForRead() {
         if (currentBuffer == null || lastWrittenFrame != device.currentFrameIndex()) {
-//            device.createCommandEncoder().writeToBuffer(this, lastWritten, 0);
             throw new IllegalStateException();
         }
         assert currentBuffer != null;
-        return currentBuffer;
+        return new Pair<>(currentBuffer, new MemoryRange(0, currentBuffer.size));
     }
     
     public void write(VkMemoryAllocation.CPU buffer) {

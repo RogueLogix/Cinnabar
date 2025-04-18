@@ -16,6 +16,7 @@ import graphics.cinnabar.api.util.Triple;
 import graphics.cinnabar.core.CinnabarCore;
 import graphics.cinnabar.core.b3d.buffers.PersistentWriteBuffer;
 import graphics.cinnabar.core.b3d.buffers.ReadBuffer;
+import graphics.cinnabar.core.b3d.buffers.RenderChunkVertexBufferPool;
 import graphics.cinnabar.core.b3d.buffers.TransientWriteBuffer;
 import graphics.cinnabar.core.b3d.command.CinnabarCommandEncoder;
 import graphics.cinnabar.core.b3d.pipeline.CinnabarPipeline;
@@ -89,6 +90,8 @@ public class CinnabarDevice implements CinnabarGpuDevice {
     public final VkMemoryPool.CPU hostPersistentMemoryPool;
     public final List<VkMemoryPool.Transient.CPU> hostTransientMemoryPools;
     
+    public final RenderChunkVertexBufferPool vertexBufferPool;
+    
     private final BiFunction<ResourceLocation, ShaderType, String> shaderSourceProvider;
     
     public CinnabarDevice(long windowHandle, int debugLevel, boolean syncDebug, BiFunction<ResourceLocation, ShaderType, String> shaderSourceProvider, boolean debugLabels) {
@@ -156,6 +159,8 @@ public class CinnabarDevice implements CinnabarGpuDevice {
         }
         hostTransientMemoryPools = List.of(hostTransientPools);
         
+        vertexBufferPool = new RenderChunkVertexBufferPool(this);
+        
         commandEncoder = new CinnabarCommandEncoder(this);
         ((CinnabarWindow) Minecraft.getInstance().getWindow()).attachDevice(this);
         
@@ -175,6 +180,7 @@ public class CinnabarDevice implements CinnabarGpuDevice {
         VulkanSampler.shutdown();
         
         commandEncoder.destroy();
+        vertexBufferPool.destroy();
         
         toDestroy.forEach(list -> list.forEach(Destroyable::destroy));
         toDestroy.clear();
@@ -368,6 +374,11 @@ public class CinnabarDevice implements CinnabarGpuDevice {
         final var name = bufferNameSupplier != null ? bufferNameSupplier.get() : null;
         if (bufferUsage == BufferUsage.DYNAMIC_WRITE && (name == null || !name.startsWith("Immediate vertex buffer for"))) {
             bufferUsage = BufferUsage.STATIC_WRITE;
+        }
+        if(name != null && name.startsWith("Section vertex buffer")){
+            assert bufferType == BufferType.VERTICES;
+            assert bufferUsage == BufferUsage.STATIC_WRITE;
+            return vertexBufferPool.alloc(bufferSize);
         }
         return switch (bufferUsage) {
             // single GPU buffer, barriers mid-frame

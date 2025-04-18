@@ -18,6 +18,7 @@ import graphics.cinnabar.core.vk.shaders.ShaderProcessing;
 import graphics.cinnabar.core.vk.shaders.ShaderSet;
 import graphics.cinnabar.core.vk.shaders.vertex.VertexInputState;
 import it.unimi.dsi.fastutil.objects.Object2ReferenceOpenHashMap;
+import it.unimi.dsi.fastutil.objects.ReferenceArrayList;
 import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.resources.ResourceLocation;
 import org.jetbrains.annotations.Nullable;
@@ -126,7 +127,14 @@ public class CinnabarPipeline implements CompiledRenderPipeline, VulkanObject {
             multiSampleState.rasterizationSamples(VK_SAMPLE_COUNT_1_BIT);
             multiSampleState.sampleShadingEnable(false);
             
-            final var inputState = VertexInputState.forVertexFormat(pipeline.getVertexFormat());
+            var inputState = VertexInputState.forVertexFormat(pipeline.getVertexFormat());
+            if (pipeline.getVertexShader().getPath().equals("core/terrain_instanced")) {
+                // special bullshit thats done with terrain rendering
+                final var offsetBuffer = new VertexInputState.Buffer(1, 12, true);
+                final var attribs = new ReferenceArrayList<>(inputState.attribs());
+                attribs.add(new VertexInputState.Attrib(shaderSet.attribLocation("ModelOffset"), 1, VK_FORMAT_R32G32B32_SFLOAT, 0));
+                inputState = new VertexInputState(List.of(inputState.buffers().getFirst(), offsetBuffer), attribs);
+            }
             
             final var bufferBindings = VkVertexInputBindingDescription.calloc(inputState.buffers().size(), stack);
             final var buffers = inputState.buffers();
@@ -147,7 +155,7 @@ public class CinnabarPipeline implements CompiledRenderPipeline, VulkanObject {
                     attribBindings.location(attrib.location());
                 } else {
                     final var location = shaderSet.attribLocation(attrib.name());
-                    if(location == -1){
+                    if (location == -1) {
                         // skip inputs not used by the shader
                         continue;
                     }
