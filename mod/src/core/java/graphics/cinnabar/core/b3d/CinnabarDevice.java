@@ -174,13 +174,15 @@ public class CinnabarDevice implements CinnabarGpuDevice {
         VulkanSampler.shutdown();
         
         commandEncoder.destroy();
+        
+        toDestroy.forEach(list -> list.forEach(Destroyable::destroy));
+        toDestroy.clear();
+        
         hostTransientMemoryPools.forEach(Destroyable::destroy);
         hostPersistentMemoryPool.destroy();
         deviceTransientMemoryPool.destroy();
         devicePersistentMemoryPool.destroy();
         
-        toDestroy.forEach(list -> list.forEach(Destroyable::destroy));
-        toDestroy.clear();
         shutdownDestroy.forEach(Destroyable::destroy);
         shutdownDestroy.clear();
         vkDestroyDevice(vkDevice, null);
