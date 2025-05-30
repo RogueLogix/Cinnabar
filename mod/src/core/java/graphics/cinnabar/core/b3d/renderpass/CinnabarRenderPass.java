@@ -9,6 +9,7 @@ import com.mojang.blaze3d.systems.ScissorState;
 import com.mojang.blaze3d.textures.GpuTexture;
 import com.mojang.blaze3d.vertex.VertexFormat;
 import graphics.cinnabar.api.exceptions.NotImplemented;
+import graphics.cinnabar.api.memory.LeakDetection;
 import graphics.cinnabar.api.memory.MagicMemorySizes;
 import graphics.cinnabar.api.memory.PointerWrapper;
 import graphics.cinnabar.core.b3d.CinnabarDevice;
@@ -69,7 +70,9 @@ public class CinnabarRenderPass implements RenderPass {
         this.memoryStack = memoryStack;
         memoryStack.push();
         final var tempSize = 16 * MagicMemorySizes.FLOAT_BYTE_SIZE; // a mat4x4 is the largest single write
-        uniformTempMemory = new PointerWrapper(memoryStack.nmalloc(tempSize), tempSize).clear();
+        uniformTempMemory = new PointerWrapper(memoryStack.nmalloc(tempSize), tempSize);
+        LeakDetection.addAccessibleLocation(uniformTempMemory);
+        uniformTempMemory.clear();
         descriptorWrites = VkWriteDescriptorSet.calloc(16, memoryStack);
         descriptorBufferInfos = VkDescriptorBufferInfo.calloc(16, memoryStack);
         descriptorSamplerInfos = VkDescriptorImageInfo.calloc(16, memoryStack);
@@ -159,6 +162,7 @@ public class CinnabarRenderPass implements RenderPass {
     
     @Override
     public void close() {
+        LeakDetection.removeAccessibleLocation(uniformTempMemory);
         unsetPipeline();
         memoryStack.pop();
         vkCmdEndRendering(commandBuffer);
