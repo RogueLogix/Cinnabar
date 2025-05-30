@@ -111,7 +111,7 @@ public class PersistentPool implements VkMemoryPool.Dedicated, VkMemoryPool.Req2
         // this ensures that i cant have a hole of a size smaller than the minimum allocation size
         final var roundedUpAlignment = Math.max(alignment, MINIMUM_SUBALLOC_SIZE);
         
-        if (dedicatedImage != 0 || dedicatedBuffer != 0) {
+        if (dedicatedImage != 0 || dedicatedBuffer != 0 || roundedUpSize > blockSize) {
             dedicated = true;
         }
         if (!dedicated) {
@@ -142,9 +142,6 @@ public class PersistentPool implements VkMemoryPool.Dedicated, VkMemoryPool.Req2
                 dedicatedAllocateInfo = VkMemoryDedicatedAllocateInfo.calloc(stack).sType$Default();
                 dedicatedAllocateInfo.image(dedicatedImage);
                 dedicatedAllocateInfo.buffer(dedicatedBuffer);
-            }
-            if (roundedUpSize > blockSize) {
-                dedicated = true;
             }
             
             // either dedicated or no other block can fit it, make a new one

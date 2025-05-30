@@ -12,12 +12,11 @@ import graphics.cinnabar.core.b3d.buffers.CinnabarGpuBuffer;
 import graphics.cinnabar.core.b3d.pipeline.CinnabarPipeline;
 import graphics.cinnabar.core.b3d.texture.CinnabarGpuTexture;
 import graphics.cinnabar.core.b3d.texture.CinnabarGpuTextureView;
-import graphics.cinnabar.core.vk.descriptors.DescriptorSetBinding;
-import graphics.cinnabar.core.vk.descriptors.SamplerBinding;
-import graphics.cinnabar.core.vk.descriptors.TexelBufferBinding;
-import graphics.cinnabar.core.vk.descriptors.UBOBinding;
+import graphics.cinnabar.core.vk.descriptors.*;
+import it.unimi.dsi.fastutil.ints.IntArrayList;
 import it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.objects.ObjectArraySet;
+import it.unimi.dsi.fastutil.objects.ReferenceArrayList;
 import net.minecraft.util.ARGB;
 import net.neoforged.neoforge.client.stencil.StencilTest;
 import org.jetbrains.annotations.Nullable;
@@ -268,7 +267,33 @@ public class CinnabarRenderPass implements RenderPass {
                     if (!dirtyUniforms.remove(name)) {
                         continue;
                     }
-                    @Nullable final var bufferSlice = uniforms.get(name);
+                    @Nullable
+                    final var bufferSlice = uniforms.get(name);
+                    if (bufferSlice == null) {
+                        throw new IllegalStateException("Any set sampler must be found in the shader");
+                    }
+                    
+                    CinnabarGpuBuffer cinnabarBuffer = (CinnabarGpuBuffer) bufferSlice.buffer();
+                    cinnabarBuffer.accessed();
+                    descriptorBufferInfos.buffer(cinnabarBuffer.backingBuffer().handle);
+                    descriptorBufferInfos.offset(bufferSlice.offset());
+                    descriptorBufferInfos.range(bufferSlice.length());
+                    
+                    descriptorWrites.sType$Default();
+                    descriptorWrites.dstBinding(bindingPoint);
+                    descriptorWrites.descriptorCount(1);
+                    descriptorWrites.descriptorType(binding.type());
+                    descriptorWrites.pBufferInfo(descriptorBufferInfos);
+                    descriptorWrites.pImageInfo(null);
+                    
+                    descriptorWrites.position(descriptorWrites.position() + 1);
+                    descriptorBufferInfos.position(descriptorBufferInfos.position() + 1);
+                } else if (binding instanceof SSBOBinding(String name, int bindingPoint, int arrayStride)) {
+                    if (!dirtyUniforms.remove(name)) {
+                        continue;
+                    }
+                    @Nullable
+                    final var bufferSlice = uniforms.get(name);
                     if (bufferSlice == null) {
                         throw new IllegalStateException("Any set sampler must be found in the shader");
                     }
@@ -292,7 +317,8 @@ public class CinnabarRenderPass implements RenderPass {
                     if (!dirtyUniforms.remove(name)) {
                         continue;
                     }
-                    @Nullable final var texelBuffer = uniforms.get(name);
+                    @Nullable
+                    final var texelBuffer = uniforms.get(name);
                     if (texelBuffer == null) {
                         throw new IllegalStateException("Any set texelBuffer must be found in the shader");
                     }
@@ -329,7 +355,8 @@ public class CinnabarRenderPass implements RenderPass {
                     if (!dirtySamplers.remove(name)) {
                         continue;
                     }
-                    @Nullable final var textureView = samplers.get(name);
+                    @Nullable
+                    final var textureView = samplers.get(name);
                     if (textureView == null) {
                         throw new IllegalStateException("Any set sampler must be found in the shader");
                     }
@@ -377,6 +404,30 @@ public class CinnabarRenderPass implements RenderPass {
     public <T> void drawMultipleIndexed(Collection<Draw<T>> draws, @Nullable GpuBuffer indexBuffer, @Nullable VertexFormat.IndexType indexType, Collection<String> dynamicUniforms, T userData) {
         assert boundPipeline != null;
         
+        if (dynamicUniforms.size() == 1) {
+            final var dynamicUniformName = dynamicUniforms.stream().findFirst().get();
+            boolean isSSBO = false;
+            for (int i = 0; i < boundPipeline.shaderSet.descriptorSetLayouts.size(); i++) {
+                for (DescriptorSetBinding binding : boundPipeline.shaderSet.descriptorSetLayouts.get(i).bindings) {
+                    if (binding instanceof SSBOBinding(String name, int bindingPoint, int size) && name.equals(dynamicUniformName)) {
+                        isSSBO = true;
+                        break;
+                    }
+                }
+                if (isSSBO) {
+                    break;
+                }
+            }
+            if (isSSBO) {
+                fastDrawMultipleIndexed(draws, indexBuffer, indexType, dynamicUniforms, userData);
+            }
+            return;
+        }
+        
+        fallbackDrawMultipleIndexed(draws, indexBuffer, indexType, dynamicUniforms, userData);
+    }
+    
+    public <T> void fallbackDrawMultipleIndexed(Collection<Draw<T>> draws, @Nullable GpuBuffer indexBuffer, @Nullable VertexFormat.IndexType indexType, Collection<String> dynamicUniforms, T userData) {
         @Nullable
         GpuBuffer lastIndexBuffer = null;
         @Nullable
@@ -395,11 +446,104 @@ public class CinnabarRenderPass implements RenderPass {
             }
             if (draw.uniformUploaderConsumer() instanceof BiConsumer<?, ?> consumer) {
                 //noinspection unchecked
-                ((BiConsumer<T, UniformUploader>)consumer).accept(userData, this::setUniform);
+                ((BiConsumer<T, UniformUploader>) consumer).accept(userData, this::setUniform);
             }
             setVertexBuffer(draw.slot(), draw.vertexBuffer());
             updateUniforms();
             vkCmdDrawIndexed(commandBuffer, draw.indexCount(), 1, draw.firstIndex(), 0, 0);
+        }
+    }
+    
+    public <T> void fastDrawMultipleIndexed(Collection<Draw<T>> draws, @Nullable GpuBuffer indexBuffer, @Nullable VertexFormat.IndexType indexType, Collection<String> dynamicUniforms, T userData) {
+        // the single largest cost is in the descriptor set updates, if those can be avoided (they can) thats a large win (and a step toward multidraw)
+        if (dynamicUniforms.size() != 1) {
+            // for memory reasons, its assumed there is only a single dynamic uniform in this path, this is currently always the case
+            throw new IllegalStateException();
+        }
+        final var dynamicUniformName = dynamicUniforms.stream().findFirst().get();
+        assert !draws.isEmpty();
+        assert boundPipeline != null;
+        
+        boolean isSSBO = false;
+        int ssboArrayStride = 0;
+        for (int i = 0; i < boundPipeline.shaderSet.descriptorSetLayouts.size(); i++) {
+            for (DescriptorSetBinding binding : boundPipeline.shaderSet.descriptorSetLayouts.get(i).bindings) {
+                if (binding instanceof SSBOBinding(String name, int bindingPoint, int arrayStride) && name.equals(dynamicUniformName)) {
+                    isSSBO = true;
+                    ssboArrayStride = arrayStride;
+                    break;
+                }
+            }
+            if (isSSBO) {
+                break;
+            }
+        }
+        
+        // TODO: dont assume that i can use the uniform uploader multiple times, someone will assume Vanilla B3D's behavior with it, which uses it exactly once
+        //       fallbackDrawMultipleIndexed will use the uploader again
+        
+        final var orderedDraws = new ReferenceArrayList<>(draws);
+        final var orderedDynamicUniformValues = new ReferenceArrayList<GpuBufferSlice>();
+        orderedDynamicUniformValues.size(orderedDraws.size());
+        for (int i = 0; i < orderedDraws.size(); i++) {
+            final var draw = orderedDraws.get(i);
+            if (draw.uniformUploaderConsumer() != null) {
+                int finalI = i;
+                draw.uniformUploaderConsumer().accept(userData, (name, bufferSlice) -> {
+                    if (!name.equals(dynamicUniformName)) {
+                        throw new IllegalArgumentException();
+                    }
+                    orderedDynamicUniformValues.set(finalI, bufferSlice);
+                });
+                if(orderedDynamicUniformValues.get(i) == null){
+                    throw new IllegalStateException();
+                }
+            }
+        }
+        
+        // if all draws dont share the same GPU buffer, i cant compact the descriptor updates
+        // they all also must be at a multiple of the array stride
+        final var expectedDynamicUniformGpuBuffer = orderedDynamicUniformValues.getFirst().buffer();
+        for (GpuBufferSlice orderedDynamicUniformValue : orderedDynamicUniformValues) {
+            boolean canBatch;
+            canBatch = expectedDynamicUniformGpuBuffer == orderedDynamicUniformValue.buffer();
+            canBatch = canBatch && orderedDynamicUniformValue.offset() % ssboArrayStride == 0;
+            canBatch = canBatch && orderedDynamicUniformValue.length() == ssboArrayStride;
+            if (!canBatch) {
+                // some check failed, can't batch them
+                fallbackDrawMultipleIndexed(draws, indexBuffer, indexType, dynamicUniforms, userData);
+                return;
+            }
+        }
+        
+        setUniform(dynamicUniformName, expectedDynamicUniformGpuBuffer.slice());
+        updateUniforms();
+        
+        final var orderedDrawArrayIndices = new IntArrayList(orderedDraws.size());
+        for (int i = 0; i < orderedDynamicUniformValues.size(); i++) {
+            orderedDrawArrayIndices.add(orderedDynamicUniformValues.get(i).offset() / ssboArrayStride);
+        }
+        
+        @Nullable
+        GpuBuffer lastIndexBuffer = null;
+        @Nullable
+        VertexFormat.IndexType lastIndexType = null;
+        for (int i = 0; i < orderedDraws.size(); i++) {
+            final var draw = orderedDraws.get(i);
+            @Nullable
+            final var indexTypeToUse = draw.indexType() == null ? indexType : draw.indexType();
+            @Nullable
+            final var indexBufferToUse = draw.indexBuffer() == null ? indexBuffer : draw.indexBuffer();
+            assert indexTypeToUse != null;
+            assert indexBufferToUse != null;
+            if (indexBufferToUse != lastIndexBuffer || indexTypeToUse != lastIndexType) {
+                lastIndexBuffer = indexBufferToUse;
+                lastIndexType = indexTypeToUse;
+                setIndexBuffer(indexBufferToUse, indexTypeToUse);
+            }
+            setVertexBuffer(draw.slot(), draw.vertexBuffer());
+            final var arrayIndex = orderedDrawArrayIndices.getInt(i);
+            vkCmdDrawIndexed(commandBuffer, draw.indexCount(), 1, draw.firstIndex(), 0, arrayIndex);
         }
     }
     

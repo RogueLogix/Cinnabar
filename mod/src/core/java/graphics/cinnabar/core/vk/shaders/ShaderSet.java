@@ -107,12 +107,17 @@ public class ShaderSet {
         // TODO: SSBOs?
         int highestDescriptorSetIndex = -1;
         final var uboNames = new ObjectArraySet<String>();
+        final var ssboNames = new ObjectArraySet<String>();
         final var texelBufferNames = new ObjectArraySet<String>();
         final var samplerNames = new ObjectArraySet<String>();
         @Nullable
         final var vertexUBOs = (List<Map<String, Object>>) vertexReflection.get("ubos");
         @Nullable
         final var fragmentUBOs = (List<Map<String, Object>>) fragmentReflection.get("ubos");
+        @Nullable
+        final var vertexSSBOs = (List<Map<String, Object>>) vertexReflection.get("ssbos");
+        @Nullable
+        final var fragmentSSBOs = (List<Map<String, Object>>) fragmentReflection.get("ssbos");
         @Nullable
         final var vertexTexelBuffers = (List<Map<String, Object>>) vertexReflection.get("separate_images");
         @Nullable
@@ -132,6 +137,20 @@ public class ShaderSet {
             for (final var ubo : fragmentUBOs) {
                 uboNames.add((String) ubo.get("name"));
                 final var setIndex = (Integer) ubo.get("set");
+                highestDescriptorSetIndex = Math.max(highestDescriptorSetIndex, setIndex);
+            }
+        }
+        if (vertexSSBOs != null) {
+            for (final var ssbo : vertexSSBOs) {
+                ssboNames.add((String) ssbo.get("name"));
+                final var setIndex = (Integer) ssbo.get("set");
+                highestDescriptorSetIndex = Math.max(highestDescriptorSetIndex, setIndex);
+            }
+        }
+        if (fragmentSSBOs != null) {
+            for (final var ssbo : fragmentSSBOs) {
+                ssboNames.add((String) ssbo.get("name"));
+                final var setIndex = (Integer) ssbo.get("set");
                 highestDescriptorSetIndex = Math.max(highestDescriptorSetIndex, setIndex);
             }
         }
@@ -182,6 +201,27 @@ public class ShaderSet {
             
             final var uboBinding = new UBOBinding(uboName, binding, size);
             setBindings.get(set).add(uboBinding);
+        }
+        
+        for (final var ssboName : ssboNames) {
+            final var ssboData = Stream.concat(vertexSSBOs != null ? vertexSSBOs.stream() : Stream.empty(), fragmentSSBOs != null ? fragmentSSBOs.stream() : Stream.empty()).filter(ubo -> ubo.get("name").equals(ssboName)).findFirst().get();
+            
+            final var type = (String) ssboData.get("type");
+            final var set = (int) ssboData.get("set");
+            final var binding = (int) ssboData.get("binding");
+            
+            final var ssboTypeData = vertexTypes != null ? vertexTypes.getOrDefault(type, fragmentTypes != null ? fragmentTypes.get(type) : null) : fragmentTypes.get(type);
+            assert ssboTypeData != null;
+            final var members = (List<Map<String, Object>>)ssboTypeData.get("members");
+            if(members.size() != 1) {
+                throw new IllegalStateException();
+            }
+            final var member = members.getFirst();
+            
+            final var arrayStride = (int) member.get("array_stride");
+            
+            final var ssboBinding = new SSBOBinding(ssboName, binding, arrayStride);
+            setBindings.get(set).add(ssboBinding);
         }
         
         for (final var texelBufferName : texelBufferNames) {

@@ -8,8 +8,6 @@ import graphics.cinnabar.core.vk.memory.VkBuffer;
 import graphics.cinnabar.core.vk.memory.VkMemoryAllocation;
 import graphics.cinnabar.core.vk.memory.VkMemoryPool;
 import org.jetbrains.annotations.Nullable;
-import org.lwjgl.vulkan.VkCommandBuffer;
-import org.lwjgl.vulkan.VkMemoryBarrier;
 
 import static org.lwjgl.vulkan.VK13.*;
 
@@ -96,7 +94,7 @@ public final class CinnabarGpuBuffer extends GpuBuffer implements Destroyable {
             bits |= VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
         }
         if ((b3dUsage & USAGE_UNIFORM) != 0) {
-            bits |= VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
+            bits |= VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
         }
         if ((b3dUsage & USAGE_UNIFORM_TEXEL_BUFFER) != 0) {
             bits |= VK_BUFFER_USAGE_UNIFORM_TEXEL_BUFFER_BIT;

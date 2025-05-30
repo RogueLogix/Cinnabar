@@ -46,8 +46,8 @@ public class ShaderProcessing {
                     """);
         }
         
-        final var versionRemovedPreprocessedVertexSource = rawVertexShader.replace("#version", "//#version");
-        final var versionRemovedPreprocessedFragmentSource = rawFragmentShader.replace("#version", "//#version");
+        final var versionRemovedPreprocessedVertexSource = rawVertexShader.replace("#version", "#define VERTEX_SHADER //");
+        final var versionRemovedPreprocessedFragmentSource = rawFragmentShader.replace("#version", "#define FRAGMENT_SHADER //");
         
         final var vertexTranslationUnit = glslTransformerIntakeCode(versionRemovedPreprocessedVertexSource);
         final var fragmentTranslationUnit = glslTransformerIntakeCode(versionRemovedPreprocessedFragmentSource);
@@ -65,7 +65,7 @@ public class ShaderProcessing {
         final var vertexOutputLines = reformattedVertexShader.lines().filter(line -> line.contains(" out ")).toList();
         final var fragmentInputLines = reformattedFragmentShader.lines().filter(line -> line.contains(" in ")).toList();
         final var fragmentOutputLines = reformattedFragmentShader.lines().filter(line -> line.contains(" in ")).toList();
-        final var uniformLines = Stream.concat(reformattedVertexShader.lines(), reformattedFragmentShader.lines()).filter(line -> line.contains(" uniform ")).filter(uniformLine -> {
+        final var uniformLines = Stream.concat(reformattedVertexShader.lines(), reformattedFragmentShader.lines()).filter(line -> line.contains(" uniform ") || line.contains(" buffer ")).filter(uniformLine -> {
             // skip UBOs
             // GLSLT output is consistent enough, i can rely on this being in the declaration line
             if (uniformLine.contains("{")) {
@@ -227,17 +227,19 @@ public class ShaderProcessing {
                 throw new IllegalStateException("Cinnabar does not support packing inter-stage values");
             }
             
-            final var outputDecStart = vertexOutputLine.indexOf(" out ") + 2;
-            final var outputTypeStart = vertexOutputLine.indexOf(' ', outputDecStart) + 1;
-            final var outputNameStart = vertexOutputLine.indexOf(' ', outputTypeStart) + 1;
-            final var outputNameEnd = vertexOutputLine.indexOf(' ', outputNameStart);
+            final var outputNameEnd = vertexOutputLine.lastIndexOf(' ', vertexOutputLine.lastIndexOf(';') - 1);
+            final var outputNameStart = vertexOutputLine.lastIndexOf(' ', outputNameEnd - 1) + 1;
             
-            final var outputType = vertexOutputLine.substring(outputTypeStart, outputNameStart).trim();
+            final var outputFlatInterpolated = vertexOutputLine.contains("flat") && vertexOutputLine.indexOf("flat") < outputNameStart;
+            
+            final var outputDecStart = outputFlatInterpolated && vertexOutputLine.indexOf(" flat ") > vertexOutputLine.indexOf(" out ") ? vertexOutputLine.indexOf(" flat ") + 4 : vertexOutputLine.indexOf(" out ") + 2;
+            final var outputTypeStart = vertexOutputLine.indexOf(' ', outputDecStart) + 1;
+            final var outputTypeEnd = vertexOutputLine.indexOf(' ', outputTypeStart);
+            
+            final var outputType = vertexOutputLine.substring(outputTypeStart, outputTypeEnd).trim();
             final var outputName = vertexOutputLine.substring(outputNameStart, outputNameEnd).trim();
             
             final var explicitBoundOutput = vertexOutputLine.contains(" location ");
-            
-            final var reflectedOutput = vertexShaderOutputs.stream().filter(output -> output.get("name").equals(outputName)).findFirst().get();
             
             @Nullable
             String matchedFragmentInputLine = null;
@@ -249,15 +251,17 @@ public class ShaderProcessing {
             for (int j = 0; j < fragmentInputLines.size(); j++) {
                 final var fragmentInputLine = fragmentInputLines.get(j);
                 
-                final var inDecStart = fragmentInputLine.indexOf(" in ") + 2;
+                final var inNameEnd = fragmentInputLine.lastIndexOf(' ', fragmentInputLine.lastIndexOf(';') - 1);
+                final var inNameStart = fragmentInputLine.lastIndexOf(' ', inNameEnd - 1) + 1;
+                
+                flatInterpolated = fragmentInputLine.contains("flat") && fragmentInputLine.indexOf("flat") < inNameStart;
+                
+                final var inDecStart = flatInterpolated && fragmentInputLine.indexOf(" flat ") > fragmentInputLine.indexOf(" in ") ? fragmentInputLine.indexOf(" flat ") + 4 : fragmentInputLine.indexOf(" in ") + 2;
                 final var inTypeStart = fragmentInputLine.indexOf(' ', inDecStart) + 1;
-                final var inNameStart = fragmentInputLine.indexOf(' ', inTypeStart) + 1;
-                final var inNameEnd = fragmentInputLine.indexOf(' ', inNameStart);
+                final var inTypeEnd = fragmentInputLine.indexOf(' ', inTypeStart);
                 
-                final var inputType = fragmentInputLine.substring(inTypeStart, inNameStart).trim();
+                final var inputType = fragmentInputLine.substring(inTypeStart, inTypeEnd).trim();
                 final var inputName = fragmentInputLine.substring(inNameStart, inNameEnd).trim();
-                
-                flatInterpolated = fragmentInputLine.contains("flat") && fragmentInputLine.indexOf("flat") < inDecStart;
                 
                 final var explicitBoundInput = fragmentInputLine.contains(" location ");
                 
@@ -322,41 +326,33 @@ public class ShaderProcessing {
             
             final var vertexOutputLine = unmatchedVertexLines.get(i);
             
-            final var outDecStart = vertexOutputLine.indexOf(" out ") + 2;
-            final var outTypeStart = vertexOutputLine.indexOf(' ', outDecStart) + 1;
-            final var outNameStart = vertexOutputLine.indexOf(' ', outTypeStart) + 1;
-            final var outNameEnd = vertexOutputLine.indexOf(' ', outNameStart);
+            final var outputNameEnd = vertexOutputLine.lastIndexOf(' ', vertexOutputLine.lastIndexOf(';') - 1);
+            final var outputNameStart = vertexOutputLine.lastIndexOf(' ', outputNameEnd - 1) + 1;
             
-            final var inputType = vertexOutputLine.substring(outTypeStart, outNameStart).trim();
-            final var inputName = vertexOutputLine.substring(outNameStart, outNameEnd).trim();
+            final var outputFlatInterpolated = vertexOutputLine.contains("flat") && vertexOutputLine.indexOf("flat") < outputNameStart;
             
-            final var flatInterpolated = vertexOutputLine.contains("flat") && vertexOutputLine.indexOf("flat") < outDecStart;
+            final var outputDecStart = outputFlatInterpolated && vertexOutputLine.indexOf(" flat ") > vertexOutputLine.indexOf(" out ") ? vertexOutputLine.indexOf(" flat ") + 4 : vertexOutputLine.indexOf(" out ") + 2;
+            final var outputTypeStart = vertexOutputLine.indexOf(' ', outputDecStart) + 1;
+            final var outputTypeEnd = vertexOutputLine.indexOf(' ', outputTypeStart);
             
-            final var formattedVertexOutput = vertexOuputBaseString.formatted(location, flatInterpolated ? " flat" : "", inputType, inputName);
-            vertexVariablesToRemove.add(inputName);
+            final var outputType = vertexOutputLine.substring(outputTypeStart, outputTypeEnd).trim();
+            final var outputName = vertexOutputLine.substring(outputNameStart, outputNameEnd).trim();
+            
+            final var formattedVertexOutput = vertexOuputBaseString.formatted(location, outputFlatInterpolated ? " flat" : "", outputType, outputName);
+            vertexVariablesToRemove.add(outputName);
             vertexVariablesToAdd.add(formattedVertexOutput);
         }
         
         for (int i = 0; i < fragmentInputLines.size(); i++) {
-            final var location = nextBindingLocation++;
-            
-            
             final var fragmentInputLine = fragmentInputLines.get(i);
             
-            final var inDecStart = fragmentInputLine.indexOf(" in ") + 2;
-            final var inTypeStart = fragmentInputLine.indexOf(' ', inDecStart) + 1;
-            final var inNameStart = fragmentInputLine.indexOf(' ', inTypeStart) + 1;
-            final var inNameEnd = fragmentInputLine.indexOf(' ', inNameStart);
+            final var inNameEnd = fragmentInputLine.lastIndexOf(' ', fragmentInputLine.lastIndexOf(';') - 1);
+            final var inNameStart = fragmentInputLine.lastIndexOf(' ', inNameEnd - 1) + 1;
             
-            final var inputType = fragmentInputLine.substring(inTypeStart, inNameStart).trim();
             final var inputName = fragmentInputLine.substring(inNameStart, inNameEnd).trim();
-            
-            final var flatInterpolated = fragmentInputLine.contains("flat") && fragmentInputLine.indexOf("flat") < inDecStart;
             
             fragmentVariablesToRemove.add(inputName);
             CINNABAR_CORE_LOG.warn("WARNING: Removing unmatched fragment input ({}) from shader, Vulkan will throw an error about this if I dont", inputName);
-//            final var formattedFragmentInput = fragmentInputBaseString.formatted(location, flatInterpolated ? " flat" : "", inputType, inputName);
-//            fragmentVariablesToAdd.add(formattedFragmentInput);
         }
         
         return new Pair<>(new Pair<>(vertexVariablesToRemove, vertexVariablesToAdd), new Pair<>(fragmentVariablesToRemove, fragmentVariablesToAdd));
