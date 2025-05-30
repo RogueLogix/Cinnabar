@@ -1,25 +1,22 @@
 package graphics.cinnabar.core.b3d;
 
-import com.mojang.blaze3d.buffers.BufferType;
-import com.mojang.blaze3d.buffers.BufferUsage;
 import com.mojang.blaze3d.buffers.GpuBuffer;
 import com.mojang.blaze3d.pipeline.CompiledRenderPipeline;
 import com.mojang.blaze3d.pipeline.RenderPipeline;
 import com.mojang.blaze3d.shaders.ShaderType;
 import com.mojang.blaze3d.textures.GpuTexture;
+import com.mojang.blaze3d.textures.GpuTextureView;
 import com.mojang.blaze3d.textures.TextureFormat;
 import graphics.cinnabar.api.CinnabarGpuDevice;
-import graphics.cinnabar.api.exceptions.NotImplemented;
 import graphics.cinnabar.api.memory.MagicMemorySizes;
 import graphics.cinnabar.api.util.Destroyable;
 import graphics.cinnabar.api.util.Triple;
 import graphics.cinnabar.core.CinnabarCore;
-import graphics.cinnabar.core.b3d.buffers.PersistentWriteBuffer;
-import graphics.cinnabar.core.b3d.buffers.ReadBuffer;
-import graphics.cinnabar.core.b3d.buffers.TransientWriteBuffer;
+import graphics.cinnabar.core.b3d.buffers.CinnabarGpuBuffer;
 import graphics.cinnabar.core.b3d.command.CinnabarCommandEncoder;
 import graphics.cinnabar.core.b3d.pipeline.CinnabarPipeline;
 import graphics.cinnabar.core.b3d.texture.CinnabarGpuTexture;
+import graphics.cinnabar.core.b3d.texture.CinnabarGpuTextureView;
 import graphics.cinnabar.core.b3d.window.CinnabarWindow;
 import graphics.cinnabar.core.util.MagicNumbers;
 import graphics.cinnabar.core.vk.VulkanSampler;
@@ -82,7 +79,8 @@ public class CinnabarDevice implements CinnabarGpuDevice {
     public final List<String> enabledDeviceExtensions;
     public final boolean debugMarkerEnabled;
     
-    private int currentFrame = 0;
+    // starts at frame n instead of 0 for initial sync reasons
+    private long currentFrame = MagicNumbers.MaximumFramesInFlight;
     
     public final VkMemoryPool devicePersistentMemoryPool;
     public final VkMemoryPool.Transient deviceTransientMemoryPool;
@@ -147,7 +145,9 @@ public class CinnabarDevice implements CinnabarGpuDevice {
         driverVersion = String.format("%d.%d.%d", VK_VERSION_MAJOR(driverVersionEncoded), VK_VERSION_MINOR(driverVersionEncoded), VK_VERSION_PATCH(driverVersionEncoded));
         renderer = String.format("%s", physicalDeviceProperties.deviceNameString());
         
-        devicePersistentMemoryPool = createMemoryPool(false, VK_MEMORY_HEAP_DEVICE_LOCAL_BIT, 0);
+        // prefer to make device persistent buffers host accessible
+        // this allows direct copy for new buffers
+        devicePersistentMemoryPool = createMemoryPool(false, VK_MEMORY_HEAP_DEVICE_LOCAL_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
         deviceTransientMemoryPool = (VkMemoryPool.Transient) createMemoryPool(true, VK_MEMORY_HEAP_DEVICE_LOCAL_BIT, 0);
         hostPersistentMemoryPool = (VkMemoryPool.CPU) createMemoryPool(false, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, 0);
         final var hostTransientPools = new VkMemoryPool.Transient.CPU[MagicNumbers.MaximumFramesInFlight];
@@ -218,8 +218,12 @@ public class CinnabarDevice implements CinnabarGpuDevice {
         deviceTransientMemoryPool.reset();
     }
     
+    public long currentFrame() {
+        return currentFrame;
+    }
+    
     public int currentFrameIndex() {
-        return currentFrame % MagicNumbers.MaximumFramesInFlight;
+        return (int) (currentFrame % MagicNumbers.MaximumFramesInFlight);
     }
     
     public <T extends Destroyable> T destroyAfterSubmit(T destroyable) {
@@ -348,44 +352,40 @@ public class CinnabarDevice implements CinnabarGpuDevice {
     }
     
     @Override
-    public GpuTexture createTexture(@Nullable Supplier<String> textureNameSupplier, TextureFormat format, int width, int height, int mips) {
-        return createTexture(debugMarkerEnabled && textureNameSupplier != null ? textureNameSupplier.get() : null, format, width, height, mips);
+    public GpuTexture createTexture(@Nullable Supplier<String> textureNameSupplier, int usage, TextureFormat format, int width, int height, int depth, int mips) {
+        return createTexture(debugMarkerEnabled && textureNameSupplier != null ? textureNameSupplier.get() : null, usage, format, width, height, depth, mips);
     }
     
     @Override
-    public GpuTexture createTexture(@Nullable String textureName, TextureFormat format, int width, int height, int mips) {
+    public GpuTexture createTexture(@Nullable String textureName, int usage, TextureFormat format, int width, int height, int depth, int mips) {
         if (textureName == null) {
             textureName = "Texture";
         }
-        final var texture = new CinnabarGpuTexture(this, textureName, format, width, height, mips);
+        final var texture = new CinnabarGpuTexture(this, usage, textureName, format, width, height, depth, mips);
         commandEncoder.setupTexture(texture);
         return texture;
     }
     
     @Override
-    public GpuBuffer createBuffer(@Nullable Supplier<@Nullable String> bufferNameSupplier, BufferType bufferType, BufferUsage bufferUsage, int bufferSize) {
-        @Nullable
-        final var name = bufferNameSupplier != null ? bufferNameSupplier.get() : null;
-        if (bufferUsage == BufferUsage.DYNAMIC_WRITE && (name == null || !name.startsWith("Immediate vertex buffer for"))) {
-            bufferUsage = BufferUsage.STATIC_WRITE;
-        }
-        return switch (bufferUsage) {
-            // single GPU buffer, barriers mid-frame
-            case STATIC_WRITE -> new PersistentWriteBuffer(this, bufferType, bufferUsage, bufferSize, name);
-            // multiple gpu buffers, uploads at beginning of frame
-            case DYNAMIC_WRITE, STREAM_WRITE -> new TransientWriteBuffer(this, bufferType, bufferUsage, bufferSize, name);
-            case STATIC_READ, DYNAMIC_READ, STREAM_READ -> new ReadBuffer(this, bufferType, bufferUsage, bufferSize, name); // reading is equally shit regardless of hints, so same buffer type for them all
-            // these are unused, and idk how they should get used really
-            case DYNAMIC_COPY -> throw new NotImplemented();
-            case STATIC_COPY -> throw new NotImplemented();
-            case STREAM_COPY -> throw new NotImplemented();
-        };
+    public GpuTextureView createTextureView(GpuTexture texture) {
+        return createTextureView(texture, 0, texture.getMipLevels());
     }
     
     @Override
-    public GpuBuffer createBuffer(@Nullable Supplier<String> bufferNameSupplier, BufferType bufferType, BufferUsage bufferUsage, ByteBuffer bufferData) {
-        final var buffer = createBuffer(bufferNameSupplier, bufferType, bufferUsage, bufferData.remaining());
-        commandEncoder.writeToBuffer(buffer, bufferData, 0);
+    public GpuTextureView createTextureView(GpuTexture gpuTexture, int baseMip, int mipLevels) {
+        return new CinnabarGpuTextureView(this, (CinnabarGpuTexture) gpuTexture, baseMip, mipLevels);
+    }
+    
+    @Override
+    public GpuBuffer createBuffer(@Nullable Supplier<String> bufferNameSupplier, int usage, int bufferSize) {
+        @Nullable final var name = bufferNameSupplier != null ? bufferNameSupplier.get() : null;
+        return new CinnabarGpuBuffer(this, usage, bufferSize, name);
+    }
+    
+    @Override
+    public GpuBuffer createBuffer(@Nullable Supplier<String> bufferNameSupplier, int bufferUsage, ByteBuffer bufferData) {
+        final var buffer = createBuffer(bufferNameSupplier, bufferUsage, bufferData.remaining());
+        commandEncoder.writeToBuffer(buffer.slice(), bufferData);
         return buffer;
     }
     
@@ -434,6 +434,11 @@ public class CinnabarDevice implements CinnabarGpuDevice {
     @Override
     public CompiledRenderPipeline precompilePipeline(RenderPipeline renderPipeline, @Nullable BiFunction<ResourceLocation, ShaderType, String> shaderSourceProvider) {
         return getPipeline(renderPipeline, shaderSourceProvider);
+    }
+    
+    @Override
+    public int getUniformOffsetAlignment() {
+        return Math.toIntExact(limits.minUniformBufferOffsetAlignment());
     }
     
     public CinnabarPipeline getPipeline(RenderPipeline renderPipeline) {

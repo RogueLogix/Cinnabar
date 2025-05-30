@@ -1,19 +1,21 @@
 package graphics.cinnabar.core.b3d.command;
 
 import com.mojang.blaze3d.buffers.GpuBuffer;
+import com.mojang.blaze3d.buffers.GpuBufferSlice;
+import com.mojang.blaze3d.buffers.GpuFence;
 import com.mojang.blaze3d.platform.NativeImage;
 import com.mojang.blaze3d.systems.CommandEncoder;
 import com.mojang.blaze3d.systems.RenderPass;
 import com.mojang.blaze3d.textures.GpuTexture;
+import com.mojang.blaze3d.textures.GpuTextureView;
 import graphics.cinnabar.api.memory.LeakDetection;
 import graphics.cinnabar.api.memory.PointerWrapper;
 import graphics.cinnabar.api.util.Destroyable;
 import graphics.cinnabar.core.b3d.CinnabarDevice;
 import graphics.cinnabar.core.b3d.buffers.CinnabarGpuBuffer;
-import graphics.cinnabar.core.b3d.buffers.ReadBuffer;
-import graphics.cinnabar.core.b3d.buffers.TransientWriteBuffer;
 import graphics.cinnabar.core.b3d.renderpass.CinnabarRenderPass;
 import graphics.cinnabar.core.b3d.texture.CinnabarGpuTexture;
+import graphics.cinnabar.core.b3d.texture.CinnabarGpuTextureView;
 import graphics.cinnabar.core.b3d.window.CinnabarWindow;
 import graphics.cinnabar.core.util.MagicNumbers;
 import graphics.cinnabar.core.vk.memory.VkBuffer;
@@ -31,6 +33,7 @@ import java.nio.IntBuffer;
 import java.util.List;
 import java.util.OptionalDouble;
 import java.util.OptionalInt;
+import java.util.function.Supplier;
 
 import static graphics.cinnabar.api.exceptions.VkException.checkVkCode;
 import static org.lwjgl.vulkan.KHRSwapchain.VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
@@ -108,14 +111,14 @@ public class CinnabarCommandEncoder implements CommandEncoder, Destroyable {
     }
     
     @Override
-    public RenderPass createRenderPass(GpuTexture colorAttachment, OptionalInt colorClear) {
-        return this.createRenderPass(colorAttachment, colorClear, null, OptionalDouble.empty());
+    public RenderPass createRenderPass(Supplier<String> debugGroup, GpuTextureView colorAttachment, OptionalInt colorClear) {
+        return this.createRenderPass(debugGroup, colorAttachment, colorClear, null, OptionalDouble.empty());
     }
     
     @Override
-    public RenderPass createRenderPass(GpuTexture colorAttachment, OptionalInt colorClear, @Nullable GpuTexture depthAttachment, OptionalDouble depthClear) {
+    public RenderPass createRenderPass(Supplier<String> debugGroup, GpuTextureView colorAttachment, OptionalInt colorClear, @Nullable GpuTextureView depthAttachment, OptionalDouble depthClear) {
         fullBarrier(mainDrawCommandBuffer);
-        return new CinnabarRenderPass(device, mainDrawCommandBuffer, memoryStack, (CinnabarGpuTexture) colorAttachment, colorClear, (CinnabarGpuTexture) depthAttachment, depthClear);
+        return new CinnabarRenderPass(device, mainDrawCommandBuffer, memoryStack, debugGroup, (CinnabarGpuTextureView) colorAttachment, colorClear, (CinnabarGpuTextureView) depthAttachment, depthClear);
     }
     
     @Override
@@ -144,6 +147,50 @@ public class CinnabarCommandEncoder implements CommandEncoder, Destroyable {
         clearColorTexture(colorTexture, clearColor);
         clearDepthTexture(depthTexture, clearDepth);
     }
+    
+    @Override
+    public void clearColorAndDepthTextures(GpuTexture colorTexture, int clearRGBA, GpuTexture depthTexture, double clearDepth, int scissorX, int scissorY, int scissorWidth, int scissorHeight) {
+        try (
+                // creating a renderpass needs texture views, but im only passed textures... amazing
+                final var colorTextureView = device.createTextureView(colorTexture);
+                final var depthTextureView = device.createTextureView(depthTexture);
+                // the renderpass object isn't needed, but its an autoclosable and vkCmdClearAttachments is a within-renderpass only call
+                final var renderpass = createRenderPass(() -> "ClearColorDepthTextures", colorTextureView, OptionalInt.empty(), depthTextureView, OptionalDouble.empty());
+                final var stack = memoryStack.push();
+        ) {
+            final var vkClearValue = VkClearValue.calloc(stack);
+            final var vkClearColor = vkClearValue.color();
+            vkClearColor.float32(0, ARGB.redFloat(clearRGBA));
+            vkClearColor.float32(1, ARGB.greenFloat(clearRGBA));
+            vkClearColor.float32(2, ARGB.blueFloat(clearRGBA));
+            vkClearColor.float32(3, ARGB.alphaFloat(clearRGBA));
+            
+            final var clearValue = vkClearValue.depthStencil();
+            clearValue.depth((float) clearDepth);
+            
+            final var rects = VkClearRect.calloc(2, stack);
+            for (int i = 0; i < 2; i++) {
+                rects.position(i);
+                rects.baseArrayLayer(0);
+                rects.layerCount(1);
+                rects.rect().offset().set(scissorX, scissorY);
+                rects.rect().extent().set(scissorWidth, scissorHeight);
+            }
+            rects.position(0);
+            
+            final var attachments = VkClearAttachment.calloc(2, stack);
+            attachments.aspectMask(VK_IMAGE_ASPECT_COLOR_BIT);
+            attachments.colorAttachment(0);
+            attachments.clearValue(vkClearValue);
+            attachments.position(1);
+            attachments.aspectMask(VK_IMAGE_ASPECT_DEPTH_BIT);
+            attachments.clearValue(vkClearValue);
+            attachments.position(0);
+            
+            vkCmdClearAttachments(mainDrawCommandBuffer, attachments, rects);
+        }
+    }
+    
     
     @Override
     public void clearDepthTexture(GpuTexture texture, double clearDepth) {
@@ -182,77 +229,41 @@ public class CinnabarCommandEncoder implements CommandEncoder, Destroyable {
     }
     
     @Override
-    public void writeToBuffer(GpuBuffer buffer, ByteBuffer data, int offset) {
-        // the transient write buffer will create a new GPU-side buffer for every upload.
-        // those can all always be done at the beginning of the frame
-        writeToBuffer((CinnabarGpuBuffer) buffer, new PointerWrapper(MemoryUtil.memAddress(data), data.remaining()), offset);
-    }
-    
-    public void writeToBuffer(CinnabarGpuBuffer buffer, PointerWrapper data, int offset) {
-        
-        try (final var stack = this.memoryStack.push()) {
-            final var uploadBeginningOfFrame = buffer.uploadBeginningOfFrame();
-            final var commandBuffer = uploadBeginningOfFrame ? beginFrameTransferCommandBuffer : mainDrawCommandBuffer;
-            
-            // TODO: sync last buffer write, if a persistent buffer
-            //       generally those aren't used for multi-write things, so that should be rare enough
-            final var targetBuffer = buffer.getBufferForWrite();
-            final var uploadBuffer = new VkBuffer(device, data.size() - offset, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, device.hostTransientMemoryPool());
-            device.destroyEndOfFrame(uploadBuffer);
-            
-            if (offset < 0 || data.size() - offset > uploadBuffer.allocation.cpu().hostPointer.size() || data.pointer() == 0) {
-                throw new IllegalStateException();
+    public void writeToBuffer(GpuBufferSlice gpuBufferSlice, ByteBuffer data) {
+        final var buffer = (CinnabarGpuBuffer) gpuBufferSlice.buffer();
+        if (buffer.canAccessDirectly()) {
+            final var cpuAlloc = buffer.backingBufferDirectAccess().allocation.cpu();
+            final var hostPtr = cpuAlloc.hostPointer;
+            LibCString.nmemcpy(hostPtr.pointer() + gpuBufferSlice.offset(), MemoryUtil.memAddress(data), data.remaining());
+        } else {
+            try (final var stack = this.memoryStack.push()) {
+                final var uploadBeginningOfFrame = !buffer.accessedThisFrame();
+                final var commandBuffer = uploadBeginningOfFrame ? beginFrameTransferCommandBuffer : mainDrawCommandBuffer;
+                
+                final var stagingBuffer = new VkBuffer(device, data.remaining(), VK_BUFFER_USAGE_TRANSFER_SRC_BIT, device.hostTransientMemoryPool());
+                device.destroyEndOfFrame(stagingBuffer);
+                
+                LibCString.nmemcpy(stagingBuffer.allocation.cpu().hostPointer.pointer(), MemoryUtil.memAddress(data), data.remaining());
+                
+                final var copyRegion = VkBufferCopy.calloc(1, stack);
+                copyRegion.srcOffset(0);
+                copyRegion.dstOffset(gpuBufferSlice.offset());
+                copyRegion.size(data.remaining());
+                copyRegion.limit(1);
+                
+                // must barrier before the write, because the buffer may still be in use by the ending renderpass, or a previous copy (write-write is valid behavior, though not recommended)
+                if (!uploadBeginningOfFrame) {
+                    fullBarrier(commandBuffer);
+                }
+                
+                vkCmdCopyBuffer(commandBuffer, stagingBuffer.handle, buffer.backingBuffer().handle, copyRegion);
+                
+                // because of limitations/guarantees from B3D, I can barrier only at renderpass start (or command buffer end for the begin frame transfer)
+                // there is no buffer to buffer copy (yet), nor buffer to texture copy
             }
-            LeakDetection.addReadableLocation(data);
-            data.copyTo(offset, uploadBuffer.allocation.cpu().hostPointer, 0);
-            LeakDetection.removeReadableLocation(data);
-            
-            final var copyRegion = VkBufferCopy.calloc(1, stack);
-            copyRegion.srcOffset(0);
-            copyRegion.dstOffset(0);
-            copyRegion.size(data.size() - offset);
-            copyRegion.limit(1);
-            
-            if (!uploadBeginningOfFrame) {
-                fullBarrier(commandBuffer);
-            }
-            
-            vkCmdCopyBuffer(commandBuffer, uploadBuffer.handle, targetBuffer.handle, copyRegion);
-            
-            if (buffer instanceof TransientWriteBuffer transientWriteBuffer) {
-                transientWriteBuffer.write(uploadBuffer.allocation.cpu());
-            } else if (!uploadBeginningOfFrame) {
-                fullBarrier(commandBuffer);
-            }
-            
-            // because of limitations/guarantees from B3D, I can barrier only at renderpass start (or command buffer end for the begin frame transfer
-            // there is no buffer to buffer copy (yet), nor buffer to texture copy
         }
     }
     
-    @Override
-    public GpuBuffer.ReadView readBuffer(GpuBuffer buffer) {
-        return readBuffer(buffer, 0, buffer.size());
-    }
-    
-    @Override
-    public GpuBuffer.ReadView readBuffer(GpuBuffer buffer, int offset, int size) {
-        vkDeviceWaitIdle(device.vkDevice);
-        assert buffer instanceof ReadBuffer;
-        final var readBuffer = (ReadBuffer) buffer;
-        return new GpuBuffer.ReadView() {
-            @Override
-            public ByteBuffer data() {
-                final var hostPtr = readBuffer.getBufferForRead().allocation.cpu().hostPointer;
-                return MemoryUtil.memByteBuffer(hostPtr.pointer(), (int) hostPtr.size());
-            }
-            
-            @Override
-            public void close() {
-                // N/A, VK uses persistent mappings
-            }
-        };
-    }
     
     public void copyBufferToBuffer(VkBuffer src, VkBuffer dst) {
         assert src.size == dst.size;
@@ -263,6 +274,30 @@ public class CinnabarCommandEncoder implements CommandEncoder, Destroyable {
             copyRange.size(src.size);
             vkCmdCopyBuffer(beginFrameTransferCommandBuffer, src.handle, dst.handle, copyRange);
         }
+    }
+    
+    @Override
+    public GpuBuffer.MappedView mapBuffer(GpuBuffer gpuBuffer, boolean read, boolean write) {
+        return mapBuffer(gpuBuffer.slice(), read, write);
+    }
+    
+    @Override
+    public GpuBuffer.MappedView mapBuffer(GpuBufferSlice gpuBufferSlice, boolean read, boolean write) {
+        final var cinnabarBuffer = (CinnabarGpuBuffer) gpuBufferSlice.buffer();
+        final var mappedRange = cinnabarBuffer.backingBuffer().allocation.cpu().hostPointer.slice(gpuBufferSlice.offset(), gpuBufferSlice.length());
+        final var mappedByteBuffer = MemoryUtil.memByteBuffer(mappedRange.pointer(), (int) mappedRange.size());
+        cinnabarBuffer.accessed();
+        return new GpuBuffer.MappedView() {
+            @Override
+            public ByteBuffer data() {
+                return mappedByteBuffer;
+            }
+            
+            @Override
+            public void close() {
+                // N/A, VK is persistent mapping
+            }
+        };
     }
     
     public void setupTexture(CinnabarGpuTexture texture) {
@@ -280,7 +315,7 @@ public class CinnabarCommandEncoder implements CommandEncoder, Destroyable {
             subresourceRange.baseMipLevel(0);
             subresourceRange.levelCount(texture.getMipLevels());
             subresourceRange.baseArrayLayer(0);
-            subresourceRange.layerCount(1);
+            subresourceRange.layerCount(texture.getDepthOrLayers());
             
             vkCmdPipelineBarrier(beginFrameTransferCommandBuffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, 0, null, null, barrier);
         }
@@ -296,12 +331,12 @@ public class CinnabarCommandEncoder implements CommandEncoder, Destroyable {
         } else if (texture.isClosed()) {
             throw new IllegalStateException("Destination texture is closed");
         } else {
-            this.writeToTexture(texture, image, 0, 0, 0, width, height, 0, 0);
+            this.writeToTexture(texture, image, 0, 0, 0, 0, width, height, 0, 0);
         }
     }
     
     @Override
-    public void writeToTexture(GpuTexture texture, NativeImage nativeImage, int mipLevel, int dstXOffset, int dstYOffset, int width, int height, int srcXOffset, int srcYOffset) {
+    public void writeToTexture(GpuTexture texture, NativeImage nativeImage, int mipLevel, int arrayLayer, int dstXOffset, int dstYOffset, int width, int height, int srcXOffset, int srcYOffset) {
         
         final var cinnabarTexture = (CinnabarGpuTexture) texture;
         final var bufferSize = nativeImage.getWidth() * nativeImage.getHeight() * texture.getFormat().pixelSize();
@@ -325,7 +360,7 @@ public class CinnabarCommandEncoder implements CommandEncoder, Destroyable {
             final var subResource = bufferImageCopy.imageSubresource();
             subResource.aspectMask(VK_IMAGE_ASPECT_COLOR_BIT);
             subResource.mipLevel(mipLevel);
-            subResource.baseArrayLayer(0);
+            subResource.baseArrayLayer(arrayLayer);
             subResource.layerCount(1);
             
             vkCmdCopyBufferToImage(beginFrameTransferCommandBuffer, uploadBuffer.handle(), cinnabarTexture.imageHandle, VK_IMAGE_LAYOUT_GENERAL, bufferImageCopy);
@@ -333,7 +368,7 @@ public class CinnabarCommandEncoder implements CommandEncoder, Destroyable {
     }
     
     @Override
-    public void writeToTexture(GpuTexture texture, IntBuffer intBuffer, NativeImage.Format bufferFormat, int mipLevel, int x, int y, int width, int height) {
+    public void writeToTexture(GpuTexture texture, IntBuffer intBuffer, NativeImage.Format bufferFormat, int mipLevel, int depthOffset, int x, int y, int width, int height) {
         final var cinnabarTexture = (CinnabarGpuTexture) texture;
         final var bufferSize = width * height * texture.getFormat().pixelSize();
         
@@ -347,7 +382,7 @@ public class CinnabarCommandEncoder implements CommandEncoder, Destroyable {
             bufferImageCopy.bufferOffset(0);
             bufferImageCopy.bufferRowLength(width);
             bufferImageCopy.bufferImageHeight(height);
-            bufferImageCopy.imageOffset().set(x, y, 0);
+            bufferImageCopy.imageOffset().set(x, y, depthOffset);
             bufferImageCopy.imageExtent().set(width, height, 1);
             final var subResource = bufferImageCopy.imageSubresource();
             subResource.aspectMask(VK_IMAGE_ASPECT_COLOR_BIT);
@@ -368,7 +403,7 @@ public class CinnabarCommandEncoder implements CommandEncoder, Destroyable {
     public void copyTextureToBuffer(GpuTexture texture, GpuBuffer buffer, int offset, Runnable callback, int mip, int xOffset, int yOffset, int width, int height) {
         
         final var cinnabarTexture = (CinnabarGpuTexture) texture;
-        final var readBuffer = (ReadBuffer) buffer;
+        final var cinnabarBuffer = (CinnabarGpuBuffer) buffer;
         
         try (final var stack = memoryStack.push()) {
             final var copy = VkBufferImageCopy.calloc(1, stack);
@@ -382,7 +417,8 @@ public class CinnabarCommandEncoder implements CommandEncoder, Destroyable {
             copy.imageExtent().set(width, height, 1);
             
             fullBarrier(mainDrawCommandBuffer);
-            vkCmdCopyImageToBuffer(mainDrawCommandBuffer, cinnabarTexture.imageHandle, VK_IMAGE_LAYOUT_GENERAL, readBuffer.getBufferForWrite().handle, copy);
+            vkCmdCopyImageToBuffer(mainDrawCommandBuffer, cinnabarTexture.imageHandle, VK_IMAGE_LAYOUT_GENERAL, cinnabarBuffer.backingBuffer().handle, copy);
+            cinnabarBuffer.accessed();
             fullBarrier(mainDrawCommandBuffer);
             device.destroyEndOfFrame(callback::run);
         }
@@ -415,7 +451,7 @@ public class CinnabarCommandEncoder implements CommandEncoder, Destroyable {
     }
     
     @Override
-    public void presentTexture(GpuTexture image) {
+    public void presentTexture(GpuTextureView imageView) {
         
         final var window = (CinnabarWindow) Minecraft.getInstance().getWindow();
         final var swapchain = window.swapchain();
@@ -442,10 +478,12 @@ public class CinnabarCommandEncoder implements CommandEncoder, Destroyable {
             // wait for nothing, this is just the swapchain image
             vkCmdPipelineBarrier(blitCommandBuffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, null, null, imageBarrier);
             
+            assert imageView.texture().getDepthOrLayers() == 1;
+            
             final var srcOffsets = VkOffset3D.calloc(2, stack);
             srcOffsets.x(0).y(0).z(0);
             srcOffsets.position(1);
-            srcOffsets.x(image.getWidth(0)).y(image.getHeight(0)).z(1);
+            srcOffsets.x(imageView.getWidth(0)).y(imageView.getHeight(0)).z(1);
             srcOffsets.position(0);
             
             final var dstOffsets = VkOffset3D.calloc(2, stack);
@@ -456,6 +494,8 @@ public class CinnabarCommandEncoder implements CommandEncoder, Destroyable {
             
             final var imageSubresource = VkImageSubresourceLayers.calloc();
             imageSubresource.aspectMask(VK_IMAGE_ASPECT_COLOR_BIT);
+            assert imageView.baseMipLevel() == 0;
+            assert imageView.mipLevels() == 1;
             imageSubresource.mipLevel(0);
             imageSubresource.baseArrayLayer(0);
             imageSubresource.layerCount(1);
@@ -468,7 +508,7 @@ public class CinnabarCommandEncoder implements CommandEncoder, Destroyable {
             
             // these barriers are for the src texture, they should be relaxed, but thats a later problem
             fullBarrier(blitCommandBuffer);
-            vkCmdBlitImage(blitCommandBuffer, ((CinnabarGpuTexture) image).imageHandle, VK_IMAGE_LAYOUT_GENERAL, swapchain.acquiredImage(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, blitRegion, VK_FILTER_NEAREST);
+            vkCmdBlitImage(blitCommandBuffer, ((CinnabarGpuTexture) imageView.texture()).imageHandle, VK_IMAGE_LAYOUT_GENERAL, swapchain.acquiredImage(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, blitRegion, VK_FILTER_NEAREST);
             fullBarrier(blitCommandBuffer);
             
             imageBarrier.oldLayout(VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
@@ -499,29 +539,63 @@ public class CinnabarCommandEncoder implements CommandEncoder, Destroyable {
             
             submitInfo.pCommandBuffers(stack.pointers(blitCommandBuffer));
             
-            timelineSubmitInfo.pSignalSemaphoreValues(stack.longs(currentFrameNumber, 0));
+            timelineSubmitInfo.pSignalSemaphoreValues(stack.longs(device.currentFrame(), 0));
             submitInfo.pSignalSemaphores(stack.longs(interFrameSemaphore, swapchain.semaphore()));
             
             submitInfo.position(0);
             vkQueueSubmit(device.graphicsQueue, submitInfo, VK_NULL_HANDLE);
-            
+        }
+        
+        // frame done
+        device.newFrame();
+        
+        // wait for the last time this frame index was submitted
+        // the semaphore starts at MaximumFramesInFlight, so this returns immediately for the first few frames
+        try (final var stack = memoryStack.push()) {
             final var waitInfo = VkSemaphoreWaitInfo.calloc(stack).sType$Default();
             waitInfo.semaphoreCount(1);
             waitInfo.pSemaphores(stack.longs(interFrameSemaphore));
-            // wait for the last time this frame index was submitted
-            // the semaphore starts at MaximumFramesInFlight, so this returns immediately for the first few frames
-            waitInfo.pValues(stack.longs(currentFrameNumber - (MagicNumbers.MaximumFramesInFlight - 1)));
+            waitInfo.pValues(stack.longs(device.currentFrame() - MagicNumbers.MaximumFramesInFlight));
             if (checkVkCode(vkWaitSemaphores(device.vkDevice, waitInfo, -1)) != VK_SUCCESS) {
                 throw new IllegalStateException();
             }
         }
+        
         
         currentFrameNumber++;
         device.newFrame();
         beginCommandBuffers();
         device.startFrame();
         fullBarrier(beginFrameTransferCommandBuffer);
+        fullBarrier(mainDrawCommandBuffer);
     }
+    
+    @Override
+    public GpuFence createFence() {
+        return new GpuFence() {
+            final long waitValue = device.currentFrame();
+            @Override
+            public void close() {
+                
+            }
+            
+            @Override
+            public boolean awaitCompletion(long l) {
+                if (waitValue == device.currentFrame()) {
+                    throw new IllegalStateException("Cannot wait on a fence the same frame it was created");
+                }
+                try (final var stack = memoryStack.push()) {
+                    final var waitInfo = VkSemaphoreWaitInfo.calloc(stack).sType$Default();
+                    waitInfo.semaphoreCount(1);
+                    waitInfo.pSemaphores(stack.longs(interFrameSemaphore));
+                    waitInfo.pValues(stack.longs(waitValue));
+                    final var returnCode = checkVkCode(vkWaitSemaphores(device.vkDevice, waitInfo, -1));
+                    return returnCode == VK_SUCCESS;
+                }
+            }
+        };
+    }
+    
     
     public List<String> debugStrings() {
         int allocatedBuffers = 0;

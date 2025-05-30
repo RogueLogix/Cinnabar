@@ -1,36 +1,32 @@
 package graphics.cinnabar.core.b3d.renderpass;
 
 import com.mojang.blaze3d.buffers.GpuBuffer;
+import com.mojang.blaze3d.buffers.GpuBufferSlice;
 import com.mojang.blaze3d.pipeline.RenderPipeline;
-import com.mojang.blaze3d.platform.Window;
 import com.mojang.blaze3d.systems.RenderPass;
-import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.blaze3d.systems.ScissorState;
-import com.mojang.blaze3d.textures.GpuTexture;
+import com.mojang.blaze3d.textures.GpuTextureView;
 import com.mojang.blaze3d.vertex.VertexFormat;
 import graphics.cinnabar.api.exceptions.NotImplemented;
-import graphics.cinnabar.api.memory.LeakDetection;
-import graphics.cinnabar.api.memory.MagicMemorySizes;
-import graphics.cinnabar.api.memory.PointerWrapper;
 import graphics.cinnabar.core.b3d.CinnabarDevice;
 import graphics.cinnabar.core.b3d.buffers.CinnabarGpuBuffer;
 import graphics.cinnabar.core.b3d.pipeline.CinnabarPipeline;
 import graphics.cinnabar.core.b3d.texture.CinnabarGpuTexture;
-import graphics.cinnabar.core.vk.descriptors.*;
+import graphics.cinnabar.core.b3d.texture.CinnabarGpuTextureView;
+import graphics.cinnabar.core.vk.descriptors.DescriptorSetBinding;
+import graphics.cinnabar.core.vk.descriptors.SamplerBinding;
+import graphics.cinnabar.core.vk.descriptors.TexelBufferBinding;
+import graphics.cinnabar.core.vk.descriptors.UBOBinding;
 import it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.objects.ObjectArraySet;
-import it.unimi.dsi.fastutil.objects.ReferenceArrayList;
-import net.minecraft.client.Minecraft;
-import net.minecraft.client.renderer.FogParameters;
 import net.minecraft.util.ARGB;
 import net.neoforged.neoforge.client.stencil.StencilTest;
 import org.jetbrains.annotations.Nullable;
-import org.joml.Matrix4f;
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.vulkan.*;
 
 import java.util.*;
-import java.util.function.Consumer;
+import java.util.function.BiConsumer;
+import java.util.function.Supplier;
 
 import static org.lwjgl.vulkan.KHRPushDescriptor.vkCmdPushDescriptorSetKHR;
 import static org.lwjgl.vulkan.VK13.*;
@@ -47,35 +43,25 @@ public class CinnabarRenderPass implements RenderPass {
     @Nullable
     private CinnabarPipeline boundPipeline;
     
-    protected final Map<String, Runnable> uniformWriteFunctions = new Object2ObjectOpenHashMap<>();
-    protected final Map<String, Object> uniforms = new Object2ObjectOpenHashMap<>();
-    protected final Map<String, GpuTexture> samplers = new Object2ObjectOpenHashMap<>();
+    protected final Map<String, GpuBufferSlice> uniforms = new Object2ObjectOpenHashMap<>();
+    protected final Map<String, GpuTextureView> samplers = new Object2ObjectOpenHashMap<>();
     protected final Set<String> dirtyUniforms = new ObjectArraySet<>();
     protected final Set<String> dirtySamplers = new ObjectArraySet<>();
     
     private final VkWriteDescriptorSet.Buffer descriptorWrites;
     private final VkDescriptorBufferInfo.Buffer descriptorBufferInfos;
     private final VkDescriptorImageInfo.Buffer descriptorSamplerInfos;
-    private final PointerWrapper uniformTempMemory;
-    @Nullable
-    private PushConstants pushConstants;
-    @Nullable
-    private PushConstants.Pusher pusher;
-    private boolean anyUBODirty = false;
-    private final ReferenceArrayList<@Nullable ReferenceArrayList<UBOBinding.@Nullable Staging>> uboStagings = new ReferenceArrayList<>();
     
-    public CinnabarRenderPass(CinnabarDevice device, VkCommandBuffer commandBuffer, MemoryStack memoryStack, CinnabarGpuTexture colorAttachment, OptionalInt colorClear, @Nullable CinnabarGpuTexture depthAttachment, OptionalDouble depthClear) {
+    public CinnabarRenderPass(CinnabarDevice device, VkCommandBuffer commandBuffer, MemoryStack memoryStack, Supplier<String> debugGroup, CinnabarGpuTextureView colorAttachment, OptionalInt colorClear, @Nullable CinnabarGpuTextureView depthAttachment, OptionalDouble depthClear) {
         this.device = device;
         this.commandBuffer = commandBuffer;
         this.memoryStack = memoryStack;
         memoryStack.push();
-        final var tempSize = 16 * MagicMemorySizes.FLOAT_BYTE_SIZE; // a mat4x4 is the largest single write
-        uniformTempMemory = new PointerWrapper(memoryStack.nmalloc(tempSize), tempSize);
-        LeakDetection.addAccessibleLocation(uniformTempMemory);
-        uniformTempMemory.clear();
         descriptorWrites = VkWriteDescriptorSet.calloc(16, memoryStack);
         descriptorBufferInfos = VkDescriptorBufferInfo.calloc(16, memoryStack);
         descriptorSamplerInfos = VkDescriptorImageInfo.calloc(16, memoryStack);
+        
+        pushDebugGroup(debugGroup);
         
         try (final var stack = memoryStack.push()) {
             final var renderingInfo = VkRenderingInfo.calloc(stack).sType$Default();
@@ -132,7 +118,7 @@ public class CinnabarRenderPass implements RenderPass {
                     depthAttachmentInfo.loadOp(VK_ATTACHMENT_LOAD_OP_LOAD);
                 }
                 
-                if (depthAttachment.getFormat().hasStencilAspect()) {
+                if (depthAttachment.texture().getFormat().hasStencilAspect()) {
                     final var stencilAttachmentInfo = VkRenderingAttachmentInfo.calloc(stack).sType$Default();
                     renderingInfo.pStencilAttachment(stencilAttachmentInfo);
                     stencilAttachmentInfo.imageView(depthAttachment.imageViewHandle);
@@ -162,15 +148,36 @@ public class CinnabarRenderPass implements RenderPass {
     
     @Override
     public void close() {
-        LeakDetection.removeAccessibleLocation(uniformTempMemory);
+        popDebugGroup();
         unsetPipeline();
         memoryStack.pop();
         vkCmdEndRendering(commandBuffer);
     }
     
     @Override
+    public void pushDebugGroup(Supplier<String> supplier) {
+        if (device.debugMarkerEnabled()) {
+            try (final var stack = memoryStack.push()) {
+                final var markerInfo = VkDebugMarkerMarkerInfoEXT.calloc(stack).sType$Default();
+                markerInfo.pMarkerName(stack.UTF8(supplier.get()));
+                markerInfo.color(0, 1);
+                markerInfo.color(1, 1);
+                markerInfo.color(2, 1);
+                markerInfo.color(3, 1);
+                EXTDebugMarker.vkCmdDebugMarkerBeginEXT(commandBuffer, markerInfo);
+            }
+        }
+    }
+    
+    @Override
+    public void popDebugGroup() {
+        if (device.debugMarkerEnabled()) {
+            EXTDebugMarker.vkCmdDebugMarkerEndEXT(commandBuffer);
+        }
+    }
+    
+    @Override
     public void setPipeline(RenderPipeline pipeline) {
-        
         unsetPipeline();
         
         // dirty all uniforms, any pipeline layout change will have screwed with this, which is guaranteed if it's a different pipeline
@@ -182,152 +189,31 @@ public class CinnabarRenderPass implements RenderPass {
         boundPipeline = device.getPipeline(pipeline);
         vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, boundPipeline.pipelineHandle);
         
-        pushConstants = boundPipeline.shaderSet.pushConstants();
-        if (pushConstants != null) {
-            pusher = pushConstants.createPusher();
-            for (UBOMember member : pushConstants.members) {
-                dirtyUniforms.add(member.name);
-                final var isMatrix = member.type.startsWith("mat");
-                final Runnable writeFunc = () -> {
-                    final var uniformData = uniforms.get(member.name);
-                    if (uniformData instanceof int[] array) {
-                        for (int i = 0; i < array.length; i++) {
-                            uniformTempMemory.putIntIdx(i, array[i]);
-                        }
-                    } else if (uniformData instanceof float[] array) {
-                        for (int i = 0; i < array.length; i++) {
-                            uniformTempMemory.putFloatIdx(i, array[i]);
-                        }
-                    } else if (uniformData == null && isMatrix) {
-                        // identity mat4
-                        uniformTempMemory.putFloatIdx(0, 1);
-                        uniformTempMemory.putFloatIdx(5, 1);
-                        uniformTempMemory.putFloatIdx(10, 1);
-                        uniformTempMemory.putFloatIdx(15, 1);
-                    }
-                    // write uses the member size, not the memory size, its fine that the source is oversized
-                    pusher.write(member, uniformTempMemory);
-                };
-                if (uniformWriteFunctions.put(member.name, writeFunc) != null) {
-                    throw new IllegalStateException();
-                }
-            }
-        }
-        
-        uboStagings.clear();
-        final var descriptorSetLayouts = boundPipeline.shaderSet.descriptorSetLayouts;
-        uboStagings.size(descriptorSetLayouts.size() + 1);
-        for (int j = 0; j < descriptorSetLayouts.size(); j++) {
-            DescriptorSetLayout descriptorSetLayout = descriptorSetLayouts.get(j);
-            for (DescriptorSetBinding binding : descriptorSetLayout.bindings) {
-                if (binding instanceof UBOBinding uboBinding) {
-                    if (uboStagings.get(j) == null) {
-                        if (uboStagings.set(j, new ReferenceArrayList<>()) != null) {
-                            throw new IllegalStateException();
-                        }
-                    }
-                    final var stagingsList = Objects.requireNonNull(uboStagings.get(j));
-                    if (stagingsList.size() <= binding.bindingPoint()) {
-                        stagingsList.size(binding.bindingPoint() + 1);
-                    }
-                    final var staging = uboBinding.createStaging();
-                    if (stagingsList.set(binding.bindingPoint(), staging) != null) {
-                        throw new IllegalStateException();
-                    }
-                    for (UBOMember member : uboBinding.members) {
-                        dirtyUniforms.add(member.name);
-                        final var isMatrix = member.type.startsWith("mat");
-                        final Runnable writeFunc = () -> {
-                            final var uniformData = uniforms.get(member.name);
-                            if (uniformData instanceof int[] array) {
-                                for (int i = 0; i < array.length; i++) {
-                                    uniformTempMemory.putIntIdx(i, array[i]);
-                                }
-                            } else if (uniformData instanceof float[] array) {
-                                for (int i = 0; i < array.length; i++) {
-                                    uniformTempMemory.putFloatIdx(i, array[i]);
-                                }
-                            } else if (uniformData == null && isMatrix) {
-                                // identity mat4
-                                uniformTempMemory.putFloatIdx(0, 1);
-                                uniformTempMemory.putFloatIdx(5, 1);
-                                uniformTempMemory.putFloatIdx(10, 1);
-                                uniformTempMemory.putFloatIdx(15, 1);
-                            }
-                            // write uses the member size, not the memory size, its fine that the source is oversized
-                            staging.write(member, uniformTempMemory);
-                            anyUBODirty = true;
-                        };
-                        if (uniformWriteFunctions.put(member.name, writeFunc) != null) {
-                            throw new IllegalStateException();
-                        }
-                    }
-                }
-            }
-        }
-        
-        anyUBODirty = true;
     }
     
     public void unsetPipeline() {
         this.boundPipeline = null;
-        pushConstants = null;
-        if (pusher != null) {
-            pusher.destroy();
-        }
-        pusher = null;
-        for (@Nullable final var uboStaging : uboStagings) {
-            if (uboStaging == null) {
-                continue;
-            }
-            for (UBOBinding.@Nullable Staging staging : uboStaging) {
-                if (staging != null) {
-                    staging.destroy();
-                }
-            }
-        }
-        uboStagings.clear();
-        uniformWriteFunctions.clear();
     }
     
     @Override
-    public void bindSampler(String uniformName, GpuTexture texture) {
+    public void bindSampler(String uniformName, @Nullable GpuTextureView texture) {
         this.samplers.put(uniformName, texture);
         this.dirtySamplers.add(uniformName);
     }
     
     @Override
-    public void setUniform(String uniformName, int... value) {
-        this.uniforms.put(uniformName, value);
-        this.dirtyUniforms.add(uniformName);
+    public void setUniform(String uboName, GpuBuffer buffer) {
+        setUniform(uboName, buffer.slice());
     }
     
     @Override
-    public void setUniform(String uniformName, float... value) {
-        this.uniforms.put(uniformName, value);
-        this.dirtyUniforms.add(uniformName);
-    }
-    
-    @Override
-    public void setUniform(String uniformName, Matrix4f value) {
-        this.uniforms.put(uniformName, value.get(new float[16]));
-        this.dirtyUniforms.add(uniformName);
-    }
-    
-    
-    @Override
-    public void enableScissor(ScissorState scissorState) {
-        if (!scissorState.isEnabled()) {
-            disableScissor();
-            return;
-        }
-        enableScissor(scissorState.getX(), scissorState.getY(), scissorState.getWidth(), scissorState.getHeight());
+    public void setUniform(String uboName, GpuBufferSlice bufferSlice) {
+        uniforms.put(uboName, bufferSlice);
+        dirtyUniforms.add(uboName);
     }
     
     @Override
     public void enableScissor(int x, int y, int width, int height) {
-        // VK defines scissor as top left, GL as bottom left
-//        int y = renderHeight - (lowerY + height);
         try (final var stack = memoryStack.push()) {
             final var scissor = VkRect2D.calloc(1, stack);
             scissor.offset().set(x, y);
@@ -356,143 +242,146 @@ public class CinnabarRenderPass implements RenderPass {
     public void setVertexBuffer(int bindingIndex, GpuBuffer buffer) {
         final var cinnabarBuffer = (CinnabarGpuBuffer) buffer;
         // TODO: binding offset
-        vkCmdBindVertexBuffers(commandBuffer, bindingIndex, new long[]{(cinnabarBuffer).getBufferForRead().handle}, new long[]{0});
+        vkCmdBindVertexBuffers(commandBuffer, bindingIndex, new long[]{cinnabarBuffer.backingBuffer().handle}, new long[]{0});
     }
     
     @Override
     public void setIndexBuffer(GpuBuffer buffer, VertexFormat.IndexType indexType) {
         final var cinnabarBuffer = (CinnabarGpuBuffer) buffer;
         // TODO: index buffer offset (the draw command can also do this though)
-        vkCmdBindIndexBuffer(commandBuffer, cinnabarBuffer.getBufferForRead().handle, 0, switch (indexType) {
+        vkCmdBindIndexBuffer(commandBuffer, cinnabarBuffer.backingBuffer().handle, 0, switch (indexType) {
             case SHORT -> VK_INDEX_TYPE_UINT16;
             case INT -> VK_INDEX_TYPE_UINT32;
         });
     }
     
-    private void setupDraw() {
-        assert boundPipeline != null;
-        // these aren't set explicitly for, reasons?
-        // asked Dinnerbone for the reasons: because TODO
-        @SuppressWarnings("ConstantValue")
-        @Nullable
-        Window window = Minecraft.getInstance() == null ? null : Minecraft.getInstance().getWindow();
-        FogParameters fogparameters = RenderSystem.getShaderFog();
-        
-        setUniform("ModelViewMat", RenderSystem.getModelViewMatrix());
-        setUniform("ProjMat", RenderSystem.getProjectionMatrix());
-        setUniform("ColorModulator", RenderSystem.getShaderColor());
-        setUniform("GlintAlpha", RenderSystem.getShaderGlintAlpha());
-        setUniform("FogStart", fogparameters.start());
-        setUniform("FogEnd", fogparameters.end());
-        setUniform("FogColor", fogparameters.red(), fogparameters.green(), fogparameters.blue(), fogparameters.alpha());
-        setUniform("FogShape", fogparameters.shape().getIndex());
-        setUniform("TextureMat", RenderSystem.getTextureMatrix());
-        setUniform("GameTime", RenderSystem.getShaderGameTime());
-        setUniform("ModelOffset", RenderSystem.getModelOffset().x, RenderSystem.getModelOffset().y, RenderSystem.getModelOffset().z);
-        //noinspection ConstantValue
-        setUniform("ScreenSize", window == null ? 0.0F : window.getWidth(), window == null ? 0.0F : window.getHeight());
-        setUniform("LineWidth", RenderSystem.getShaderLineWidth());
-        final var shaderLights = RenderSystem.getShaderLights();
-        setUniform("Light0_Direction", shaderLights[0].x, shaderLights[0].y, shaderLights[0].z);
-        setUniform("Light1_Direction", shaderLights[1].x, shaderLights[1].y, shaderLights[1].z);
-        
-        updateUniforms();
-    }
-    
     private void updateUniforms() {
         assert boundPipeline != null;
         
-        dirtyUniforms.forEach(dirtyUniform -> uniformWriteFunctions.getOrDefault(dirtyUniform, () -> {
-        }).run());
-        if (pusher != null) {
-            pusher.push(commandBuffer);
+        if (dirtyUniforms.isEmpty() && dirtySamplers.isEmpty()) {
+            return;
         }
-        if (anyUBODirty || !dirtySamplers.isEmpty()) {
-            for (int i = 0; i < boundPipeline.shaderSet.descriptorSetLayouts.size(); i++) {
-                if (uboStagings.size() > i) {
-                    @Nullable
-                    final var stagingList = uboStagings.get(i);
-                    if (stagingList != null) {
-                        for (final var staging : stagingList) {
-                            if (!staging.isDirty()) {
-                                continue;
-                            }
-                            
-                            // the uploader automatically destroys the buffers, no need to track them here
-                            final var upload = staging.upload();
-                            descriptorBufferInfos.buffer(upload.buffer.handle);
-                            descriptorBufferInfos.offset(0);
-                            descriptorBufferInfos.range(upload.buffer.size);
-                            
-                            descriptorWrites.sType$Default();
-                            descriptorWrites.dstBinding(staging.binding().bindingPoint());
-                            descriptorWrites.descriptorCount(1);
-                            descriptorWrites.descriptorType(staging.binding().type());
-                            descriptorWrites.pBufferInfo(descriptorBufferInfos);
-                            descriptorWrites.pImageInfo(null);
-                            
-                            descriptorWrites.position(descriptorWrites.position() + 1);
-                            descriptorBufferInfos.position(descriptorBufferInfos.position() + 1);
-                        }
+        
+        for (int i = 0; i < boundPipeline.shaderSet.descriptorSetLayouts.size(); i++) {
+            for (DescriptorSetBinding binding : boundPipeline.shaderSet.descriptorSetLayouts.get(i).bindings) {
+                if (binding instanceof UBOBinding(String name, int bindingPoint, int size)) {
+                    if (!dirtyUniforms.remove(name)) {
+                        continue;
                     }
-                }
-                for (DescriptorSetBinding binding : boundPipeline.shaderSet.descriptorSetLayouts.get(i).bindings) {
-                    if (binding instanceof SamplerBinding(String name, int bindingPoint)) {
-                        if (!dirtySamplers.remove(name)) {
-                            continue;
-                        }
-                        @Nullable
-                        final var texture = samplers.get(name);
-                        if (texture == null) {
-                            throw new IllegalStateException("Any set sampler must be found in the shader");
-                        }
+                    @Nullable final var bufferSlice = uniforms.get(name);
+                    if (bufferSlice == null) {
+                        throw new IllegalStateException("Any set sampler must be found in the shader");
+                    }
+                    
+                    CinnabarGpuBuffer cinnabarBuffer = (CinnabarGpuBuffer) bufferSlice.buffer();
+                    cinnabarBuffer.accessed();
+                    descriptorBufferInfos.buffer(cinnabarBuffer.backingBuffer().handle);
+                    descriptorBufferInfos.offset(bufferSlice.offset());
+                    descriptorBufferInfos.range(bufferSlice.length());
+                    
+                    descriptorWrites.sType$Default();
+                    descriptorWrites.dstBinding(bindingPoint);
+                    descriptorWrites.descriptorCount(1);
+                    descriptorWrites.descriptorType(binding.type());
+                    descriptorWrites.pBufferInfo(descriptorBufferInfos);
+                    descriptorWrites.pImageInfo(null);
+                    
+                    descriptorWrites.position(descriptorWrites.position() + 1);
+                    descriptorBufferInfos.position(descriptorBufferInfos.position() + 1);
+                } else if (binding instanceof TexelBufferBinding(String name, int bindingPoint, int format)) {
+                    if (!dirtyUniforms.remove(name)) {
+                        continue;
+                    }
+                    @Nullable final var texelBuffer = uniforms.get(name);
+                    if (texelBuffer == null) {
+                        throw new IllegalStateException("Any set texelBuffer must be found in the shader");
+                    }
+                    
+                    CinnabarGpuBuffer cinnabarBuffer = (CinnabarGpuBuffer) texelBuffer.buffer();
+                    cinnabarBuffer.accessed();
+                    
+                    try (final var stack = memoryStack.push()) {
+                        final var bufferViewCreateInfo = VkBufferViewCreateInfo.calloc().sType$Default();
+                        bufferViewCreateInfo.buffer(cinnabarBuffer.backingBuffer().handle);
+                        bufferViewCreateInfo.format(format);
+                        bufferViewCreateInfo.offset(texelBuffer.offset());
+                        bufferViewCreateInfo.range(texelBuffer.length());
                         
-                        descriptorSamplerInfos.sampler(((CinnabarGpuTexture) texture).sampler().vulkanHandle);
-                        descriptorSamplerInfos.imageView(((CinnabarGpuTexture) texture).imageViewHandle);
-                        descriptorSamplerInfos.imageLayout(VK_IMAGE_LAYOUT_GENERAL);
+                        final var ret = stack.longs(0);
+                        vkCreateBufferView(device.vkDevice, bufferViewCreateInfo, null, ret);
+                        final var viewHandle = ret.get(0);
+                        device.destroyEndOfFrame(() -> {
+                            vkDestroyBufferView(device.vkDevice, viewHandle, null);
+                        });
                         
                         descriptorWrites.sType$Default();
                         descriptorWrites.dstBinding(bindingPoint);
                         descriptorWrites.descriptorCount(1);
-                        descriptorWrites.descriptorType(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+                        descriptorWrites.descriptorType(binding.type());
                         descriptorWrites.pBufferInfo(null);
-                        descriptorWrites.pImageInfo(descriptorSamplerInfos);
-                        
-                        descriptorWrites.position(descriptorWrites.position() + 1);
-                        descriptorSamplerInfos.position(descriptorSamplerInfos.position() + 1);
+                        descriptorWrites.pImageInfo(null);
+                        descriptorWrites.pTexelBufferView(ret);
                     }
+                    
+                    descriptorWrites.position(descriptorWrites.position() + 1);
+                    descriptorBufferInfos.position(descriptorBufferInfos.position() + 1);
+                } else if (binding instanceof SamplerBinding(String name, int bindingPoint)) {
+                    if (!dirtySamplers.remove(name)) {
+                        continue;
+                    }
+                    @Nullable final var textureView = samplers.get(name);
+                    if (textureView == null) {
+                        throw new IllegalStateException("Any set sampler must be found in the shader");
+                    }
+                    
+                    descriptorSamplerInfos.sampler(((CinnabarGpuTexture) textureView.texture()).sampler().vulkanHandle);
+                    descriptorSamplerInfos.imageView(((CinnabarGpuTextureView) textureView).imageViewHandle);
+                    descriptorSamplerInfos.imageLayout(VK_IMAGE_LAYOUT_GENERAL);
+                    
+                    descriptorWrites.sType$Default();
+                    descriptorWrites.dstBinding(bindingPoint);
+                    descriptorWrites.descriptorCount(1);
+                    descriptorWrites.descriptorType(binding.type());
+                    descriptorWrites.pBufferInfo(null);
+                    descriptorWrites.pImageInfo(descriptorSamplerInfos);
+                    
+                    descriptorWrites.position(descriptorWrites.position() + 1);
+                    descriptorSamplerInfos.position(descriptorSamplerInfos.position() + 1);
                 }
-                if (descriptorWrites.position() != 0) {
-                    descriptorWrites.limit(descriptorWrites.position());
-                    descriptorWrites.position(0);
-                    vkCmdPushDescriptorSetKHR(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, boundPipeline.shaderSet.pipelineLayout, i, descriptorWrites);
-                }
-                descriptorBufferInfos.position(0);
-                descriptorSamplerInfos.position(0);
             }
+            if (descriptorWrites.position() != 0) {
+                descriptorWrites.limit(descriptorWrites.position());
+                descriptorWrites.position(0);
+                vkCmdPushDescriptorSetKHR(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, boundPipeline.shaderSet.pipelineLayout, i, descriptorWrites);
+            }
+            descriptorWrites.position(0);
+            descriptorBufferInfos.position(0);
+            descriptorSamplerInfos.position(0);
+            descriptorWrites.limit(descriptorWrites.capacity());
+            descriptorBufferInfos.limit(descriptorBufferInfos.capacity());
+            descriptorSamplerInfos.limit(descriptorSamplerInfos.capacity());
         }
         
-        anyUBODirty = false;
         dirtySamplers.clear();
         dirtyUniforms.clear();
     }
     
     @Override
-    public void drawIndexed(int firstIndex, int indexCount) {
-        setupDraw();
-        vkCmdDrawIndexed(commandBuffer, indexCount, 1, firstIndex, 0, 0);
+    public void drawIndexed(int baseVertex, int firstIndex, int indexCount, int instanceCount) {
+        updateUniforms();
+        vkCmdDrawIndexed(commandBuffer, indexCount, instanceCount, firstIndex, baseVertex, 0);
     }
     
+    
     @Override
-    public void drawMultipleIndexed(Collection<Draw> draws, @Nullable GpuBuffer indexBuffer, @Nullable VertexFormat.IndexType indexType) {
+    public <T> void drawMultipleIndexed(Collection<Draw<T>> draws, @Nullable GpuBuffer indexBuffer, @Nullable VertexFormat.IndexType indexType, Collection<String> dynamicUniforms, T userData) {
         assert boundPipeline != null;
-        setupDraw();
         
         @Nullable
         GpuBuffer lastIndexBuffer = null;
         @Nullable
         VertexFormat.IndexType lastIndexType = null;
-        for (Draw draw : draws) {
+        for (Draw<T> draw : draws) {
             @Nullable
             final var indexTypeToUse = draw.indexType() == null ? indexType : draw.indexType();
             @Nullable
@@ -504,8 +393,9 @@ public class CinnabarRenderPass implements RenderPass {
                 lastIndexType = indexTypeToUse;
                 setIndexBuffer(indexBufferToUse, indexTypeToUse);
             }
-            if (draw.uniformUploaderConsumer() instanceof Consumer<UniformUploader> consumer) {
-                consumer.accept(this::setUniform);
+            if (draw.uniformUploaderConsumer() instanceof BiConsumer<?, ?> consumer) {
+                //noinspection unchecked
+                ((BiConsumer<T, UniformUploader>)consumer).accept(userData, this::setUniform);
             }
             setVertexBuffer(draw.slot(), draw.vertexBuffer());
             updateUniforms();
@@ -515,7 +405,7 @@ public class CinnabarRenderPass implements RenderPass {
     
     @Override
     public void draw(int first, int count) {
-        setupDraw();
+        updateUniforms();
         vkCmdDraw(commandBuffer, count, 1, first, 0);
     }
 }

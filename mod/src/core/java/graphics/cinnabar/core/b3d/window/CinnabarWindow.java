@@ -9,6 +9,7 @@ import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.Tesselator;
 import graphics.cinnabar.core.b3d.CinnabarDevice;
 import graphics.cinnabar.lib.annotations.RewriteHierarchy;
+import net.minecraft.client.Minecraft;
 import org.lwjgl.glfw.GLFW;
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.vulkan.KHRSurface;
@@ -89,7 +90,8 @@ public class CinnabarWindow extends Window {
         }
         
         swapchain.acquire();
-        
+        RenderSystem.getDynamicUniforms().reset();
+        Minecraft.getInstance().levelRenderer.endFrame();
         RenderSystem.pollEvents();
     }
     

@@ -8,13 +8,14 @@ import it.unimi.dsi.fastutil.objects.ReferenceImmutableList;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
+import java.util.Map;
 
 import static org.lwjgl.vulkan.VK10.*;
 
 public record VertexInputState(List<Buffer> buffers, List<Attrib> attribs) {
     
     
-    public static final VertexInputState BLOCK_FORMAT = forVertexFormat(DefaultVertexFormat.BLOCK);
+    public static final VertexInputState EMPTY = new VertexInputState(List.of(), List.of());
     
     public record Buffer(int bindingIndex, int stride, boolean perInstance) {
         public Buffer(int bindingIndex, int stride) {
@@ -36,7 +37,7 @@ public record VertexInputState(List<Buffer> buffers, List<Attrib> attribs) {
         this.buffers = new ReferenceImmutableList<>(buffers);
         this.attribs = new ReferenceImmutableList<>(attribs);
         // TODO: validate buffer/attrib bindings
-        if (buffers.isEmpty() || attribs.isEmpty()) {
+        if ((buffers.isEmpty() || attribs.isEmpty()) && !(buffers.isEmpty() && attribs.isEmpty())) {
             throw new IllegalArgumentException();
         }
     }
@@ -49,20 +50,36 @@ public record VertexInputState(List<Buffer> buffers, List<Attrib> attribs) {
         this(List.of(buffer), List.of(attribs));
     }
     
-    public static VertexInputState forVertexFormat(VertexFormat format) {
+    public static VertexInputState forVertexFormat(VertexFormat format, Map<String, @Nullable String> attribTypes) {
+        if (format.getVertexSize() == 0) {
+            return EMPTY;
+        }
         final var attribs = new ReferenceArrayList<Attrib>();
         for (final var element : format.getElements()) {
             final var elementName = format.getElementName(element);
-            final var elementFormat = mapTypeAndCountToVkFormat(element.type(), element.count(), element.usage());
+            final var elementFormat = mapTypeAndCountToVkFormat(element.type(), element.count(), element.usage(), isFloatInputType(attribTypes.get(elementName)));
             final var elementOffset = format.getOffset(element);
             attribs.add(new Attrib(elementName, 0, elementFormat, elementOffset));
         }
         return new VertexInputState(new Buffer(0, format.getVertexSize()), attribs);
     }
     
+    @SuppressWarnings("DuplicateBranchesInSwitch")
+    private static boolean isFloatInputType(@Nullable String input) {
+        if (input == null) {
+            // if null for a specific attrib set, then it can be treated as int, it wont actually be read by the shader
+            return false;
+        }
+        return switch (input) {
+            case "uint", "uvec2", "uvec3", "uvec4" -> false;
+            case "int", "ivec2", "ivec3", "ivec4" -> false;
+            case "float", "vec2", "vec3", "vec4" -> true;
+            default -> throw new IllegalStateException("Unexpected value: " + input);
+        };
+    }
     
-    // TODO: INT vs SCALED for float input types with integers in the buffers
-    private static int mapTypeAndCountToVkFormat(VertexFormatElement.Type type, int count, VertexFormatElement.Usage usage) {
+    // TODO: INT vs SCALED for float input types with integers in the buffers    
+    private static int mapTypeAndCountToVkFormat(VertexFormatElement.Type type, int count, VertexFormatElement.Usage usage, boolean floatInput) {
         final boolean normalized = switch (usage) {
             case COLOR, NORMAL -> true;
             default -> false;
@@ -83,10 +100,10 @@ public record VertexInputState(List<Buffer> buffers, List<Attrib> attribs) {
                 default -> throw new IllegalStateException("Unexpected value: " + count);
             };
             case BYTE -> switch (count) {
-                case 1 -> normalized ? VK_FORMAT_R8_SNORM : VK_FORMAT_R8_SINT;
-                case 2 -> normalized ? VK_FORMAT_R8G8_SNORM : VK_FORMAT_R8G8_SINT;
-                case 3 -> normalized ? VK_FORMAT_R8G8B8_SNORM : VK_FORMAT_R8G8B8_SINT;
-                case 4 -> normalized ? VK_FORMAT_R8G8B8A8_SNORM : VK_FORMAT_R8G8B8A8_SINT;
+                case 1 -> normalized ? VK_FORMAT_R8_SNORM : (floatInput ? VK_FORMAT_R8_SSCALED : VK_FORMAT_R8_SINT);
+                case 2 -> normalized ? VK_FORMAT_R8G8_SNORM : (floatInput ? VK_FORMAT_R8G8_SSCALED : VK_FORMAT_R8G8_SINT);
+                case 3 -> normalized ? VK_FORMAT_R8G8B8_SNORM : (floatInput ? VK_FORMAT_R8G8B8_SSCALED : VK_FORMAT_R8G8B8_SINT);
+                case 4 -> normalized ? VK_FORMAT_R8G8B8A8_SNORM : (floatInput ? VK_FORMAT_R8G8B8A8_SSCALED : VK_FORMAT_R8G8B8A8_SINT);
                 default -> throw new IllegalStateException("Unexpected value: " + count);
             };
             case USHORT -> switch (count) {
@@ -97,10 +114,10 @@ public record VertexInputState(List<Buffer> buffers, List<Attrib> attribs) {
                 default -> throw new IllegalStateException("Unexpected value: " + count);
             };
             case SHORT -> switch (count) {
-                case 1 -> normalized ? VK_FORMAT_R16_SNORM : VK_FORMAT_R16_SINT;
-                case 2 -> normalized ? VK_FORMAT_R16G16_SNORM : VK_FORMAT_R16G16_SINT;
-                case 3 -> normalized ? VK_FORMAT_R16G16B16_SNORM : VK_FORMAT_R16G16B16_SINT;
-                case 4 -> normalized ? VK_FORMAT_R16G16B16A16_SNORM : VK_FORMAT_R16G16B16A16_SINT;
+                case 1 -> normalized ? VK_FORMAT_R16_SNORM : (floatInput ? VK_FORMAT_R16_SSCALED : VK_FORMAT_R16_SINT);
+                case 2 -> normalized ? VK_FORMAT_R16G16_SNORM : (floatInput ? VK_FORMAT_R16G16_SSCALED : VK_FORMAT_R16G16_SINT);
+                case 3 -> normalized ? VK_FORMAT_R16G16B16_SNORM : (floatInput ? VK_FORMAT_R16G16B16_SSCALED : VK_FORMAT_R16G16B16_SINT);
+                case 4 -> normalized ? VK_FORMAT_R16G16B16A16_SNORM : (floatInput ? VK_FORMAT_R16G16B16A16_SSCALED : VK_FORMAT_R16G16B16A16_SINT);
                 default -> throw new IllegalStateException("Unexpected value: " + count);
             };
             case UINT -> switch (count) {

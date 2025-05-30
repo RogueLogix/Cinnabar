@@ -37,6 +37,15 @@ public class ShaderProcessing {
     @ThreadSafety.Many
     public static Pair<String, String> processShaders(String rawVertexShader, String rawFragmentShader, String vertexShaderName, String fragmentShaderName, List<String> pushConstants, List<List<String>> dedicatedUBOs) {
         
+        // TODO: remove this when the shader gets fixed
+        if ("minecraft:core/entity".equals(vertexShaderName)) {
+            rawVertexShader = rawVertexShader.replace("overlayColor = texelFetch(Sampler1, UV1, 0);", """
+                        #ifndef NO_OVERLAY
+                        overlayColor = texelFetch(Sampler1, UV1, 0);
+                        #endif
+                    """);
+        }
+        
         final var versionRemovedPreprocessedVertexSource = rawVertexShader.replace("#version", "//#version");
         final var versionRemovedPreprocessedFragmentSource = rawFragmentShader.replace("#version", "//#version");
         
@@ -80,9 +89,9 @@ public class ShaderProcessing {
         }).toList();
         
         vertexTransformer.rename("gl_VertexID", "gl_VertexIndex");
+        vertexTransformer.rename("gl_InstanceID", "gl_InstanceIndex");
         
-        @SuppressWarnings("unchecked")
-        final var stageBindings = generatedStageBindings(vertexOutputLines, (List<Map<String, Object>>) vertexShaderReflection.get("outputs"), fragmentInputLines, (List<Map<String, Object>>) fragmentShaderReflection.get("inputs"));
+        @SuppressWarnings("unchecked") final var stageBindings = generatedStageBindings(vertexOutputLines, (List<Map<String, Object>>) vertexShaderReflection.get("outputs"), fragmentInputLines, (List<Map<String, Object>>) fragmentShaderReflection.get("inputs"));
         final var uniforms = generatedUniformMap(uniformLines, pushConstants, dedicatedUBOs);
         
         final var vertexBindings = stageBindings.first();
@@ -189,7 +198,7 @@ public class ShaderProcessing {
         final var regeneratedVertexShader = getFormattedShader(vertexTranslationUnit, new StringBuilder()).toString();
         final var regeneratedFragmentShader = getFormattedShader(fragmentTranslationUnit, new StringBuilder()).toString();
         
-        return new Pair<>(regeneratedVertexShader, regeneratedFragmentShader);
+        return bindUBOs(uniformLines, regeneratedVertexShader, regeneratedFragmentShader, nextBindingPoint);
     }
     
     private static Pair<Pair<List<String>, List<String>>, Pair<List<String>, List<String>>> generatedStageBindings(
@@ -509,5 +518,17 @@ public class ShaderProcessing {
             }
         }
         return stringBuilder;
+    }
+    
+    
+    @ThreadSafety.Any
+    private static Pair<String, String> bindUBOs(List<String> ubos, String vertexShader, String fragmentShader, int bindingIndex) {
+        final var ubosSet = new HashSet<>(ubos);
+        for (String declarationLine : ubosSet) {
+            final var replacementDeclaration = declarationLine.replace("layout ( std140 )", "layout (set = 0, binding = " + bindingIndex++ + ", std140 )");
+            vertexShader = vertexShader.replace(declarationLine, replacementDeclaration);
+            fragmentShader = fragmentShader.replace(declarationLine, replacementDeclaration);
+        }
+        return new Pair<>(vertexShader, fragmentShader);
     }
 }

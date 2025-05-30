@@ -41,14 +41,6 @@ public class CinnabarPipeline implements CompiledRenderPipeline, VulkanObject {
     public final ShaderSet shaderSet;
     public final long pipelineHandle;
     
-    // anything not specified here will be dumped into a single UBO
-    private static final List<List<String>> ubos = List.of(
-            RenderPipelines.MATRICES_SNIPPET.uniforms().get().stream().map(RenderPipeline.UniformDescription::name).toList(),
-            RenderPipelines.FOG_SNIPPET.uniforms().get().stream().map(RenderPipeline.UniformDescription::name).toList()
-    );
-    
-    private static final List<String> pushConstants = List.of("ModelOffset");
-    
     @Override
     public long handle() {
         return pipelineHandle;
@@ -82,7 +74,7 @@ public class CinnabarPipeline implements CompiledRenderPipeline, VulkanObject {
         final Pair<String, String> processedShaders;
         {
             long start = System.nanoTime();
-            processedShaders = ShaderProcessing.processShaders(glVertexGLSL, glFragmentGLSL, vertexShaderName, fragmentShaderName, pushConstants, ubos);
+            processedShaders = ShaderProcessing.processShaders(glVertexGLSL, glFragmentGLSL, vertexShaderName, fragmentShaderName, List.of(), List.of());
             long end = System.nanoTime();
             long time = end - start;
             CINNABAR_CORE_LOG.debug("{}us taken to process shaders for {}", time / (1_000), pipelineName);
@@ -93,7 +85,7 @@ public class CinnabarPipeline implements CompiledRenderPipeline, VulkanObject {
         
         {
             long start = System.nanoTime();
-            shaderSet = ShaderSet.create(device, pipelineName, vertexShaderName, fragmentShaderName, vkVertexGLSL, vkFragmentGLSL);
+            shaderSet = ShaderSet.create(device, pipeline, pipelineName, vertexShaderName, fragmentShaderName, vkVertexGLSL, vkFragmentGLSL);
             long end = System.nanoTime();
             long time = end - start;
             CINNABAR_CORE_LOG.debug("{}us taken to compile shaders for {}", time / (1_000), pipelineName);
@@ -126,7 +118,7 @@ public class CinnabarPipeline implements CompiledRenderPipeline, VulkanObject {
             multiSampleState.rasterizationSamples(VK_SAMPLE_COUNT_1_BIT);
             multiSampleState.sampleShadingEnable(false);
             
-            final var inputState = VertexInputState.forVertexFormat(pipeline.getVertexFormat());
+            final var inputState = VertexInputState.forVertexFormat(pipeline.getVertexFormat(), shaderSet.attribTypes());
             
             final var bufferBindings = VkVertexInputBindingDescription.calloc(inputState.buffers().size(), stack);
             final var buffers = inputState.buffers();
@@ -264,14 +256,6 @@ public class CinnabarPipeline implements CompiledRenderPipeline, VulkanObject {
     public void destroy() {
         vkDestroyPipeline(device.vkDevice, pipelineHandle, null);
         shaderSet.destroy();
-    }
-    
-    @Override
-    public boolean containsUniform(String uniformName) {
-        // TODO: dont use streams for this
-        @Nullable
-        final var pushConstants = shaderSet.pushConstants();
-        return (pushConstants != null && pushConstants.members.stream().anyMatch(uboMember -> uboMember.name.equals(uniformName))) || shaderSet.descriptorSetLayouts.stream().anyMatch(descriptorSetLayout -> descriptorSetLayout.bindings.stream().filter(binding -> binding instanceof UBOBinding).map(binding -> (UBOBinding) binding).anyMatch(uboBinding -> uboBinding.members.stream().anyMatch(uboMember -> uboMember.name.equals(uniformName))));
     }
     
     @Override

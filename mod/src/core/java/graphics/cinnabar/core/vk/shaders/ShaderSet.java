@@ -1,5 +1,6 @@
 package graphics.cinnabar.core.vk.shaders;
 
+import com.mojang.blaze3d.pipeline.RenderPipeline;
 import graphics.cinnabar.api.annotations.API;
 import graphics.cinnabar.api.annotations.Constant;
 import graphics.cinnabar.api.annotations.ThreadSafety;
@@ -7,6 +8,7 @@ import graphics.cinnabar.api.memory.MemoryRange;
 import graphics.cinnabar.api.threading.IWorkQueue;
 import graphics.cinnabar.api.threading.WorkFuture;
 import graphics.cinnabar.core.b3d.CinnabarDevice;
+import graphics.cinnabar.core.b3d.texture.CinnabarGpuTexture;
 import graphics.cinnabar.core.vk.descriptors.*;
 import it.unimi.dsi.fastutil.objects.*;
 import org.jetbrains.annotations.Nullable;
@@ -19,8 +21,10 @@ import org.lwjgl.vulkan.VkPushConstantRange;
 import org.lwjgl.vulkan.VkShaderModuleCreateInfo;
 
 import java.nio.ByteBuffer;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.stream.Stream;
 
 import static graphics.cinnabar.api.CinnabarAPI.Internals.CINNABAR_API_LOG;
@@ -41,12 +45,13 @@ public class ShaderSet {
     public final VkPipelineShaderStageCreateInfo.Buffer shaderStages = VkPipelineShaderStageCreateInfo.calloc(2);
     
     private final Object2IntMap<String> attribLocationMap = new Object2IntArrayMap<>();
+    private final Object2ObjectMap<String, String> attribTypeMap = new Object2ObjectArrayMap<>();
     public final List<DescriptorSetLayout> descriptorSetLayouts;
     @Nullable
     private final PushConstants pushConstants;
     
     @ThreadSafety.Many
-    public static ShaderSet create(CinnabarDevice device, String pipelineName, String vertexShaderName, String fragmentShaderName, String vertexShaderGLSL, String fragmentShaderGLSL, List<String> pushConstants, List<List<String>> dedicatedUBOs) {
+    public static ShaderSet create(CinnabarDevice device, RenderPipeline pipeline, String pipelineName, String vertexShaderName, String fragmentShaderName, String vertexShaderGLSL, String fragmentShaderGLSL, List<String> pushConstants, List<List<String>> dedicatedUBOs) {
         long start = System.nanoTime();
         
         CINNABAR_CORE_LOG.debug("Reprocessing shaders ({}, {}) for pipeline {}", vertexShaderName, fragmentShaderName, pipelineName);
@@ -59,22 +64,22 @@ public class ShaderSet {
         long time = end - start;
         CINNABAR_API_LOG.debug("{}ns taken to reprocess shaders for pipeline {}", time, pipelineName);
         
-        return create(device, pipelineName, vertexShaderName, fragmentShaderName, vkVertexGLSL, vkFragmentGLSL);
+        return create(device, pipeline, pipelineName, vertexShaderName, fragmentShaderName, vkVertexGLSL, vkFragmentGLSL);
     }
     
     @ThreadSafety.Many
-    public static WorkFuture<ShaderSet> createDeferred(CinnabarDevice device, String pipelineName, String vertexShaderName, String fragmentShaderName, String vertexShaderGLSL, String fragmentShaderGLSL) {
-        return new WorkFuture<>(index -> create(device, pipelineName, vertexShaderName, fragmentShaderName, vertexShaderGLSL, fragmentShaderGLSL)).enqueue(IWorkQueue.BACKGROUND_THREADS);
+    public static WorkFuture<ShaderSet> createDeferred(CinnabarDevice device, RenderPipeline pipeline, String pipelineName, String vertexShaderName, String fragmentShaderName, String vertexShaderGLSL, String fragmentShaderGLSL) {
+        return new WorkFuture<>(index -> create(device, pipeline, pipelineName, vertexShaderName, fragmentShaderName, vertexShaderGLSL, fragmentShaderGLSL)).enqueue(IWorkQueue.BACKGROUND_THREADS);
     }
     
     @ThreadSafety.Many
-    public static ShaderSet create(CinnabarDevice device, String pipelineName, String vertexShaderName, String fragmentShaderName, String vertexShaderGLSL, String fragmentShaderGLSL) {
-        return new ShaderSet(device, pipelineName, vertexShaderName, fragmentShaderName, vertexShaderGLSL, fragmentShaderGLSL);
+    public static ShaderSet create(CinnabarDevice device, RenderPipeline pipeline, String pipelineName, String vertexShaderName, String fragmentShaderName, String vertexShaderGLSL, String fragmentShaderGLSL) {
+        return new ShaderSet(device, pipeline, pipelineName, vertexShaderName, fragmentShaderName, vertexShaderGLSL, fragmentShaderGLSL);
     }
     
     @ThreadSafety.Many
     @SuppressWarnings("unchecked")
-    private ShaderSet(CinnabarDevice device, String pipelineName, String vertexShaderName, String fragmentShaderName, String vertexShaderGLSL, String fragmentShaderGLSL) {
+    private ShaderSet(CinnabarDevice device, RenderPipeline pipeline, String pipelineName, String vertexShaderName, String fragmentShaderName, String vertexShaderGLSL, String fragmentShaderGLSL) {
         this.device = device;
         
         // TODO: dont leak stuff if compilation fails
@@ -102,11 +107,16 @@ public class ShaderSet {
         // TODO: SSBOs?
         int highestDescriptorSetIndex = -1;
         final var uboNames = new ObjectArraySet<String>();
+        final var texelBufferNames = new ObjectArraySet<String>();
         final var samplerNames = new ObjectArraySet<String>();
         @Nullable
         final var vertexUBOs = (List<Map<String, Object>>) vertexReflection.get("ubos");
         @Nullable
         final var fragmentUBOs = (List<Map<String, Object>>) fragmentReflection.get("ubos");
+        @Nullable
+        final var vertexTexelBuffers = (List<Map<String, Object>>) vertexReflection.get("separate_images");
+        @Nullable
+        final var fragmentTexelBuffers = (List<Map<String, Object>>) fragmentReflection.get("separate_images");
         @Nullable
         final var vertexSamplers = (List<Map<String, Object>>) vertexReflection.get("textures");
         @Nullable
@@ -125,6 +135,21 @@ public class ShaderSet {
                 highestDescriptorSetIndex = Math.max(highestDescriptorSetIndex, setIndex);
             }
         }
+        if (vertexTexelBuffers != null) {
+            for (final var texelBuffer : vertexTexelBuffers) {
+                texelBufferNames.add((String) texelBuffer.get("name"));
+                final var setIndex = (Integer) texelBuffer.get("set");
+                highestDescriptorSetIndex = Math.max(highestDescriptorSetIndex, setIndex);
+            }
+        }
+        if (fragmentTexelBuffers != null) {
+            for (final var texelBuffer : fragmentTexelBuffers) {
+                texelBufferNames.add((String) texelBuffer.get("name"));
+                final var setIndex = (Integer) texelBuffer.get("set");
+                highestDescriptorSetIndex = Math.max(highestDescriptorSetIndex, setIndex);
+            }
+        }
+        
         if (vertexSamplers != null) {
             for (final var sampler : vertexSamplers) {
                 samplerNames.add((String) sampler.get("name"));
@@ -149,40 +174,27 @@ public class ShaderSet {
         }
         
         for (final var uboName : uboNames) {
-            final var vertexTypeMembersOptional = vertexTypes.entrySet().stream().filter(type -> uboName.equals(type.getValue().get("name"))).map(type -> (List<Map<String, Object>>) type.getValue().get("members")).findFirst();
-            final var fragmentTypeMembersOptional = fragmentTypes.entrySet().stream().filter(type -> uboName.equals(type.getValue().get("name"))).map(type -> (List<Map<String, Object>>) type.getValue().get("members")).findFirst();
-            final var uboData = Stream.concat(vertexUBOs.stream(), fragmentUBOs.stream()).filter(ubo -> ubo.get("name").equals(uboName)).findFirst().get();
-            final List<Map<String, Object>> typeMembersToUse;
-            if (vertexTypeMembersOptional.isEmpty() || fragmentTypeMembersOptional.isEmpty()) {
-                assert vertexTypeMembersOptional.isPresent() || fragmentTypeMembersOptional.isPresent();
-                typeMembersToUse = vertexTypeMembersOptional.orElseGet(fragmentTypeMembersOptional::get);
-            } else {
-                final var vertexTypeMembers = vertexTypeMembersOptional.get();
-                final var fragmentTypeMembers = fragmentTypeMembersOptional.get();
-                if (!vertexTypeMembers.equals(fragmentTypeMembers)) {
-                    throw new IllegalArgumentException("Mismatched UBOs (%s) between stages in pipeline %s".formatted(uboName, pipelineName));
-                }
-                
-                typeMembersToUse = vertexTypeMembers;
-            }
-            
-            final var members = new ReferenceArrayList<UBOMember>();
-            for (int i = 0; i < typeMembersToUse.size(); i++) {
-                final var member = typeMembersToUse.get(i);
-                final var uboMember = new UBOMember((String) member.get("name"), (String) member.get("type"), (Integer) member.get("offset"));
-                members.add(uboMember);
-            }
+            final var uboData = Stream.concat(vertexUBOs != null ? vertexUBOs.stream() : Stream.empty(), fragmentUBOs != null ? fragmentUBOs.stream() : Stream.empty()).filter(ubo -> ubo.get("name").equals(uboName)).findFirst().get();
             
             final var set = (int) uboData.get("set");
             final var size = (int) uboData.get("block_size");
             final var binding = (int) uboData.get("binding");
             
-            final var uboBinding = new UBOBinding(device, binding, size, members);
+            final var uboBinding = new UBOBinding(uboName, binding, size);
             setBindings.get(set).add(uboBinding);
         }
         
+        for (final var texelBufferName : texelBufferNames) {
+            final var description = pipeline.getUniforms().stream().filter(uniformDescription -> uniformDescription.name().equals(texelBufferName)).findFirst().get();
+            final var samplerData = Stream.concat(vertexTexelBuffers != null ? vertexTexelBuffers.stream() : Stream.empty(), fragmentTexelBuffers != null ? fragmentTexelBuffers.stream() : Stream.empty()).filter(sampler -> sampler.get("name").equals(texelBufferName)).findFirst().get();
+            final var set = (int) samplerData.get("set");
+            final var binding = (int) samplerData.get("binding");
+            final var texelBinding = new TexelBufferBinding(texelBufferName, binding, CinnabarGpuTexture.toVk(Objects.requireNonNull(description.textureFormat())));
+            setBindings.get(set).add(texelBinding);
+        }
+        
         for (final var samplerName : samplerNames) {
-            final var samplerData = Stream.concat(vertexSamplers.stream(), fragmentSamplers.stream()).filter(sampler -> sampler.get("name").equals(samplerName)).findFirst().get();
+            final var samplerData = Stream.concat(vertexSamplers != null ? vertexSamplers.stream() : Stream.empty(), fragmentSamplers != null ? fragmentSamplers.stream() : Stream.empty()).filter(sampler -> sampler.get("name").equals(samplerName)).findFirst().get();
             final var set = (int) samplerData.get("set");
             final var binding = (int) samplerData.get("binding");
             final var samplerBinding = new SamplerBinding(samplerName, binding);
@@ -304,11 +316,15 @@ public class ShaderSet {
         shaderStages.pName(mainUTF8);
         shaderStages.position(0);
         
-        final var vertexInputs = (List<Map<String, Object>>) vertexReflection.get("inputs");
-        for (final var vertexInput : vertexInputs) {
-            final var name = (String) vertexInput.get("name");
-            final var location = (int) vertexInput.get("location");
-            attribLocationMap.put(name, location);
+        @Nullable final var vertexInputs = (List<Map<String, Object>>) vertexReflection.get("inputs");
+        if (vertexInputs != null) {
+            for (final var vertexInput : vertexInputs) {
+                final var name = (String) vertexInput.get("name");
+                final var location = (int) vertexInput.get("location");
+                final var type = (String) vertexInput.get("type");
+                attribLocationMap.put(name, location);
+                attribTypeMap.put(name, type);
+            }
         }
     }
     
@@ -354,5 +370,12 @@ public class ShaderSet {
     @ThreadSafety.Many
     public List<DescriptorSetLayout> descriptorSetLayouts() {
         return descriptorSetLayouts;
+    }
+    
+    @API
+    @Constant
+    @ThreadSafety.Many
+    public Map<String, String> attribTypes() {
+        return Collections.unmodifiableMap(attribTypeMap);
     }
 }

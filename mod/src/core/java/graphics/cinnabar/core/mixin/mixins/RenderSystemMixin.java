@@ -1,13 +1,12 @@
 package graphics.cinnabar.core.mixin.mixins;
 
-import com.mojang.blaze3d.buffers.BufferType;
-import com.mojang.blaze3d.buffers.BufferUsage;
 import com.mojang.blaze3d.buffers.GpuBuffer;
 import com.mojang.blaze3d.shaders.ShaderType;
 import com.mojang.blaze3d.systems.GpuDevice;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.*;
 import graphics.cinnabar.core.b3d.CinnabarDevice;
+import net.minecraft.client.renderer.DynamicUniforms;
 import net.minecraft.resources.ResourceLocation;
 import org.jetbrains.annotations.Nullable;
 import org.spongepowered.asm.mixin.Mixin;
@@ -27,11 +26,15 @@ public class RenderSystemMixin {
     @Shadow
     @Nullable
     private static GpuBuffer QUAD_VERTEX_BUFFER;
+    @Shadow
+    @Nullable
+    private static DynamicUniforms dynamicUniforms;
     
     @Overwrite
     public static void initRenderer(long windowHandle, int debugLevel, boolean syncDebug, BiFunction<ResourceLocation, ShaderType, String> shaderSourceProvider, boolean debugLabels) {
         DEVICE = new CinnabarDevice(windowHandle, debugLevel, syncDebug, shaderSourceProvider, debugLabels);
-        apiDescription = RenderSystem.getDevice().getImplementationInformation();
+        apiDescription = DEVICE.getImplementationInformation();
+        dynamicUniforms = new DynamicUniforms();
         
         try (ByteBufferBuilder bytebufferbuilder = new ByteBufferBuilder(DefaultVertexFormat.POSITION.getVertexSize() * 4)) {
             BufferBuilder bufferbuilder = new BufferBuilder(bytebufferbuilder, VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION);
@@ -41,7 +44,7 @@ public class RenderSystemMixin {
             bufferbuilder.addVertex(1.0F, 0.0F, 0.0F);
             
             try (MeshData meshdata = bufferbuilder.buildOrThrow()) {
-                QUAD_VERTEX_BUFFER = RenderSystem.getDevice().createBuffer(() -> "Quad", BufferType.VERTICES, BufferUsage.STATIC_WRITE, meshdata.vertexBuffer());
+                QUAD_VERTEX_BUFFER = RenderSystem.getDevice().createBuffer(() -> "Quad", GpuBuffer.USAGE_VERTEX, meshdata.vertexBuffer());
             }
         }
     }
