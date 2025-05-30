@@ -1,5 +1,7 @@
 package graphics.cinnabar.core.vk.memory;
 
+import graphics.cinnabar.api.CinnabarAPI;
+import graphics.cinnabar.api.memory.MemoryRange;
 import graphics.cinnabar.core.b3d.CinnabarDevice;
 import graphics.cinnabar.core.vk.VulkanObject;
 import org.lwjgl.system.MemoryStack;
@@ -61,5 +63,33 @@ public class VkBuffer implements VulkanObject {
         vkDestroyBuffer(device.vkDevice, handle, null);
         allocation.destroy();
 //        LiveHandles.destroy(handle);
+    }
+    
+    public Slice whole() {
+        return new Slice(allocation.range);
+    }
+    
+    public Slice slice(MemoryRange range) {
+        if (CinnabarAPI.DEBUG_MODE) {
+            if (range.offset() < 0) {
+                throw new IllegalArgumentException("Attempt to slice buffer before beginning");
+            }
+            if ((range.offset() + range.size()) > size) {
+                throw new IllegalArgumentException("Attempt to slice buffer after end");
+            }
+        }
+        return new Slice(range);
+    }
+    
+    public class Slice {
+        public final MemoryRange range;
+        
+        public Slice(MemoryRange range) {
+            this.range = range;
+        }
+        
+        public VkBuffer buffer() {
+            return VkBuffer.this;
+        }
     }
 }
