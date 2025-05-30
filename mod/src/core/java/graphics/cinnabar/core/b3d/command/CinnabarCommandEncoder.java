@@ -5,11 +5,11 @@ import com.mojang.blaze3d.platform.NativeImage;
 import com.mojang.blaze3d.systems.CommandEncoder;
 import com.mojang.blaze3d.systems.RenderPass;
 import com.mojang.blaze3d.textures.GpuTexture;
+import graphics.cinnabar.api.memory.LeakDetection;
 import graphics.cinnabar.api.memory.PointerWrapper;
 import graphics.cinnabar.api.util.Destroyable;
 import graphics.cinnabar.core.b3d.CinnabarDevice;
 import graphics.cinnabar.core.b3d.buffers.CinnabarGpuBuffer;
-import graphics.cinnabar.core.b3d.buffers.PersistentWriteBuffer;
 import graphics.cinnabar.core.b3d.buffers.ReadBuffer;
 import graphics.cinnabar.core.b3d.buffers.TransientWriteBuffer;
 import graphics.cinnabar.core.b3d.renderpass.CinnabarRenderPass;
@@ -200,8 +200,12 @@ public class CinnabarCommandEncoder implements CommandEncoder, Destroyable {
             final var uploadBuffer = new VkBuffer(device, data.size() - offset, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, device.hostTransientMemoryPool());
             device.destroyEndOfFrame(uploadBuffer);
             
-            // TODO: memory checking? requires registering the data ByteBuffer
-            LibCString.nmemcpy(uploadBuffer.allocation.cpu().hostPointer.pointer(), data.pointer() + offset, data.size() - offset);
+            if (offset < 0 || data.size() - offset > uploadBuffer.allocation.cpu().hostPointer.size() || data.pointer() == 0) {
+                throw new IllegalStateException();
+            }
+            LeakDetection.addReadableLocation(data);
+            data.copyTo(offset, uploadBuffer.allocation.cpu().hostPointer, 0);
+            LeakDetection.removeReadableLocation(data);
             
             final var copyRegion = VkBufferCopy.calloc(1, stack);
             copyRegion.srcOffset(0);
