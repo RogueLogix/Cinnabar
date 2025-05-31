@@ -12,7 +12,7 @@ public class CinnabarCore {
     @Nullable
     public static CinnabarDevice cinnabarDeviceSingleton;
     
-    private static CinnabarDevice device() {
+    public static CinnabarDevice device() {
         if (cinnabarDeviceSingleton == null) {
             throw new IllegalStateException("Cannot get CinnabarDevice before initialization has started");
         }

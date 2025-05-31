@@ -5,6 +5,7 @@ import graphics.cinnabar.api.CinnabarGpuDevice;
 import graphics.cinnabar.api.annotations.Constant;
 import graphics.cinnabar.api.annotations.ThreadSafety;
 import graphics.cinnabar.api.util.Destroyable;
+import graphics.cinnabar.core.CinnabarCore;
 import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.Nullable;
 import org.lwjgl.system.MemoryStack;
@@ -36,7 +37,7 @@ public interface VulkanObject extends Destroyable, VulkanNameable {
             nameInfo.objectType(objectType());
             nameInfo.object(handle());
             nameInfo.pObjectName(stack.UTF8(name));
-            vkDebugMarkerSetObjectNameEXT(CinnabarGpuDevice.get().vkDevice(), nameInfo);
+            vkDebugMarkerSetObjectNameEXT(CinnabarCore.device().vkDevice(), nameInfo);
         }
     }
 }

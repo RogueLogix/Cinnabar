@@ -28,4 +28,12 @@ public class MathUtil {
     public static long BtoMB(long bytes) {
         return BtoKB(bytes) / 1024;
     }
+    
+    public static long KBToB(long kilobytes) {
+        return kilobytes * 1024;
+    }
+    
+    public static long MBToB(long megabytes) {
+        return KBToB(megabytes * 1024);
+    }
 }

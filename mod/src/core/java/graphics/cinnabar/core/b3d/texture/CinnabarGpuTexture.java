@@ -5,13 +5,14 @@ import com.mojang.blaze3d.textures.TextureFormat;
 import graphics.cinnabar.core.b3d.CinnabarDevice;
 import graphics.cinnabar.core.vk.VulkanObject;
 import graphics.cinnabar.core.vk.VulkanSampler;
-import graphics.cinnabar.core.vk.memory.VkMemoryAllocation;
 import org.lwjgl.system.MemoryStack;
+import org.lwjgl.util.vma.VmaAllocationCreateInfo;
 import org.lwjgl.vulkan.VkImageCreateInfo;
-import org.lwjgl.vulkan.VkMemoryRequirements;
 
 import static com.mojang.blaze3d.textures.FilterMode.LINEAR;
 import static graphics.cinnabar.api.exceptions.VkException.checkVkCode;
+import static org.lwjgl.util.vma.Vma.vmaCreateImage;
+import static org.lwjgl.util.vma.Vma.vmaDestroyImage;
 import static org.lwjgl.vulkan.VK10.*;
 
 public class CinnabarGpuTexture extends GpuTexture implements VulkanObject {
@@ -19,7 +20,7 @@ public class CinnabarGpuTexture extends GpuTexture implements VulkanObject {
     
     private boolean closed = false;
     public final long imageHandle;
-    private final VkMemoryAllocation memoryAllocation;
+    public final long vmaAllocation;
     private int liveViews = 0;
     
     public CinnabarGpuTexture(CinnabarDevice device, int usage, String label, TextureFormat format, int width, int height, int depth, int mips) {
@@ -40,17 +41,13 @@ public class CinnabarGpuTexture extends GpuTexture implements VulkanObject {
             imageCreateInfo.samples(VK_SAMPLE_COUNT_1_BIT); // TODO: MSAA would be cool
             imageCreateInfo.flags(cubemap ? VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT : 0);
             
-            final var longPtr = stack.callocLong(1);
-            checkVkCode(vkCreateImage(device.vkDevice, imageCreateInfo, null, longPtr));
-            imageHandle = longPtr.get(0);
-            
-            final var memoryRequirements = VkMemoryRequirements.calloc(stack);
-            vkGetImageMemoryRequirements(device.vkDevice, imageHandle, memoryRequirements);
-            
-            memoryAllocation = device.devicePersistentMemoryPool.alloc(memoryRequirements);
-            vkBindImageMemory(device.vkDevice, imageHandle, memoryAllocation.memoryHandle, memoryAllocation.range.offset());
-            
-            
+            final var allocCreateInfo = VmaAllocationCreateInfo.calloc(stack);
+            allocCreateInfo.memoryTypeBits( 1 << device.deviceMemoryType.leftInt());
+            final var imagePtr = stack.callocLong(1);
+            final var allocationPtr = stack.callocPointer(1);
+            checkVkCode(vmaCreateImage(device.vmaAllocator, imageCreateInfo, allocCreateInfo, imagePtr, allocationPtr, null));
+            imageHandle = imagePtr.get(0);
+            vmaAllocation = allocationPtr.get(0);
         }
         setVulkanName(label);
     }
@@ -73,8 +70,7 @@ public class CinnabarGpuTexture extends GpuTexture implements VulkanObject {
     
     @Override
     public void destroy() {
-        vkDestroyImage(device.vkDevice, imageHandle, null);
-        memoryAllocation.destroy();
+        vmaDestroyImage(device.vmaAllocator, imageHandle, vmaAllocation);
     }
     
     public VulkanSampler sampler() {

@@ -4,47 +4,58 @@ import graphics.cinnabar.api.CinnabarAPI;
 import graphics.cinnabar.api.memory.MemoryRange;
 import graphics.cinnabar.core.b3d.CinnabarDevice;
 import graphics.cinnabar.core.vk.VulkanObject;
+import it.unimi.dsi.fastutil.ints.IntIntImmutablePair;
 import org.lwjgl.system.MemoryStack;
+import org.lwjgl.util.vma.VmaAllocationCreateInfo;
+import org.lwjgl.util.vma.VmaAllocationInfo;
 import org.lwjgl.vulkan.VkBufferCreateInfo;
-import org.lwjgl.vulkan.VkMemoryRequirements;
+import org.lwjgl.vulkan.VkMappedMemoryRange;
 
+import static graphics.cinnabar.api.exceptions.VkException.checkVkCode;
+import static graphics.cinnabar.core.CinnabarConfig.defaultVal;
+import static org.lwjgl.util.vma.Vma.*;
 import static org.lwjgl.vulkan.EXTDebugReport.VK_DEBUG_REPORT_OBJECT_TYPE_BUFFER_EXT;
 import static org.lwjgl.vulkan.VK10.*;
-import static org.lwjgl.vulkan.VK10.vkBindBufferMemory;
 
 public class VkBuffer implements VulkanObject {
     
     private final CinnabarDevice device;
     
+    public static final int CINNABAR_BUFFER_USAGE_TRANSIENT = defaultVal(1);
+    
     public final long size;
     public final long handle;
-    public final VkMemoryAllocation allocation;
+    public final long vmaAllocation;
+    public final VmaAllocationInfo allocationInfo = VmaAllocationInfo.calloc();
     
-    public VkBuffer(CinnabarDevice device, long size, int usageFlags, VkMemoryPool memoryPool) {
+    public VkBuffer(CinnabarDevice device, long size, int vkUsageFlags, IntIntImmutablePair memoryType) {
         this.device = device;
         this.size = size;
         try (final var stack = MemoryStack.stackPush()) {
-            final var longPtr = stack.callocLong(1);
+            final var bufferPtr = stack.callocLong(1);
+            final var allocPtr = stack.callocPointer(1);
             final var createInfo = VkBufferCreateInfo.calloc(stack);
             createInfo.sType(VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO);
             createInfo.pNext(0);
             createInfo.flags(0);
             createInfo.size(size);
-            createInfo.usage(usageFlags);
+            createInfo.usage(vkUsageFlags);
             createInfo.sharingMode(VK_SHARING_MODE_EXCLUSIVE);
             createInfo.pQueueFamilyIndices(null);
             
-            vkCreateBuffer(device.vkDevice, createInfo, null, longPtr);
-            handle = longPtr.get(0);
+            final var mappableMemory = (memoryType.rightInt() & (VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT)) != 0;
+            final var allocCreateInfo = VmaAllocationCreateInfo.calloc(stack);
+            allocCreateInfo.usage(VMA_MEMORY_USAGE_AUTO);
+            allocCreateInfo.flags(allocCreateInfo.flags() | (mappableMemory ? (VMA_ALLOCATION_CREATE_MAPPED_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT) : 0));
+            allocCreateInfo.memoryTypeBits( 1 << memoryType.leftInt());
             
-            final var memoryRequirements = VkMemoryRequirements.malloc(stack);
-            vkGetBufferMemoryRequirements(device.vkDevice, handle, memoryRequirements);
-            allocation = memoryPool.alloc(memoryRequirements);
+            checkVkCode(vmaCreateBuffer(device.vmaAllocator, createInfo, allocCreateInfo, bufferPtr, allocPtr, allocationInfo));
+            vmaAllocation = allocPtr.get(0);
+            handle = bufferPtr.get(0);
             
-            vkBindBufferMemory(device.vkDevice, handle, allocation.memoryHandle, allocation.range.offset());
-            
-            // TODO: bring live handles to the API package, or drop impl to core
-//            LiveHandles.create(handle);
+            if(mappableMemory && allocationInfo.pMappedData() == 0){
+                throw new IllegalStateException();
+            }
         }
     }
     
@@ -60,13 +71,12 @@ public class VkBuffer implements VulkanObject {
     
     @Override
     public void destroy() {
-        vkDestroyBuffer(device.vkDevice, handle, null);
-        allocation.destroy();
-//        LiveHandles.destroy(handle);
+        vmaDestroyBuffer(device.vmaAllocator, handle, vmaAllocation);
+        allocationInfo.free();
     }
     
     public Slice whole() {
-        return new Slice(allocation.range);
+        return new Slice(new MemoryRange(0, size));
     }
     
     public Slice slice(MemoryRange range) {

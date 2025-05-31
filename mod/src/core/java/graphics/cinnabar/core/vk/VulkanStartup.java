@@ -669,10 +669,10 @@ public class VulkanStartup {
                     queueFamilies.add(computeQueueFamily);
                     queueCounts.add(1);
                 }
-                if (queueFamilies.contains(transferQueueIndex)) {
+                if (queueFamilies.contains(transferQueueFamily)) {
                     final var queueCreateIndex = queueFamilies.indexOf(transferQueueFamily);
                     final var queueIndex = queueCounts.getInt(queueCreateIndex);
-                    computeQueueIndex = queueIndex;
+                    transferQueueIndex = queueIndex;
                     queueCounts.set(queueCreateIndex, queueIndex + 1);
                 } else {
                     queueFamilies.add(transferQueueFamily);

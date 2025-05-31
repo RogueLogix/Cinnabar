@@ -46,8 +46,8 @@ public class ShaderProcessing {
                     """);
         }
         
-        final var versionRemovedPreprocessedVertexSource = rawVertexShader.replace("#version", "#define VERTEX_SHADER //");
-        final var versionRemovedPreprocessedFragmentSource = rawFragmentShader.replace("#version", "#define FRAGMENT_SHADER //");
+        final var versionRemovedPreprocessedVertexSource = rawVertexShader.replace("#version", "#define CINNABAR_VK\n#define CINNABAR_VERTEX_SHADER //");
+        final var versionRemovedPreprocessedFragmentSource = rawFragmentShader.replace("#version", "#define CINNABAR_VK\n#define CINNABAR_FRAGMENT_SHADER //");
         
         final var vertexTranslationUnit = glslTransformerIntakeCode(versionRemovedPreprocessedVertexSource);
         final var fragmentTranslationUnit = glslTransformerIntakeCode(versionRemovedPreprocessedFragmentSource);

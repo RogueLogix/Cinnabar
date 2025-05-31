@@ -8,11 +8,11 @@ import com.mojang.blaze3d.textures.GpuTexture;
 import com.mojang.blaze3d.textures.GpuTextureView;
 import com.mojang.blaze3d.textures.TextureFormat;
 import graphics.cinnabar.api.CinnabarGpuDevice;
-import graphics.cinnabar.api.memory.MagicMemorySizes;
 import graphics.cinnabar.api.util.Destroyable;
 import graphics.cinnabar.api.util.Triple;
 import graphics.cinnabar.core.CinnabarCore;
-import graphics.cinnabar.core.b3d.buffers.CinnabarGpuBuffer;
+import graphics.cinnabar.core.b3d.buffers.BufferPool;
+import graphics.cinnabar.core.b3d.buffers.CinnabarIndividualGpuBuffer;
 import graphics.cinnabar.core.b3d.command.CinnabarCommandEncoder;
 import graphics.cinnabar.core.b3d.pipeline.CinnabarPipeline;
 import graphics.cinnabar.core.b3d.texture.CinnabarGpuTexture;
@@ -21,11 +21,9 @@ import graphics.cinnabar.core.b3d.window.CinnabarWindow;
 import graphics.cinnabar.core.util.MagicNumbers;
 import graphics.cinnabar.core.vk.VulkanSampler;
 import graphics.cinnabar.core.vk.VulkanStartup;
-import graphics.cinnabar.core.vk.memory.VkMemoryPool;
-import graphics.cinnabar.core.vk.memory.pools.PersistentPool;
-import graphics.cinnabar.core.vk.memory.pools.TransientPool;
 import graphics.cinnabar.lib.util.MathUtil;
 import graphics.cinnabar.lib.vulkan.VulkanDebug;
+import it.unimi.dsi.fastutil.ints.IntIntImmutablePair;
 import it.unimi.dsi.fastutil.ints.IntReferencePair;
 import it.unimi.dsi.fastutil.objects.ReferenceArrayList;
 import net.minecraft.client.Minecraft;
@@ -36,9 +34,12 @@ import net.neoforged.neoforge.client.event.CustomizeGuiOverlayEvent;
 import net.neoforged.neoforge.common.NeoForge;
 import org.jetbrains.annotations.Nullable;
 import org.lwjgl.system.MemoryStack;
+import org.lwjgl.util.vma.VmaAllocatorCreateInfo;
+import org.lwjgl.util.vma.VmaVulkanFunctions;
 import org.lwjgl.vulkan.*;
 
 import java.nio.ByteBuffer;
+import java.util.Collections;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
@@ -46,6 +47,8 @@ import java.util.function.BiFunction;
 import java.util.function.Supplier;
 
 import static graphics.cinnabar.core.CinnabarCore.CINNABAR_CORE_LOG;
+import static org.lwjgl.util.vma.Vma.vmaCreateAllocator;
+import static org.lwjgl.util.vma.Vma.vmaDestroyAllocator;
 import static org.lwjgl.vulkan.EXTDebugMarker.VK_EXT_DEBUG_MARKER_EXTENSION_NAME;
 import static org.lwjgl.vulkan.EXTDebugUtils.vkDestroyDebugUtilsMessengerEXT;
 import static org.lwjgl.vulkan.VK13.*;
@@ -82,10 +85,13 @@ public class CinnabarDevice implements CinnabarGpuDevice {
     // starts at frame n instead of 0 for initial sync reasons
     private long currentFrame = MagicNumbers.MaximumFramesInFlight;
     
-    public final VkMemoryPool devicePersistentMemoryPool;
-    public final VkMemoryPool.Transient deviceTransientMemoryPool;
-    public final VkMemoryPool.CPU hostPersistentMemoryPool;
-    public final List<VkMemoryPool.Transient.CPU> hostTransientMemoryPools;
+    public final long vmaAllocator;
+    public final IntIntImmutablePair deviceMemoryType;
+    public final IntIntImmutablePair hostMemoryType;
+    
+    public final BufferPool vertexBufferPool;
+    public final BufferPool indexBufferPool;
+    public final List<BufferPool> uploadPools;
     
     private final BiFunction<ResourceLocation, ShaderType, String> shaderSourceProvider;
     
@@ -145,19 +151,37 @@ public class CinnabarDevice implements CinnabarGpuDevice {
         driverVersion = String.format("%d.%d.%d", VK_VERSION_MAJOR(driverVersionEncoded), VK_VERSION_MINOR(driverVersionEncoded), VK_VERSION_PATCH(driverVersionEncoded));
         renderer = String.format("%s", physicalDeviceProperties.deviceNameString());
         
-        // prefer to make device persistent buffers host accessible
-        // this allows direct copy for new buffers
-        devicePersistentMemoryPool = createMemoryPool(false, VK_MEMORY_HEAP_DEVICE_LOCAL_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-        deviceTransientMemoryPool = (VkMemoryPool.Transient) createMemoryPool(true, VK_MEMORY_HEAP_DEVICE_LOCAL_BIT, 0);
-        hostPersistentMemoryPool = (VkMemoryPool.CPU) createMemoryPool(false, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, 0);
-        final var hostTransientPools = new VkMemoryPool.Transient.CPU[MagicNumbers.MaximumFramesInFlight];
-        for (int i = 0; i < hostTransientPools.length; i++) {
-            hostTransientPools[i] = (VkMemoryPool.Transient.CPU) createMemoryPool(true, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, 0);
+        try (final var stack = MemoryStack.stackPush()){
+            
+            final var vmaVulkanFunctions = VmaVulkanFunctions.calloc(stack);
+            vmaVulkanFunctions.set(vkInstance, vkDevice);
+            
+            final var allocatorCreateInfo = VmaAllocatorCreateInfo.calloc(stack);
+            allocatorCreateInfo.flags(0);
+            allocatorCreateInfo.vulkanApiVersion(VK_API_VERSION_1_3);
+            allocatorCreateInfo.physicalDevice(vkPhysicalDevice);
+            allocatorCreateInfo.device(vkDevice);
+            allocatorCreateInfo.instance(vkInstance);
+            allocatorCreateInfo.pVulkanFunctions(vmaVulkanFunctions);
+            
+            final var handlePtr = stack.pointers(0);
+            vmaCreateAllocator(allocatorCreateInfo, handlePtr);
+            vmaAllocator = handlePtr.get(0);
         }
-        hostTransientMemoryPools = List.of(hostTransientPools);
+        
+        deviceMemoryType = pickMemoryType(VK_MEMORY_HEAP_DEVICE_LOCAL_BIT, 0);
+        hostMemoryType = pickMemoryType(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, 0);
         
         commandEncoder = new CinnabarCommandEncoder(this);
         ((CinnabarWindow) Minecraft.getInstance().getWindow()).attachDevice(this);
+        
+        vertexBufferPool = new BufferPool(this, deviceMemoryType, GpuBuffer.USAGE_VERTEX | GpuBuffer.USAGE_COPY_DST, MathUtil.MBToB(64), "vertex", false);
+        indexBufferPool = new BufferPool(this, deviceMemoryType, GpuBuffer.USAGE_INDEX | GpuBuffer.USAGE_COPY_DST, MathUtil.MBToB(16), "index", false);
+        final var uploadPools = new ReferenceArrayList<BufferPool>();
+        for (int i = 0; i < MagicNumbers.MaximumFramesInFlight; i++) {
+            uploadPools.add(new BufferPool(this, hostMemoryType, GpuBuffer.USAGE_COPY_SRC, MathUtil.MBToB(16), "upload", true));
+        }
+        this.uploadPools = Collections.unmodifiableList(uploadPools);
         
         NeoForge.EVENT_BUS.register(this);
     }
@@ -179,10 +203,7 @@ public class CinnabarDevice implements CinnabarGpuDevice {
         toDestroy.forEach(list -> list.forEach(Destroyable::destroy));
         toDestroy.clear();
         
-        hostTransientMemoryPools.forEach(Destroyable::destroy);
-        hostPersistentMemoryPool.destroy();
-        deviceTransientMemoryPool.destroy();
-        devicePersistentMemoryPool.destroy();
+        vmaDestroyAllocator(vmaAllocator);
         
         shutdownDestroy.forEach(Destroyable::destroy);
         shutdownDestroy.clear();
@@ -214,8 +235,9 @@ public class CinnabarDevice implements CinnabarGpuDevice {
         submitDestroy.clear();
         toDestroy.get(currentFrameIndex()).forEach(Destroyable::destroy);
         toDestroy.get(currentFrameIndex()).clear();
-        hostTransientMemoryPools.get(currentFrameIndex()).reset();
-        deviceTransientMemoryPool.reset();
+        vertexBufferPool.processRealloc();
+        indexBufferPool.processRealloc();
+        uploadPools.get(currentFrameIndex()).processRealloc();
     }
     
     public long currentFrame() {
@@ -224,6 +246,14 @@ public class CinnabarDevice implements CinnabarGpuDevice {
     
     public int currentFrameIndex() {
         return (int) (currentFrame % MagicNumbers.MaximumFramesInFlight);
+    }
+    
+    public void idleAndClear() {
+        // waits for device idle, and destroys anything pending
+        // this is rarely useful
+        vkDeviceWaitIdle(vkDevice);
+        toDestroy.forEach(list -> list.forEach(Destroyable::destroy));
+        toDestroy.forEach(ReferenceArrayList::clear);
     }
     
     public <T extends Destroyable> T destroyAfterSubmit(T destroyable) {
@@ -241,15 +271,7 @@ public class CinnabarDevice implements CinnabarGpuDevice {
         return destroyable;
     }
     
-    public VkMemoryPool createMemoryPool(boolean transientPool, int requiredProperties, int preferredProperties) {
-        return createMemoryPool(transientPool, requiredProperties, preferredProperties, 0);
-    }
-    
-    public VkMemoryPool createMemoryPool(boolean transientPool, int requiredProperties, int preferredProperties, long blockSize) {
-        if (blockSize <= 0) {
-            blockSize = MagicMemorySizes.MEMORY_POOL_BLOCK_SIZE;
-        }
-        blockSize = MathUtil.roundUpPo2(blockSize);
+    public IntIntImmutablePair pickMemoryType(int requiredProperties, int preferredProperties){
         final int selectedMemoryType;
         final int selectedMemoryTypeBits;
         preferredProperties |= requiredProperties;
@@ -279,24 +301,7 @@ public class CinnabarDevice implements CinnabarGpuDevice {
             selectedMemoryType = memoryType;
             selectedMemoryTypeBits = memoryTypeBits;
         }
-        boolean mapped = (selectedMemoryTypeBits & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) != 0;
-        if (transientPool) {
-            if (mapped) {
-                return new TransientPool.CPU(this, selectedMemoryType, blockSize);
-            } else {
-                return new TransientPool(this, selectedMemoryType, blockSize);
-            }
-        } else {
-            if (mapped) {
-                return new PersistentPool.CPU(this, selectedMemoryType, blockSize);
-            } else {
-                return new PersistentPool(this, selectedMemoryType, blockSize);
-            }
-        }
-    }
-    
-    public VkMemoryPool.Transient.CPU hostTransientMemoryPool() {
-        return hostTransientMemoryPools.get(currentFrameIndex());
+        return new IntIntImmutablePair(selectedMemoryType, selectedMemoryTypeBits);
     }
     
     @SubscribeEvent
@@ -309,10 +314,6 @@ public class CinnabarDevice implements CinnabarGpuDevice {
             list.add("Validation layers disabled");
         }
         list.add(String.format("Pending destroys: %05d", toDestroy.stream().mapToInt(ReferenceArrayList::size).sum() + submitDestroy.size()));
-        list.add(String.format("Device persistent memory: %d/%dMB", MathUtil.BtoMB(devicePersistentMemoryPool.liveAllocated()), MathUtil.BtoMB(devicePersistentMemoryPool.totalAllocatedFromVulkan())));
-        list.add(String.format("Device transient memory: %d/%dMB", MathUtil.BtoMB(deviceTransientMemoryPool.liveAllocated()), MathUtil.BtoMB(deviceTransientMemoryPool.totalAllocatedFromVulkan())));
-        list.add(String.format("Host persistent memory: %d/%dMB", MathUtil.BtoMB(hostPersistentMemoryPool.liveAllocated()), MathUtil.BtoMB(hostPersistentMemoryPool.totalAllocatedFromVulkan())));
-        list.add(String.format("Host transient memory: %d/%dMB", MathUtil.BtoMB(hostTransientMemoryPools.stream().mapToLong(VkMemoryPool::liveAllocated).sum()), MathUtil.BtoMB(hostTransientMemoryPools.stream().mapToLong(VkMemoryPool::totalAllocatedFromVulkan).sum())));
         list.addAll(commandEncoder.debugStrings());
     }
     
@@ -378,8 +379,15 @@ public class CinnabarDevice implements CinnabarGpuDevice {
     
     @Override
     public GpuBuffer createBuffer(@Nullable Supplier<String> bufferNameSupplier, int usage, int bufferSize) {
-        @Nullable final var name = bufferNameSupplier != null ? bufferNameSupplier.get() : null;
-        return new CinnabarGpuBuffer(this, usage, bufferSize, name);
+        @Nullable
+        final var name = bufferNameSupplier != null ? bufferNameSupplier.get() : null;
+        if (vertexBufferPool.canAllocate(usage)) {
+            return vertexBufferPool.alloc(usage, bufferSize, name);
+        }
+        if (indexBufferPool.canAllocate(usage)) {
+            return indexBufferPool.alloc(usage, bufferSize, name);
+        }
+        return new CinnabarIndividualGpuBuffer(this, usage, bufferSize, name);
     }
     
     @Override

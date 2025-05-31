@@ -63,6 +63,7 @@ def lwjglJavaLibs = [
 def lwjglNativeLibs = [
         "shaderc",
         "spvc",
+        "vma",
 ]
 
 def lwjglNativePlatforms = [

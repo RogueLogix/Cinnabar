@@ -8,10 +8,9 @@ import com.mojang.blaze3d.systems.CommandEncoder;
 import com.mojang.blaze3d.systems.RenderPass;
 import com.mojang.blaze3d.textures.GpuTexture;
 import com.mojang.blaze3d.textures.GpuTextureView;
-import graphics.cinnabar.api.memory.LeakDetection;
-import graphics.cinnabar.api.memory.PointerWrapper;
 import graphics.cinnabar.api.util.Destroyable;
 import graphics.cinnabar.core.b3d.CinnabarDevice;
+import graphics.cinnabar.core.b3d.buffers.BufferPool;
 import graphics.cinnabar.core.b3d.buffers.CinnabarGpuBuffer;
 import graphics.cinnabar.core.b3d.renderpass.CinnabarRenderPass;
 import graphics.cinnabar.core.b3d.texture.CinnabarGpuTexture;
@@ -78,7 +77,7 @@ public class CinnabarCommandEncoder implements CommandEncoder, Destroyable {
         vkDestroySemaphore(device.vkDevice, interFrameSemaphore, null);
     }
     
-    private VulkanTransientCommandBufferPool currentCommandPool() {
+    public VulkanTransientCommandBufferPool currentCommandPool() {
         return commandPools.get(device.currentFrameIndex());
     }
     
@@ -232,22 +231,24 @@ public class CinnabarCommandEncoder implements CommandEncoder, Destroyable {
     public void writeToBuffer(GpuBufferSlice gpuBufferSlice, ByteBuffer data) {
         final var buffer = (CinnabarGpuBuffer) gpuBufferSlice.buffer();
         if (buffer.canAccessDirectly()) {
-            final var cpuAlloc = buffer.backingBufferDirectAccess().allocation.cpu();
-            final var hostPtr = cpuAlloc.hostPointer;
-            LibCString.nmemcpy(hostPtr.pointer() + gpuBufferSlice.offset(), MemoryUtil.memAddress(data), data.remaining());
+            final var backingSlice = buffer.backingSliceDirectAccess();
+            final var hostPtr = backingSlice.buffer().allocationInfo.pMappedData() + backingSlice.range.offset();
+            LibCString.nmemcpy(hostPtr + gpuBufferSlice.offset(), MemoryUtil.memAddress(data), data.remaining());
         } else {
+            final var backingSlice = buffer.backingSlice();
             try (final var stack = this.memoryStack.push()) {
                 final var uploadBeginningOfFrame = !buffer.accessedThisFrame();
                 final var commandBuffer = uploadBeginningOfFrame ? beginFrameTransferCommandBuffer : mainDrawCommandBuffer;
                 
-                final var stagingBuffer = new VkBuffer(device, data.remaining(), VK_BUFFER_USAGE_TRANSFER_SRC_BIT, device.hostTransientMemoryPool());
+                final var stagingBuffer = device.uploadPools.get(device.currentFrameIndex()).alloc(0, data.remaining(), null);
                 device.destroyEndOfFrame(stagingBuffer);
-                
-                LibCString.nmemcpy(stagingBuffer.allocation.cpu().hostPointer.pointer(), MemoryUtil.memAddress(data), data.remaining());
+                final var stagingSlice = stagingBuffer.backingSlice();
+                LibCString.nmemcpy(stagingSlice.buffer().allocationInfo.pMappedData() + stagingSlice.range.offset(), MemoryUtil.memAddress(data), data.remaining());
                 
                 final var copyRegion = VkBufferCopy.calloc(1, stack);
-                copyRegion.srcOffset(0);
-                copyRegion.dstOffset(gpuBufferSlice.offset());
+                copyRegion.srcOffset(stagingSlice.range.offset());
+                // yes, a sliced slice...
+                copyRegion.dstOffset(backingSlice.range.offset() + gpuBufferSlice.offset());
                 copyRegion.size(data.remaining());
                 copyRegion.limit(1);
                 
@@ -256,7 +257,7 @@ public class CinnabarCommandEncoder implements CommandEncoder, Destroyable {
                     fullBarrier(commandBuffer);
                 }
                 
-                vkCmdCopyBuffer(commandBuffer, stagingBuffer.handle, buffer.backingBuffer().handle, copyRegion);
+                vkCmdCopyBuffer(commandBuffer, stagingSlice.buffer().handle, backingSlice.buffer().handle, copyRegion);
                 
                 // because of limitations/guarantees from B3D, I can barrier only at renderpass start (or command buffer end for the begin frame transfer)
                 // there is no buffer to buffer copy (yet), nor buffer to texture copy
@@ -283,9 +284,14 @@ public class CinnabarCommandEncoder implements CommandEncoder, Destroyable {
     
     @Override
     public GpuBuffer.MappedView mapBuffer(GpuBufferSlice gpuBufferSlice, boolean read, boolean write) {
+        if (gpuBufferSlice.buffer() instanceof BufferPool.Buffer) {
+            // can't (shouldn't) map these, because their backing buffer changes
+            throw new IllegalStateException();
+        }
         final var cinnabarBuffer = (CinnabarGpuBuffer) gpuBufferSlice.buffer();
-        final var mappedRange = cinnabarBuffer.backingBuffer().allocation.cpu().hostPointer.slice(gpuBufferSlice.offset(), gpuBufferSlice.length());
-        final var mappedByteBuffer = MemoryUtil.memByteBuffer(mappedRange.pointer(), (int) mappedRange.size());
+        // this must be externally synced, so im not using the DirectAccess one
+        final var backingSlice = cinnabarBuffer.backingSlice();
+        final var mappedByteBuffer = MemoryUtil.memByteBuffer(backingSlice.buffer().allocationInfo.pMappedData() + backingSlice.range.offset() + gpuBufferSlice.offset(), (int) backingSlice.range.size());
         cinnabarBuffer.accessed();
         return new GpuBuffer.MappedView() {
             @Override
@@ -341,10 +347,9 @@ public class CinnabarCommandEncoder implements CommandEncoder, Destroyable {
         final var cinnabarTexture = (CinnabarGpuTexture) texture;
         final var bufferSize = nativeImage.getWidth() * nativeImage.getHeight() * texture.getFormat().pixelSize();
         
-        final var uploadBuffer = new VkBuffer(device, bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, device.hostTransientMemoryPool());
+        final var uploadBuffer = new VkBuffer(device, bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, device.hostMemoryType);
         device.destroyEndOfFrame(uploadBuffer);
-        final var uploadPtr = uploadBuffer.allocation.cpu().hostPointer;
-        LibCString.nmemcpy(uploadPtr.pointer(), nativeImage.getPointer(), uploadPtr.size());
+        LibCString.nmemcpy(uploadBuffer.allocationInfo.pMappedData(), nativeImage.getPointer(), uploadBuffer.size);
         
         final var texelSize = texture.getFormat().pixelSize();
         final int skipTexels = srcXOffset + srcYOffset * nativeImage.getWidth();
@@ -372,10 +377,9 @@ public class CinnabarCommandEncoder implements CommandEncoder, Destroyable {
         final var cinnabarTexture = (CinnabarGpuTexture) texture;
         final var bufferSize = width * height * texture.getFormat().pixelSize();
         
-        final var uploadBuffer = new VkBuffer(device, bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, device.hostTransientMemoryPool());
+        final var uploadBuffer = new VkBuffer(device, bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, device.hostMemoryType);
         device.destroyEndOfFrame(uploadBuffer);
-        final var uploadPtr = uploadBuffer.allocation.cpu().hostPointer;
-        LibCString.nmemcpy(uploadPtr.pointer(), MemoryUtil.memAddress(intBuffer), uploadPtr.size());
+        LibCString.nmemcpy(uploadBuffer.allocationInfo.pMappedData(), MemoryUtil.memAddress(intBuffer), uploadBuffer.size);
         
         try (final var stack = this.memoryStack.push()) {
             final var bufferImageCopy = VkBufferImageCopy.calloc(1, stack);
@@ -404,10 +408,11 @@ public class CinnabarCommandEncoder implements CommandEncoder, Destroyable {
         
         final var cinnabarTexture = (CinnabarGpuTexture) texture;
         final var cinnabarBuffer = (CinnabarGpuBuffer) buffer;
+        final var backingSlice = cinnabarBuffer.backingSlice();
         
         try (final var stack = memoryStack.push()) {
             final var copy = VkBufferImageCopy.calloc(1, stack);
-            copy.bufferOffset(offset);
+            copy.bufferOffset(backingSlice.range.offset() + offset);
             final var subresource = copy.imageSubresource();
             subresource.aspectMask(cinnabarTexture.aspectMask());
             subresource.mipLevel(mip);
@@ -417,7 +422,7 @@ public class CinnabarCommandEncoder implements CommandEncoder, Destroyable {
             copy.imageExtent().set(width, height, 1);
             
             fullBarrier(mainDrawCommandBuffer);
-            vkCmdCopyImageToBuffer(mainDrawCommandBuffer, cinnabarTexture.imageHandle, VK_IMAGE_LAYOUT_GENERAL, cinnabarBuffer.backingBuffer().handle, copy);
+            vkCmdCopyImageToBuffer(mainDrawCommandBuffer, cinnabarTexture.imageHandle, VK_IMAGE_LAYOUT_GENERAL, backingSlice.buffer().handle, copy);
             cinnabarBuffer.accessed();
             fullBarrier(mainDrawCommandBuffer);
             device.destroyEndOfFrame(callback::run);
@@ -561,9 +566,7 @@ public class CinnabarCommandEncoder implements CommandEncoder, Destroyable {
             }
         }
         
-        
         currentFrameNumber++;
-        device.newFrame();
         beginCommandBuffers();
         device.startFrame();
         fullBarrier(beginFrameTransferCommandBuffer);
@@ -574,6 +577,7 @@ public class CinnabarCommandEncoder implements CommandEncoder, Destroyable {
     public GpuFence createFence() {
         return new GpuFence() {
             final long waitValue = device.currentFrame();
+            
             @Override
             public void close() {
                 

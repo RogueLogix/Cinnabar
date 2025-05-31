@@ -1,9 +1,13 @@
-
-#if !defined(VERTEX_SHADER) && !defined(FRAGMENT_SHADER)
-#error VERTEX_SHADER or FRAGMENT_SHADER must be defined
+#ifndef CINNABAR_VK
+#error This shader is only compatible with Cinnabar Vulkan 
 #endif
 
-#ifdef VERTEX_SHADER
+
+#if !defined(CINNABAR_VERTEX_SHADER) && !defined(CINNABAR_FRAGMENT_SHADER)
+#error CINNABAR_VERTEX_SHADER or CINNABAR_FRAGMENT_SHADER must be defined
+#endif
+
+#ifdef CINNABAR_VERTEX_SHADER
 out flat int arrayIndex;
 #else
 in flat int arrayIndex;
@@ -28,7 +32,7 @@ layout(std140) buffer readonly DynamicTransforms {
 };
 
 void loadDynTransforms() {
-    #ifdef VERTEX_SHADER
+    #ifdef CINNABAR_VERTEX_SHADER
     // even with multidraw, base_instance can be used to index into it
     // but this also works if im not doing multidraw
     arrayIndex = gl_BaseInstance;

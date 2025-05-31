@@ -22,32 +22,32 @@ public class CinnabarConfig {
     public final int ForcedVulkanDeviceIndex = defaultVal(-1);
     
     // tricks the compiler into thinking its not a constant value, so it cant inline it elsewhere
-    private static <T> T defaultVal(T t) {
+    public static <T> T defaultVal(T t) {
         return t;
     }
     
     @Contract("_ -> param1") // tricks IDEA into thinking this might return something else
-    private static boolean defaultVal(boolean t) {
+    public static boolean defaultVal(boolean t) {
         return t;
     }
     
     @Contract("_ -> param1") // tricks IDEA into thinking this might return something else
-    private static byte defaultVal(byte t) {
+    public static byte defaultVal(byte t) {
         return t;
     }
     
     @Contract("_ -> param1") // tricks IDEA into thinking this might return something else
-    private static short defaultVal(short t) {
+    public static short defaultVal(short t) {
         return t;
     }
     
     @Contract("_ -> param1") // tricks IDEA into thinking this might return something else
-    private static int defaultVal(int t) {
+    public static int defaultVal(int t) {
         return t;
     }
     
     @Contract("_ -> param1") // tricks IDEA into thinking this might return something else
-    private static long defaultVal(long t) {
+    public static long defaultVal(long t) {
         return t;
     }
     
