@@ -23,6 +23,13 @@ repositories {
         name = "TauMC"
         url = "https://maven.taumc.org/releases"
     }
+    maven {
+        name 'Maven for PR #2297' // https://github.com/neoforged/NeoForge/pull/2297
+        url 'https://prmaven.neoforged.net/NeoForge/pr2297'
+        content {
+            includeModule('net.neoforged', 'neoforge')
+        }
+    }
 }
 
 base {
