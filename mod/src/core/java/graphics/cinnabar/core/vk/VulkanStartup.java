@@ -522,10 +522,6 @@ public class VulkanStartup {
             logMissingFeature("storageBuffer8BitAccess");
             hasAllFeatures = false;
         }
-        if (!physicalDeviceFeatures12.storagePushConstant8()) {
-            logMissingFeature("storagePushConstant8");
-            hasAllFeatures = false;
-        }
         if (!physicalDeviceFeatures12.timelineSemaphore()) {
             logMissingFeature("timelineSemaphore");
             hasAllFeatures = false;
@@ -735,7 +731,6 @@ public class VulkanStartup {
             physicalDeviceFeatures12.shaderUniformTexelBufferArrayDynamicIndexing(true);
             physicalDeviceFeatures12.shaderUniformTexelBufferArrayNonUniformIndexing(true);
             physicalDeviceFeatures12.storageBuffer8BitAccess(true);
-            physicalDeviceFeatures12.storagePushConstant8(true); // low support, 65%
             physicalDeviceFeatures12.timelineSemaphore(true);
             physicalDeviceFeatures12.uniformAndStorageBuffer8BitAccess(true);
             physicalDeviceFeatures12.uniformBufferStandardLayout(true); // low support, 80%
