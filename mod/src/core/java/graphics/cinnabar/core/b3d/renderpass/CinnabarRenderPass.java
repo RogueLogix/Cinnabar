@@ -264,10 +264,12 @@ public class CinnabarRenderPass implements RenderPass {
             return;
         }
         
+        final var allowIncrementalUpdate = !device.workarounds.allowIncrementalDescriptorPush;
+        
         for (int i = 0; i < boundPipeline.shaderSet.descriptorSetLayouts.size(); i++) {
             for (DescriptorSetBinding binding : boundPipeline.shaderSet.descriptorSetLayouts.get(i).bindings) {
                 if (binding instanceof UBOBinding(String name, int bindingPoint, int size)) {
-                    if (!dirtyUniforms.remove(name)) {
+                    if (allowIncrementalUpdate && !dirtyUniforms.remove(name)) {
                         continue;
                     }
                     @Nullable
@@ -293,7 +295,7 @@ public class CinnabarRenderPass implements RenderPass {
                     descriptorWrites.position(descriptorWrites.position() + 1);
                     descriptorBufferInfos.position(descriptorBufferInfos.position() + 1);
                 } else if (binding instanceof SSBOBinding(String name, int bindingPoint, int arrayStride)) {
-                    if (!dirtyUniforms.remove(name)) {
+                    if (allowIncrementalUpdate && !dirtyUniforms.remove(name)) {
                         continue;
                     }
                     @Nullable
@@ -319,7 +321,7 @@ public class CinnabarRenderPass implements RenderPass {
                     descriptorWrites.position(descriptorWrites.position() + 1);
                     descriptorBufferInfos.position(descriptorBufferInfos.position() + 1);
                 } else if (binding instanceof TexelBufferBinding(String name, int bindingPoint, int format)) {
-                    if (!dirtyUniforms.remove(name)) {
+                    if (allowIncrementalUpdate && !dirtyUniforms.remove(name)) {
                         continue;
                     }
                     @Nullable
@@ -358,7 +360,7 @@ public class CinnabarRenderPass implements RenderPass {
                     descriptorWrites.position(descriptorWrites.position() + 1);
                     descriptorBufferInfos.position(descriptorBufferInfos.position() + 1);
                 } else if (binding instanceof SamplerBinding(String name, int bindingPoint)) {
-                    if (!dirtySamplers.remove(name)) {
+                    if (allowIncrementalUpdate && !dirtySamplers.remove(name)) {
                         continue;
                     }
                     @Nullable

@@ -11,6 +11,7 @@ import graphics.cinnabar.api.CinnabarGpuDevice;
 import graphics.cinnabar.api.util.Destroyable;
 import graphics.cinnabar.api.util.Triple;
 import graphics.cinnabar.core.CinnabarCore;
+import graphics.cinnabar.core.DriverWorkarounds;
 import graphics.cinnabar.core.b3d.buffers.BufferPool;
 import graphics.cinnabar.core.b3d.buffers.CinnabarIndividualGpuBuffer;
 import graphics.cinnabar.core.b3d.command.CinnabarCommandEncoder;
@@ -71,6 +72,7 @@ public class CinnabarDevice implements CinnabarGpuDevice {
     public final String renderer;
     
     public final VkDevice vkDevice;
+    public final DriverWorkarounds workarounds;
     
     public final VkQueue graphicsQueue;
     public final int graphicsQueueFamily;
@@ -157,6 +159,8 @@ public class CinnabarDevice implements CinnabarGpuDevice {
         apiVersionUsed = String.format("Vulkan %d.%d.%d", VK_VERSION_MAJOR(APIVersionEncoded), VK_VERSION_MINOR(APIVersionEncoded), VK_VERSION_PATCH(APIVersionEncoded));
         driverVersion = String.format("%d.%d.%d", VK_VERSION_MAJOR(driverVersionEncoded), VK_VERSION_MINOR(driverVersionEncoded), VK_VERSION_PATCH(driverVersionEncoded));
         renderer = String.format("%s", physicalDeviceProperties.deviceNameString());
+        
+        workarounds = new DriverWorkarounds(vkDevice);
         
         try (final var stack = MemoryStack.stackPush()){
             
