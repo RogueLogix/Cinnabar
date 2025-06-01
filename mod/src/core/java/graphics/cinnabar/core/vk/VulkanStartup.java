@@ -235,12 +235,6 @@ public class VulkanStartup {
                 
                 CINNABAR_CORE_LOG.info("Considering device {}", deviceProperties.deviceNameString());
                 
-                // uint32 in C++, 2^32 - 1
-                if (limits.maxMemoryAllocationCount() != -1) {
-                    CINNABAR_CORE_LOG.info("Skipping device, not enough allocations available");
-                    continue;
-                }
-                
                 vkGetPhysicalDeviceQueueFamilyProperties2(physicalDevice, queueFamilyCountPtr, null);
                 final var queueFamilyCount = queueFamilyCountPtr.get(0);
                 final var queueFamilyProperties2 = VkQueueFamilyProperties2.calloc(queueFamilyCount, stack);
