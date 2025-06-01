@@ -25,6 +25,11 @@ struct DynTransforms {
     vec3 ModelOffset;
     mat4 TextureMat;
     float LineWidth;
+    // std140 unpadded 164 bytes in size, align 16, 176 byte array stride
+    #define REQUIRED_PADDING_VEC4S  ((((176 + (CINNABAR_UBO_ALIGNMENT - 1)) & ~(CINNABAR_UBO_ALIGNMENT - 1)) - 176) / 16)
+    #if REQUIRED_PADDING_VEC4S > 0
+    vec4[REQUIRED_PADDING_VEC4S] padding;
+    #endif
 };
 
 layout(std140) buffer readonly DynamicTransforms {

@@ -30,6 +30,7 @@ import java.util.Objects;
 import java.util.stream.Stream;
 
 import static graphics.cinnabar.core.CinnabarCore.CINNABAR_CORE_LOG;
+import static graphics.cinnabar.core.CinnabarCore.device;
 import static org.lwjgl.util.shaderc.Shaderc.*;
 import static org.lwjgl.util.spvc.Spvc.*;
 
@@ -46,8 +47,13 @@ public class ShaderProcessing {
                     """);
         }
         
-        final var versionRemovedPreprocessedVertexSource = rawVertexShader.replace("#version", "#define CINNABAR_VK\n#define CINNABAR_VERTEX_SHADER //");
-        final var versionRemovedPreprocessedFragmentSource = rawFragmentShader.replace("#version", "#define CINNABAR_VK\n#define CINNABAR_FRAGMENT_SHADER //");
+        final var alignment = device().getUniformOffsetAlignment();
+        final var cinnabarStandardDefines = """
+                #define CINNABAR_VK
+                #define CINNABAR_UBO_ALIGNMENT %s
+                """.formatted(alignment);
+        final var versionRemovedPreprocessedVertexSource = rawVertexShader.replace("#version", cinnabarStandardDefines + "\n#define CINNABAR_VERTEX_SHADER //");
+        final var versionRemovedPreprocessedFragmentSource = rawFragmentShader.replace("#version", cinnabarStandardDefines + "\n#define CINNABAR_FRAGMENT_SHADER //");
         
         final var vertexTranslationUnit = glslTransformerIntakeCode(versionRemovedPreprocessedVertexSource);
         final var fragmentTranslationUnit = glslTransformerIntakeCode(versionRemovedPreprocessedFragmentSource);
