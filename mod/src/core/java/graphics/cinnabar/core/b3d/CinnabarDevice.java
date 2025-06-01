@@ -60,7 +60,9 @@ public class CinnabarDevice implements CinnabarGpuDevice {
     private final List<String> enabledLayersAndInstanceExtensions;
     
     public final VkPhysicalDevice vkPhysicalDevice;
-    public final VkPhysicalDeviceProperties physicalDeviceProperties = VkPhysicalDeviceProperties.calloc();
+    public final VkPhysicalDeviceProperties2 physicalDeviceProperties2 = VkPhysicalDeviceProperties2.calloc().sType$Default();
+    public final VkPhysicalDeviceProperties physicalDeviceProperties = physicalDeviceProperties2.properties();
+    public final VkPhysicalDeviceVulkan12Properties physicalDevice12Properties = VkPhysicalDeviceVulkan12Properties.calloc().sType$Default();
     public final VkPhysicalDeviceLimits limits = physicalDeviceProperties.limits();
     
     public final String vendorString;
@@ -115,7 +117,8 @@ public class CinnabarDevice implements CinnabarGpuDevice {
             throw e;
         }
         
-        vkGetPhysicalDeviceProperties(vkPhysicalDevice, physicalDeviceProperties);
+        physicalDeviceProperties2.pNext(physicalDevice12Properties);
+        vkGetPhysicalDeviceProperties2(vkPhysicalDevice, physicalDeviceProperties2);
         
         final Triple<VkDevice, List<IntReferencePair<VkQueue>>, List<String>> deviceAndQueues;
         try {
@@ -213,6 +216,10 @@ public class CinnabarDevice implements CinnabarGpuDevice {
         }
         vkDestroyInstance(vkInstance, null);
         CinnabarCore.cinnabarDeviceSingleton = null;
+        
+        physicalDeviceProperties2.free();
+        physicalDevice12Properties.free();
+        
         CINNABAR_CORE_LOG.info("CinnabarDevice Shutdown");
     }
     
@@ -429,7 +436,7 @@ public class CinnabarDevice implements CinnabarGpuDevice {
     
     @Override
     public String getRenderer() {
-        return physicalDeviceProperties.deviceNameString();
+        return physicalDeviceProperties.deviceNameString() + " " + physicalDevice12Properties.driverInfoString();
     }
     
     @Override
