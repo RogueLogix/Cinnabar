@@ -307,7 +307,6 @@ public class CinnabarRenderPass implements RenderPass {
                     final var backingSlice = cinnabarBuffer.backingSlice();
                     descriptorBufferInfos.buffer(backingSlice.buffer().handle);
                     descriptorBufferInfos.offset(backingSlice.range.offset() + bufferSlice.offset());
-                    descriptorBufferInfos.offset(bufferSlice.offset());
                     descriptorBufferInfos.range(bufferSlice.length());
                     
                     descriptorWrites.sType$Default();
