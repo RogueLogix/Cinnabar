@@ -112,7 +112,9 @@ public class CinnabarDevice implements CinnabarGpuDevice {
         try {
             vkPhysicalDevice = VulkanStartup.selectPhysicalDevice(vkInstance);
         } catch (Exception e) {
-            vkDestroyDebugUtilsMessengerEXT(vkInstance, debugCallback, null);
+            if(debugCallback != -1){
+                vkDestroyDebugUtilsMessengerEXT(vkInstance, debugCallback, null);
+            }
             vkDestroyInstance(vkInstance, null);
             throw e;
         }
@@ -124,7 +126,9 @@ public class CinnabarDevice implements CinnabarGpuDevice {
         try {
             deviceAndQueues = VulkanStartup.createLogicalDeviceAndQueues(vkInstance, vkPhysicalDevice, enabledLayersAndInstanceExtensions);
         } catch (Exception e) {
-            vkDestroyDebugUtilsMessengerEXT(vkInstance, debugCallback, null);
+            if(debugCallback != -1){
+                vkDestroyDebugUtilsMessengerEXT(vkInstance, debugCallback, null);
+            }
             vkDestroyInstance(vkInstance, null);
             throw e;
         }
