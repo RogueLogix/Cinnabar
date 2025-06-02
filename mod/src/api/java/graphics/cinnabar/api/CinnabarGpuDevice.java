@@ -26,4 +26,6 @@ public interface CinnabarGpuDevice extends GpuDevice {
     
     @API
     <T extends Destroyable> T destroyOnShutdown(T destroyable);
+    
+    void endFrame();
 }

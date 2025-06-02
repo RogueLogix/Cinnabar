@@ -7,13 +7,11 @@ import com.mojang.blaze3d.platform.Window;
 import com.mojang.blaze3d.platform.WindowEventHandler;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.Tesselator;
+import graphics.cinnabar.api.CinnabarGpuDevice;
 import graphics.cinnabar.core.b3d.CinnabarDevice;
 import graphics.cinnabar.lib.annotations.RewriteHierarchy;
 import net.minecraft.client.Minecraft;
-import org.lwjgl.glfw.GLFW;
 import org.lwjgl.system.MemoryStack;
-import org.lwjgl.vulkan.KHRSurface;
-import org.lwjgl.vulkan.KHRSwapchain;
 
 import static graphics.cinnabar.api.exceptions.VkException.checkVkCode;
 import static graphics.cinnabar.lib.helpers.GLFWClassloadHelper.glfwExtCreateWindowSurface;
@@ -64,6 +62,8 @@ public class CinnabarWindow extends Window {
     public void updateDisplay(TracyFrameCapture tracyFrameCapture) {
         RenderSystem.pollEvents();
         Tesselator.getInstance().clear();
+        
+        CinnabarGpuDevice.get().endFrame();
         
         boolean shouldRecreateSwapchain = !swapchain.present();
         

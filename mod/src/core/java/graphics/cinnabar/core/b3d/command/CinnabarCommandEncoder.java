@@ -46,9 +46,15 @@ public class CinnabarCommandEncoder implements CommandEncoder, Destroyable {
     
     private final ReferenceArrayList<VulkanTransientCommandBufferPool> commandPools = new ReferenceArrayList<>();
     
+    @Nullable
     private VkCommandBuffer beginFrameTransferCommandBuffer;
+    @Nullable
     private VkCommandBuffer mainDrawCommandBuffer;
+    @Nullable
     private VkCommandBuffer blitCommandBuffer;
+    
+    private final ReferenceArrayList<@Nullable VkCommandBuffer> commandBuffers = new ReferenceArrayList<>();
+    private final VkCommandBufferBeginInfo commandBufferBeginInfo = VkCommandBufferBeginInfo.calloc(memoryStack).sType$Default();
     
     private final long interFrameSemaphore;
     private long currentFrameNumber = MagicNumbers.MaximumFramesInFlight;
@@ -83,21 +89,39 @@ public class CinnabarCommandEncoder implements CommandEncoder, Destroyable {
     
     private void beginCommandBuffers() {
         currentCommandPool().reset(true, true);
-        beginFrameTransferCommandBuffer = currentCommandPool().alloc("beginFrameTransfer" + currentFrameNumber);
-        mainDrawCommandBuffer = currentCommandPool().alloc("mainDraw" + currentFrameNumber);
-        blitCommandBuffer = currentCommandPool().alloc("blit" + currentFrameNumber);
-        try (final var stack = this.memoryStack.push()) {
-            final var beginInfo = VkCommandBufferBeginInfo.calloc(stack).sType$Default();
-            vkBeginCommandBuffer(beginFrameTransferCommandBuffer, beginInfo);
-            vkBeginCommandBuffer(mainDrawCommandBuffer, beginInfo);
-            vkBeginCommandBuffer(blitCommandBuffer, beginInfo);
+        beginFrameTransferCommandBuffer = currentCommandPool().alloc("beginFrameTransfer");
+        vkBeginCommandBuffer(beginFrameTransferCommandBuffer, commandBufferBeginInfo);
+        commandBuffers.add(beginFrameTransferCommandBuffer);
+    }
+    
+    private VkCommandBuffer allocAndInsertCommandBuffer(String name) {
+        final var commandBuffer = currentCommandPool().alloc(name);
+        if (mainDrawCommandBuffer != null) {
+            vkEndCommandBuffer(mainDrawCommandBuffer);
+            mainDrawCommandBuffer = null;
         }
+        vkBeginCommandBuffer(commandBuffer, commandBufferBeginInfo);
+        commandBuffers.add(commandBuffer);
+        return commandBuffer;
     }
     
     private void endCommandBuffers() {
+        assert beginFrameTransferCommandBuffer != null;
         vkEndCommandBuffer(beginFrameTransferCommandBuffer);
-        vkEndCommandBuffer(mainDrawCommandBuffer);
-        vkEndCommandBuffer(blitCommandBuffer);
+        beginFrameTransferCommandBuffer = null;
+        if (mainDrawCommandBuffer != null) {
+            vkEndCommandBuffer(mainDrawCommandBuffer);
+            mainDrawCommandBuffer = null;
+        }
+    }
+    
+    private VkCommandBuffer getMainDrawCommandBuffer() {
+        if (mainDrawCommandBuffer == null) {
+            mainDrawCommandBuffer = currentCommandPool().alloc("mainDraw");
+            vkBeginCommandBuffer(mainDrawCommandBuffer, commandBufferBeginInfo);
+            commandBuffers.add(mainDrawCommandBuffer);
+        }
+        return mainDrawCommandBuffer;
     }
     
     private void fullBarrier(VkCommandBuffer commandBuffer) {
@@ -116,8 +140,8 @@ public class CinnabarCommandEncoder implements CommandEncoder, Destroyable {
     
     @Override
     public RenderPass createRenderPass(Supplier<String> debugGroup, GpuTextureView colorAttachment, OptionalInt colorClear, @Nullable GpuTextureView depthAttachment, OptionalDouble depthClear) {
-        fullBarrier(mainDrawCommandBuffer);
-        return new CinnabarRenderPass(device, mainDrawCommandBuffer, memoryStack, debugGroup, (CinnabarGpuTextureView) colorAttachment, colorClear, (CinnabarGpuTextureView) depthAttachment, depthClear);
+        fullBarrier(getMainDrawCommandBuffer());
+        return new CinnabarRenderPass(device, getMainDrawCommandBuffer(), memoryStack, debugGroup, (CinnabarGpuTextureView) colorAttachment, colorClear, (CinnabarGpuTextureView) depthAttachment, depthClear);
     }
     
     @Override
@@ -136,9 +160,9 @@ public class CinnabarCommandEncoder implements CommandEncoder, Destroyable {
             subresourceRange.baseArrayLayer(0);
             subresourceRange.layerCount(1);
             subresourceRange.aspectMask(VK_IMAGE_ASPECT_COLOR_BIT);
-            vkCmdClearColorImage(mainDrawCommandBuffer, ((CinnabarGpuTexture) texture).imageHandle, VK_IMAGE_LAYOUT_GENERAL, vkClearColor, subresourceRange);
+            vkCmdClearColorImage(getMainDrawCommandBuffer(), ((CinnabarGpuTexture) texture).imageHandle, VK_IMAGE_LAYOUT_GENERAL, vkClearColor, subresourceRange);
         }
-        fullBarrier(mainDrawCommandBuffer);
+        fullBarrier(getMainDrawCommandBuffer());
     }
     
     @Override
@@ -186,7 +210,7 @@ public class CinnabarCommandEncoder implements CommandEncoder, Destroyable {
             attachments.clearValue(vkClearValue);
             attachments.position(0);
             
-            vkCmdClearAttachments(mainDrawCommandBuffer, attachments, rects);
+            vkCmdClearAttachments(getMainDrawCommandBuffer(), attachments, rects);
         }
     }
     
@@ -204,9 +228,9 @@ public class CinnabarCommandEncoder implements CommandEncoder, Destroyable {
             subresourceRange.baseArrayLayer(0);
             subresourceRange.layerCount(1);
             subresourceRange.aspectMask(VK_IMAGE_ASPECT_DEPTH_BIT);
-            vkCmdClearDepthStencilImage(mainDrawCommandBuffer, ((CinnabarGpuTexture) texture).imageHandle, VK_IMAGE_LAYOUT_GENERAL, clearValue, subresourceRange);
+            vkCmdClearDepthStencilImage(getMainDrawCommandBuffer(), ((CinnabarGpuTexture) texture).imageHandle, VK_IMAGE_LAYOUT_GENERAL, clearValue, subresourceRange);
         }
-        fullBarrier(mainDrawCommandBuffer);
+        fullBarrier(getMainDrawCommandBuffer());
     }
     
     @Override
@@ -222,9 +246,9 @@ public class CinnabarCommandEncoder implements CommandEncoder, Destroyable {
             subresourceRange.baseArrayLayer(0);
             subresourceRange.layerCount(1);
             subresourceRange.aspectMask(VK_IMAGE_ASPECT_STENCIL_BIT);
-            vkCmdClearDepthStencilImage(mainDrawCommandBuffer, ((CinnabarGpuTexture) texture).imageHandle, VK_IMAGE_LAYOUT_GENERAL, clearValue, subresourceRange);
+            vkCmdClearDepthStencilImage(getMainDrawCommandBuffer(), ((CinnabarGpuTexture) texture).imageHandle, VK_IMAGE_LAYOUT_GENERAL, clearValue, subresourceRange);
         }
-        fullBarrier(mainDrawCommandBuffer);
+        fullBarrier(getMainDrawCommandBuffer());
     }
     
     @Override
@@ -238,7 +262,7 @@ public class CinnabarCommandEncoder implements CommandEncoder, Destroyable {
             final var backingSlice = buffer.backingSlice();
             try (final var stack = this.memoryStack.push()) {
                 final var uploadBeginningOfFrame = !buffer.accessedThisFrame();
-                final var commandBuffer = uploadBeginningOfFrame ? beginFrameTransferCommandBuffer : mainDrawCommandBuffer;
+                final var commandBuffer = uploadBeginningOfFrame ? beginFrameTransferCommandBuffer : getMainDrawCommandBuffer();
                 
                 final var stagingBuffer = device.uploadPools.get(device.currentFrameIndex()).alloc(0, data.remaining(), null);
                 device.destroyEndOfFrame(stagingBuffer);
@@ -421,10 +445,10 @@ public class CinnabarCommandEncoder implements CommandEncoder, Destroyable {
             copy.imageOffset().set(xOffset, yOffset, 0);
             copy.imageExtent().set(width, height, 1);
             
-            fullBarrier(mainDrawCommandBuffer);
-            vkCmdCopyImageToBuffer(mainDrawCommandBuffer, cinnabarTexture.imageHandle, VK_IMAGE_LAYOUT_GENERAL, backingSlice.buffer().handle, copy);
+            fullBarrier(getMainDrawCommandBuffer());
+            vkCmdCopyImageToBuffer(getMainDrawCommandBuffer(), cinnabarTexture.imageHandle, VK_IMAGE_LAYOUT_GENERAL, backingSlice.buffer().handle, copy);
             cinnabarBuffer.accessed();
-            fullBarrier(mainDrawCommandBuffer);
+            fullBarrier(getMainDrawCommandBuffer());
             device.destroyEndOfFrame(callback::run);
         }
     }
@@ -449,19 +473,25 @@ public class CinnabarCommandEncoder implements CommandEncoder, Destroyable {
             blits.dstOffsets(0).set(dstX, dstY, 0);
             blits.dstOffsets(1).set(width, height, 1);
             
-            fullBarrier(mainDrawCommandBuffer);
-            vkCmdBlitImage(mainDrawCommandBuffer, cinnabarSrc.imageHandle, VK_IMAGE_LAYOUT_GENERAL, cinnabarDst.imageHandle, VK_IMAGE_LAYOUT_GENERAL, blits, VK_FILTER_NEAREST);
-            fullBarrier(mainDrawCommandBuffer);
+            fullBarrier(getMainDrawCommandBuffer());
+            vkCmdBlitImage(getMainDrawCommandBuffer(), cinnabarSrc.imageHandle, VK_IMAGE_LAYOUT_GENERAL, cinnabarDst.imageHandle, VK_IMAGE_LAYOUT_GENERAL, blits, VK_FILTER_NEAREST);
+            fullBarrier(getMainDrawCommandBuffer());
         }
     }
     
     @Override
     public void presentTexture(GpuTextureView imageView) {
         
+        if (blitCommandBuffer != null) {
+            throw new IllegalStateException("Can only present onece per frame");
+        }
+        
         final var window = (CinnabarWindow) Minecraft.getInstance().getWindow();
         final var swapchain = window.swapchain();
         assert swapchain.hasImageAcquired();
         
+        blitCommandBuffer = currentCommandPool().alloc("presentTexture blit");
+        vkBeginCommandBuffer(blitCommandBuffer, commandBufferBeginInfo);
         try (final var stack = memoryStack.push()) {
             final var imageBarrier = VkImageMemoryBarrier.calloc(1, stack).sType$Default();
             imageBarrier.srcAccessMask(VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT);
@@ -522,30 +552,54 @@ public class CinnabarCommandEncoder implements CommandEncoder, Destroyable {
             imageBarrier.dstAccessMask(0);
             // nothing needs to wait on this, the semaphore signals the queue present
             vkCmdPipelineBarrier(blitCommandBuffer, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 0, null, null, imageBarrier);
-            
-            // barrier at the end of this command buffer for all implicit transfers
-            fullBarrier(beginFrameTransferCommandBuffer);
-            endCommandBuffers();
         }
+        vkEndCommandBuffer(blitCommandBuffer);
+    }
+    
+    public void flushCommandBuffers() {
+        assert beginFrameTransferCommandBuffer != null;
         
+        // barrier at the end of this command buffer for all implicit transfers
+        fullBarrier(beginFrameTransferCommandBuffer);
+        endCommandBuffers();
+        
+        final var window = (CinnabarWindow) Minecraft.getInstance().getWindow();
+        final var swapchain = window.swapchain();
+        assert swapchain.hasImageAcquired();
         // only the blit needs to wait
         try (final var stack = memoryStack.push()) {
             final var submitInfo = VkSubmitInfo.calloc(2, stack).sType$Default();
             
-            submitInfo.pCommandBuffers(stack.pointers(beginFrameTransferCommandBuffer, mainDrawCommandBuffer));
+            final var buffers = stack.callocPointer(commandBuffers.size());
+            for (int i = 0; i < commandBuffers.size(); i++) {
+                @Nullable
+                final var cb = commandBuffers.get(i);
+                if (cb == null) {
+                    throw new IllegalStateException();
+                }
+                buffers.put(i, cb);
+            }
+            commandBuffers.clear();
+            submitInfo.pCommandBuffers(buffers);
             
             submitInfo.position(1).sType$Default();
             final var timelineSubmitInfo = VkTimelineSemaphoreSubmitInfo.calloc(stack).sType$Default();
             submitInfo.pNext(timelineSubmitInfo);
             
-            submitInfo.pWaitSemaphores(stack.longs(swapchain.semaphore()));
-            submitInfo.pWaitDstStageMask(stack.ints(VK_PIPELINE_STAGE_TRANSFER_BIT));
-            submitInfo.waitSemaphoreCount(1);
-            
-            submitInfo.pCommandBuffers(stack.pointers(blitCommandBuffer));
-            
-            timelineSubmitInfo.pSignalSemaphoreValues(stack.longs(device.currentFrame(), 0));
-            submitInfo.pSignalSemaphores(stack.longs(interFrameSemaphore, swapchain.semaphore()));
+            if (blitCommandBuffer != null) {
+                
+                submitInfo.pWaitSemaphores(stack.longs(swapchain.semaphore()));
+                submitInfo.pWaitDstStageMask(stack.ints(VK_PIPELINE_STAGE_TRANSFER_BIT));
+                submitInfo.waitSemaphoreCount(1);
+                
+                submitInfo.pCommandBuffers(stack.pointers(blitCommandBuffer));
+                blitCommandBuffer = null;
+                timelineSubmitInfo.pSignalSemaphoreValues(stack.longs(device.currentFrame(), 0));
+                submitInfo.pSignalSemaphores(stack.longs(interFrameSemaphore, swapchain.semaphore()));
+            } else {
+                timelineSubmitInfo.pSignalSemaphoreValues(stack.longs(device.currentFrame()));
+                submitInfo.pSignalSemaphores(stack.longs(interFrameSemaphore));
+            }
             
             submitInfo.position(0);
             vkQueueSubmit(device.graphicsQueue, submitInfo, VK_NULL_HANDLE);
@@ -568,9 +622,15 @@ public class CinnabarCommandEncoder implements CommandEncoder, Destroyable {
         
         currentFrameNumber++;
         beginCommandBuffers();
+        
+        assert beginFrameTransferCommandBuffer != null;
         device.startFrame();
         fullBarrier(beginFrameTransferCommandBuffer);
-        fullBarrier(mainDrawCommandBuffer);
+        fullBarrier(getMainDrawCommandBuffer());
+    }
+    
+    public void endFrame() {
+        flushCommandBuffers();
     }
     
     @Override
@@ -586,7 +646,7 @@ public class CinnabarCommandEncoder implements CommandEncoder, Destroyable {
             @Override
             public boolean awaitCompletion(long l) {
                 if (waitValue == device.currentFrame()) {
-                    throw new IllegalStateException("Cannot wait on a fence the same frame it was created");
+                    flushCommandBuffers();
                 }
                 try (final var stack = memoryStack.push()) {
                     final var waitInfo = VkSemaphoreWaitInfo.calloc(stack).sType$Default();
