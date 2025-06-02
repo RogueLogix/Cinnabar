@@ -2,6 +2,7 @@ package graphics.cinnabar.lib.vulkan;
 
 import graphics.cinnabar.api.exceptions.VkException;
 import org.lwjgl.system.MemoryStack;
+import org.lwjgl.system.MemoryUtil;
 import org.lwjgl.vulkan.VkDebugUtilsMessengerCallbackDataEXT;
 import org.lwjgl.vulkan.VkDebugUtilsMessengerCallbackEXT;
 import org.lwjgl.vulkan.VkDebugUtilsMessengerCreateInfoEXT;
@@ -81,6 +82,8 @@ public class VulkanDebug extends VkDebugUtilsMessengerCallbackEXT {
             PrintWriter pw = new PrintWriter(sw);
             new VkException().printStackTrace(pw);
             CINNABAR_LIB_LOG.warn(sw.toString());
+            // force a segfault, aka crash the JVM immediately
+            MemoryUtil.memSet(0L, 0, 1L);
         }
         return VK_FALSE;
     }
