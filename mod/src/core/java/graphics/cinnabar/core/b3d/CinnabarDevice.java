@@ -106,7 +106,7 @@ public class CinnabarDevice implements CinnabarGpuDevice {
         CinnabarCore.cinnabarDeviceSingleton = this;
         this.shaderSourceProvider = shaderSourceProvider;
         CINNABAR_CORE_LOG.info("Initializing CinnabarDevice");
-        final var instanceAndDebugCallback = VulkanStartup.createVkInstance(true, new VulkanDebug.MessageSeverity[]{VulkanDebug.MessageSeverity.ERROR, VulkanDebug.MessageSeverity.WARNING, VulkanDebug.MessageSeverity.INFO}, new VulkanDebug.MessageType[]{VulkanDebug.MessageType.GENERAL, VulkanDebug.MessageType.VALIDATION});
+        final var instanceAndDebugCallback = VulkanStartup.createVkInstance(false, new VulkanDebug.MessageSeverity[]{VulkanDebug.MessageSeverity.ERROR, VulkanDebug.MessageSeverity.WARNING, VulkanDebug.MessageSeverity.INFO}, new VulkanDebug.MessageType[]{VulkanDebug.MessageType.GENERAL, VulkanDebug.MessageType.VALIDATION});
         vkInstance = instanceAndDebugCallback.first();
         debugCallback = instanceAndDebugCallback.second();
         enabledLayersAndInstanceExtensions = instanceAndDebugCallback.third();

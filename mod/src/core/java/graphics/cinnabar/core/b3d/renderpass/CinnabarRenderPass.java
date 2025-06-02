@@ -33,7 +33,8 @@ import static org.lwjgl.vulkan.VK13.*;
 public class CinnabarRenderPass implements RenderPass {
     
     private final CinnabarDevice device;
-    private final VkCommandBuffer commandBuffer;
+    // TODO: make this private again
+    public final VkCommandBuffer commandBuffer;
     private final MemoryStack memoryStack;
     
     private final int renderWidth;
@@ -151,6 +152,7 @@ public class CinnabarRenderPass implements RenderPass {
         unsetPipeline();
         memoryStack.pop();
         vkCmdEndRendering(commandBuffer);
+        vkEndCommandBuffer(commandBuffer);
     }
     
     @Override

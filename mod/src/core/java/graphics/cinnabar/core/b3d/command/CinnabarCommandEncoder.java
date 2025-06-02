@@ -140,8 +140,9 @@ public class CinnabarCommandEncoder implements CommandEncoder, Destroyable {
     
     @Override
     public RenderPass createRenderPass(Supplier<String> debugGroup, GpuTextureView colorAttachment, OptionalInt colorClear, @Nullable GpuTextureView depthAttachment, OptionalDouble depthClear) {
-        fullBarrier(getMainDrawCommandBuffer());
-        return new CinnabarRenderPass(device, getMainDrawCommandBuffer(), memoryStack, debugGroup, (CinnabarGpuTextureView) colorAttachment, colorClear, (CinnabarGpuTextureView) depthAttachment, depthClear);
+        final var commandBuffer = allocAndInsertCommandBuffer(debugGroup.get());
+        fullBarrier(commandBuffer);
+        return new CinnabarRenderPass(device, commandBuffer, memoryStack, debugGroup, (CinnabarGpuTextureView) colorAttachment, colorClear, (CinnabarGpuTextureView) depthAttachment, depthClear);
     }
     
     @Override
@@ -210,7 +211,7 @@ public class CinnabarCommandEncoder implements CommandEncoder, Destroyable {
             attachments.clearValue(vkClearValue);
             attachments.position(0);
             
-            vkCmdClearAttachments(getMainDrawCommandBuffer(), attachments, rects);
+            vkCmdClearAttachments(((CinnabarRenderPass)renderpass).commandBuffer, attachments, rects);
         }
     }
     
@@ -262,6 +263,7 @@ public class CinnabarCommandEncoder implements CommandEncoder, Destroyable {
             final var backingSlice = buffer.backingSlice();
             try (final var stack = this.memoryStack.push()) {
                 final var uploadBeginningOfFrame = !buffer.accessedThisFrame();
+                assert beginFrameTransferCommandBuffer != null;
                 final var commandBuffer = uploadBeginningOfFrame ? beginFrameTransferCommandBuffer : getMainDrawCommandBuffer();
                 
                 final var stagingBuffer = device.uploadPools.get(device.currentFrameIndex()).alloc(0, data.remaining(), null);
@@ -297,6 +299,7 @@ public class CinnabarCommandEncoder implements CommandEncoder, Destroyable {
             copyRange.srcOffset(0);
             copyRange.dstOffset(0);
             copyRange.size(src.size);
+            assert beginFrameTransferCommandBuffer != null;
             vkCmdCopyBuffer(beginFrameTransferCommandBuffer, src.handle, dst.handle, copyRange);
         }
     }
@@ -347,6 +350,7 @@ public class CinnabarCommandEncoder implements CommandEncoder, Destroyable {
             subresourceRange.baseArrayLayer(0);
             subresourceRange.layerCount(texture.getDepthOrLayers());
             
+            assert beginFrameTransferCommandBuffer != null;
             vkCmdPipelineBarrier(beginFrameTransferCommandBuffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, 0, null, null, barrier);
         }
         
@@ -392,6 +396,7 @@ public class CinnabarCommandEncoder implements CommandEncoder, Destroyable {
             subResource.baseArrayLayer(arrayLayer);
             subResource.layerCount(1);
             
+            assert beginFrameTransferCommandBuffer != null;
             vkCmdCopyBufferToImage(beginFrameTransferCommandBuffer, uploadBuffer.handle(), cinnabarTexture.imageHandle, VK_IMAGE_LAYOUT_GENERAL, bufferImageCopy);
         }
     }
@@ -418,6 +423,7 @@ public class CinnabarCommandEncoder implements CommandEncoder, Destroyable {
             subResource.baseArrayLayer(0);
             subResource.layerCount(1);
             
+            assert beginFrameTransferCommandBuffer != null;
             vkCmdCopyBufferToImage(beginFrameTransferCommandBuffer, uploadBuffer.handle(), cinnabarTexture.imageHandle, VK_IMAGE_LAYOUT_GENERAL, bufferImageCopy);
         }
     }
@@ -481,10 +487,6 @@ public class CinnabarCommandEncoder implements CommandEncoder, Destroyable {
     
     @Override
     public void presentTexture(GpuTextureView imageView) {
-        
-        if (blitCommandBuffer != null) {
-            throw new IllegalStateException("Can only present onece per frame");
-        }
         
         final var window = (CinnabarWindow) Minecraft.getInstance().getWindow();
         final var swapchain = window.swapchain();
