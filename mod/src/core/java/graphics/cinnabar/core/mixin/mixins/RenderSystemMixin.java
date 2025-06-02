@@ -5,6 +5,7 @@ import com.mojang.blaze3d.shaders.ShaderType;
 import com.mojang.blaze3d.systems.GpuDevice;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.*;
+import graphics.cinnabar.core.CinnabarCore;
 import graphics.cinnabar.core.b3d.CinnabarDevice;
 import net.minecraft.client.renderer.DynamicUniforms;
 import net.minecraft.resources.ResourceLocation;
@@ -46,6 +47,17 @@ public class RenderSystemMixin {
             try (MeshData meshdata = bufferbuilder.buildOrThrow()) {
                 QUAD_VERTEX_BUFFER = RenderSystem.getDevice().createBuffer(() -> "Quad", GpuBuffer.USAGE_VERTEX, meshdata.vertexBuffer());
             }
+        }
+    }
+    
+    // this is set at the beginning of device init, and allows me to get the device within its own init phase
+    // this is used for debug things
+    @Overwrite
+    public static GpuDevice getDevice() {
+        if (CinnabarCore.cinnabarDeviceSingleton == null) {
+            throw new IllegalStateException("Can't getDevice() before it was initialized");
+        } else {
+            return CinnabarCore.cinnabarDeviceSingleton;
         }
     }
 }
