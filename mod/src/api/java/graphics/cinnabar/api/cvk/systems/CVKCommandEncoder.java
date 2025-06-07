@@ -1,5 +1,6 @@
 package graphics.cinnabar.api.cvk.systems;
 
+import com.mojang.blaze3d.buffers.GpuBufferSlice;
 import com.mojang.blaze3d.textures.GpuTexture;
 import com.mojang.blaze3d.textures.GpuTextureView;
 import graphics.cinnabar.api.b3dext.systems.ExtCommandEncoder;
@@ -10,6 +11,8 @@ import java.util.OptionalInt;
 import java.util.function.Supplier;
 
 public interface CVKCommandEncoder extends ExtCommandEncoder {
+    
+    void copyBufferToBufferExternallySynced(GpuBufferSlice src, GpuBufferSlice dst, BufferCopy... copies);
     
     // ---------- Deprecated in favor of alternative, function unmodified ----------
     

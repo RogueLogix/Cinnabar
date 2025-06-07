@@ -132,6 +132,52 @@ public class CinnabarCommandEncoder implements CVKCommandEncoder, Destroyable {
         }
     }
     
+    // ---------- CVKCommandEncoder ----------
+    
+    @Override
+    public void copyBufferToBufferExternallySynced(GpuBufferSlice src, GpuBufferSlice dst, BufferCopy... copies) {
+        try (final var stack = memoryStack.push()) {
+            
+            final var srcBufferSlice = ((CinnabarGpuBuffer) src.buffer()).backingSlice();
+            final var dstBufferSlice = ((CinnabarGpuBuffer) dst.buffer()).backingSlice();
+            
+            final VkBufferCopy.Buffer bufferCopies;
+            if (copies.length == 0) {
+                // special case for copy the whole thing
+                bufferCopies = VkBufferCopy.calloc(1, stack);
+                bufferCopies.srcOffset(srcBufferSlice.range.offset() + src.offset());
+                bufferCopies.dstOffset(dstBufferSlice.range.offset() + dst.offset());
+                bufferCopies.size(Math.min(src.length(), dst.length()));
+            } else {
+                bufferCopies = VkBufferCopy.calloc(copies.length, stack);
+                
+                for (int i = 0; i < copies.length; i++) {
+                    final var copy = copies[i];
+                    bufferCopies.position(i);
+                    bufferCopies.srcOffset(srcBufferSlice.range.offset() + src.offset() + copy.srcOffset());
+                    bufferCopies.dstOffset(dstBufferSlice.range.offset() + dst.offset() + copy.dstOffset());
+                    bufferCopies.size(copy.size() == -1 ? Math.min(src.length() - copy.srcOffset(), dst.length() - copy.dstOffset()) : copy.size());
+                }
+            }
+            
+            bufferCopies.position(0);
+            
+            vkCmdCopyBuffer(getMainDrawCommandBuffer(), srcBufferSlice.buffer().handle, dstBufferSlice.buffer().handle, bufferCopies);
+        }
+    }
+    
+    
+    // ---------- ExtCommandEncoder ----------
+    
+    @Override
+    public void copyBufferToBuffer(GpuBufferSlice src, GpuBufferSlice dst, BufferCopy... copies) {
+        fullBarrier(getMainDrawCommandBuffer());
+        copyBufferToBufferExternallySynced(src, dst, copies);
+        fullBarrier(getMainDrawCommandBuffer());
+    }
+    
+    // ---------- Vanilla CommandEncoder ----------
+    
     @Override
     public CinnabarRenderPass createRenderPass(Supplier<String> debugGroup, GpuTextureView colorAttachment, OptionalInt colorClear) {
         return this.createRenderPass(debugGroup, colorAttachment, colorClear, null, OptionalDouble.empty());
@@ -240,6 +286,8 @@ public class CinnabarCommandEncoder implements CVKCommandEncoder, Destroyable {
                 final var stagingSlice = stagingBuffer.backingSlice();
                 LibCString.nmemcpy(stagingSlice.buffer().allocationInfo.pMappedData() + stagingSlice.range.offset(), MemoryUtil.memAddress(data), data.remaining());
                 
+                copyBufferToBufferExternallySynced(stagingBuffer.slice(), gpuBufferSlice);
+                
                 final var copyRegion = VkBufferCopy.calloc(1, stack);
                 copyRegion.srcOffset(stagingSlice.range.offset());
                 // yes, a sliced slice...
@@ -257,19 +305,6 @@ public class CinnabarCommandEncoder implements CVKCommandEncoder, Destroyable {
                 // because of limitations/guarantees from B3D, I can barrier only at renderpass start (or command buffer end for the begin frame transfer)
                 // there is no buffer to buffer copy (yet), nor buffer to texture copy
             }
-        }
-    }
-    
-    
-    public void copyBufferToBuffer(VkBuffer src, VkBuffer dst) {
-        assert src.size == dst.size;
-        try (final var stack = memoryStack.push()) {
-            final var copyRange = VkBufferCopy.calloc(1, stack);
-            copyRange.srcOffset(0);
-            copyRange.dstOffset(0);
-            copyRange.size(src.size);
-            assert beginFrameTransferCommandBuffer != null;
-            vkCmdCopyBuffer(beginFrameTransferCommandBuffer, src.handle, dst.handle, copyRange);
         }
     }
     
