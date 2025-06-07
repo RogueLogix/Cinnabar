@@ -3,6 +3,7 @@ package graphics.cinnabar.core.b3d.renderpass;
 import com.mojang.blaze3d.buffers.GpuBuffer;
 import com.mojang.blaze3d.buffers.GpuBufferSlice;
 import com.mojang.blaze3d.pipeline.RenderPipeline;
+import com.mojang.blaze3d.systems.ScissorState;
 import com.mojang.blaze3d.textures.GpuTextureView;
 import com.mojang.blaze3d.vertex.VertexFormat;
 import graphics.cinnabar.api.cvk.systems.CVKRenderPass;
@@ -33,12 +34,13 @@ import static org.lwjgl.vulkan.VK13.*;
 public class CinnabarRenderPass implements CVKRenderPass {
     
     private final CinnabarDevice device;
-    // TODO: make this private again
-    public final VkCommandBuffer commandBuffer;
+    private final VkCommandBuffer commandBuffer;
     private final MemoryStack memoryStack;
     
     private final int renderWidth;
     private final int renderHeight;
+    
+    private final ScissorState scissorState = new ScissorState();
     
     @Nullable
     private CinnabarPipeline boundPipeline;
@@ -155,6 +157,46 @@ public class CinnabarRenderPass implements CVKRenderPass {
         vkEndCommandBuffer(commandBuffer);
     }
     
+    // ---------- CVKRenderPass ----------
+    
+    @Override
+    public void clearAttachments(int clearColor, double clearDepth) {
+        try(                final var stack = memoryStack.push()) {
+            final var vkClearValue = VkClearValue.calloc(stack);
+            final var vkClearColor = vkClearValue.color();
+            vkClearColor.float32(0, ARGB.redFloat(clearColor));
+            vkClearColor.float32(1, ARGB.greenFloat(clearColor));
+            vkClearColor.float32(2, ARGB.blueFloat(clearColor));
+            vkClearColor.float32(3, ARGB.alphaFloat(clearColor));
+            
+            final var clearValue = vkClearValue.depthStencil();
+            clearValue.depth((float) clearDepth);
+            
+            final var rects = VkClearRect.calloc(2, stack);
+            for (int i = 0; i < 2; i++) {
+                rects.position(i);
+                rects.baseArrayLayer(0);
+                rects.layerCount(1);
+                rects.rect().offset().set(scissorState.x(), scissorState.y());
+                rects.rect().extent().set(scissorState.width(), scissorState.height());
+            }
+            rects.position(0);
+            
+            final var attachments = VkClearAttachment.calloc(2, stack);
+            attachments.aspectMask(VK_IMAGE_ASPECT_COLOR_BIT);
+            attachments.colorAttachment(0);
+            attachments.clearValue(vkClearValue);
+            attachments.position(1);
+            attachments.aspectMask(VK_IMAGE_ASPECT_DEPTH_BIT);
+            attachments.clearValue(vkClearValue);
+            attachments.position(0);
+            
+            vkCmdClearAttachments(commandBuffer, attachments, rects);
+        }
+    }
+    
+    // ---------- Vanilla RenderPass ----------
+    
     @Override
     public void pushDebugGroup(Supplier<String> supplier) {
         if (device.debugMarkerEnabled()) {
@@ -216,6 +258,7 @@ public class CinnabarRenderPass implements CVKRenderPass {
     @Override
     public void enableScissor(int x, int y, int width, int height) {
         try (final var stack = memoryStack.push()) {
+            scissorState.enable(x, y, width, height);
             final var scissor = VkRect2D.calloc(1, stack);
             scissor.offset().set(x, y);
             scissor.extent().set(width, height);

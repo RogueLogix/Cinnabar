@@ -172,45 +172,15 @@ public class CinnabarCommandEncoder implements CVKCommandEncoder, Destroyable {
     }
     
     @Override
-    public void clearColorAndDepthTextures(GpuTexture colorTexture, int clearRGBA, GpuTexture depthTexture, double clearDepth, int scissorX, int scissorY, int scissorWidth, int scissorHeight) {
+    public void clearColorAndDepthTextures(GpuTexture colorTexture, int clearColor, GpuTexture depthTexture, double clearDepth, int scissorX, int scissorY, int scissorWidth, int scissorHeight) {
         try (
                 // creating a renderpass needs texture views, but im only passed textures... amazing
                 final var colorTextureView = device.createTextureView(colorTexture);
                 final var depthTextureView = device.createTextureView(depthTexture);
-                // the renderpass object isn't needed, but its an autoclosable and vkCmdClearAttachments is a within-renderpass only call
                 final var renderpass = createRenderPass(() -> "ClearColorDepthTextures", colorTextureView, OptionalInt.empty(), depthTextureView, OptionalDouble.empty());
-                final var stack = memoryStack.push();
         ) {
-            final var vkClearValue = VkClearValue.calloc(stack);
-            final var vkClearColor = vkClearValue.color();
-            vkClearColor.float32(0, ARGB.redFloat(clearRGBA));
-            vkClearColor.float32(1, ARGB.greenFloat(clearRGBA));
-            vkClearColor.float32(2, ARGB.blueFloat(clearRGBA));
-            vkClearColor.float32(3, ARGB.alphaFloat(clearRGBA));
-            
-            final var clearValue = vkClearValue.depthStencil();
-            clearValue.depth((float) clearDepth);
-            
-            final var rects = VkClearRect.calloc(2, stack);
-            for (int i = 0; i < 2; i++) {
-                rects.position(i);
-                rects.baseArrayLayer(0);
-                rects.layerCount(1);
-                rects.rect().offset().set(scissorX, scissorY);
-                rects.rect().extent().set(scissorWidth, scissorHeight);
-            }
-            rects.position(0);
-            
-            final var attachments = VkClearAttachment.calloc(2, stack);
-            attachments.aspectMask(VK_IMAGE_ASPECT_COLOR_BIT);
-            attachments.colorAttachment(0);
-            attachments.clearValue(vkClearValue);
-            attachments.position(1);
-            attachments.aspectMask(VK_IMAGE_ASPECT_DEPTH_BIT);
-            attachments.clearValue(vkClearValue);
-            attachments.position(0);
-            
-            vkCmdClearAttachments(((CinnabarRenderPass)renderpass).commandBuffer, attachments, rects);
+            renderpass.enableScissor(scissorX, scissorY, scissorWidth, scissorHeight);
+            renderpass.clearAttachments(clearColor, clearDepth);
         }
     }
     
