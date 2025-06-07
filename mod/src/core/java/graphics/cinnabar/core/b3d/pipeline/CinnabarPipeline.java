@@ -1,6 +1,5 @@
 package graphics.cinnabar.core.b3d.pipeline;
 
-import com.mojang.blaze3d.pipeline.CompiledRenderPipeline;
 import com.mojang.blaze3d.pipeline.RenderPipeline;
 import com.mojang.blaze3d.platform.DepthTestFunction;
 import com.mojang.blaze3d.platform.DestFactor;
@@ -9,18 +8,16 @@ import com.mojang.blaze3d.platform.SourceFactor;
 import com.mojang.blaze3d.preprocessor.GlslPreprocessor;
 import com.mojang.blaze3d.shaders.ShaderType;
 import com.mojang.blaze3d.vertex.VertexFormat;
+import graphics.cinnabar.api.cvk.pipeline.CVKCompiledRenderPipeline;
 import graphics.cinnabar.api.util.Pair;
 import graphics.cinnabar.core.b3d.CinnabarDevice;
 import graphics.cinnabar.core.util.MagicNumbers;
 import graphics.cinnabar.core.vk.VulkanObject;
-import graphics.cinnabar.core.vk.descriptors.UBOBinding;
 import graphics.cinnabar.core.vk.shaders.ShaderProcessing;
 import graphics.cinnabar.core.vk.shaders.ShaderSet;
 import graphics.cinnabar.core.vk.shaders.vertex.VertexInputState;
 import it.unimi.dsi.fastutil.objects.Object2ReferenceOpenHashMap;
-import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.resources.ResourceLocation;
-import org.jetbrains.annotations.Nullable;
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.vulkan.*;
 
@@ -32,7 +29,7 @@ import static graphics.cinnabar.api.exceptions.VkException.checkVkCode;
 import static graphics.cinnabar.core.CinnabarCore.CINNABAR_CORE_LOG;
 import static org.lwjgl.vulkan.VK13.*;
 
-public class CinnabarPipeline implements CompiledRenderPipeline, VulkanObject {
+public class CinnabarPipeline implements CVKCompiledRenderPipeline, VulkanObject {
     
     private final CinnabarDevice device;
     

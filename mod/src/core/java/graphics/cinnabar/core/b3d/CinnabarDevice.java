@@ -1,13 +1,15 @@
 package graphics.cinnabar.core.b3d;
 
 import com.mojang.blaze3d.buffers.GpuBuffer;
-import com.mojang.blaze3d.pipeline.CompiledRenderPipeline;
 import com.mojang.blaze3d.pipeline.RenderPipeline;
 import com.mojang.blaze3d.shaders.ShaderType;
 import com.mojang.blaze3d.textures.GpuTexture;
-import com.mojang.blaze3d.textures.GpuTextureView;
 import com.mojang.blaze3d.textures.TextureFormat;
-import graphics.cinnabar.api.CinnabarGpuDevice;
+import graphics.cinnabar.api.cvk.buffers.CVKGpuBuffer;
+import graphics.cinnabar.api.cvk.pipeline.CVKCompiledRenderPipeline;
+import graphics.cinnabar.api.cvk.systems.CVKGpuDevice;
+import graphics.cinnabar.api.cvk.textures.CVKGpuTexture;
+import graphics.cinnabar.api.cvk.textures.CVKTextureView;
 import graphics.cinnabar.api.util.Destroyable;
 import graphics.cinnabar.api.util.Triple;
 import graphics.cinnabar.core.CinnabarCore;
@@ -54,7 +56,7 @@ import static org.lwjgl.vulkan.EXTDebugMarker.VK_EXT_DEBUG_MARKER_EXTENSION_NAME
 import static org.lwjgl.vulkan.EXTDebugUtils.vkDestroyDebugUtilsMessengerEXT;
 import static org.lwjgl.vulkan.VK13.*;
 
-public class CinnabarDevice implements CinnabarGpuDevice {
+public class CinnabarDevice implements CVKGpuDevice {
     
     public final VkInstance vkInstance;
     private final long debugCallback;
@@ -373,12 +375,12 @@ public class CinnabarDevice implements CinnabarGpuDevice {
     }
     
     @Override
-    public GpuTexture createTexture(@Nullable Supplier<String> textureNameSupplier, int usage, TextureFormat format, int width, int height, int depth, int mips) {
+    public CVKGpuTexture createTexture(@Nullable Supplier<String> textureNameSupplier, int usage, TextureFormat format, int width, int height, int depth, int mips) {
         return createTexture(debugMarkerEnabled && textureNameSupplier != null ? textureNameSupplier.get() : null, usage, format, width, height, depth, mips);
     }
     
     @Override
-    public GpuTexture createTexture(@Nullable String textureName, int usage, TextureFormat format, int width, int height, int depth, int mips) {
+    public CVKGpuTexture createTexture(@Nullable String textureName, int usage, TextureFormat format, int width, int height, int depth, int mips) {
         if (textureName == null) {
             textureName = "Texture";
         }
@@ -388,17 +390,17 @@ public class CinnabarDevice implements CinnabarGpuDevice {
     }
     
     @Override
-    public GpuTextureView createTextureView(GpuTexture texture) {
+    public CVKTextureView createTextureView(GpuTexture texture) {
         return createTextureView(texture, 0, texture.getMipLevels());
     }
     
     @Override
-    public GpuTextureView createTextureView(GpuTexture gpuTexture, int baseMip, int mipLevels) {
+    public CVKTextureView createTextureView(GpuTexture gpuTexture, int baseMip, int mipLevels) {
         return new CinnabarGpuTextureView(this, (CinnabarGpuTexture) gpuTexture, baseMip, mipLevels);
     }
     
     @Override
-    public GpuBuffer createBuffer(@Nullable Supplier<String> bufferNameSupplier, int usage, int bufferSize) {
+    public CVKGpuBuffer createBuffer(@Nullable Supplier<String> bufferNameSupplier, int usage, int bufferSize) {
         @Nullable
         final var name = bufferNameSupplier != null ? bufferNameSupplier.get() : null;
         if (vertexBufferPool.canAllocate(usage)) {
@@ -411,7 +413,7 @@ public class CinnabarDevice implements CinnabarGpuDevice {
     }
     
     @Override
-    public GpuBuffer createBuffer(@Nullable Supplier<String> bufferNameSupplier, int bufferUsage, ByteBuffer bufferData) {
+    public CVKGpuBuffer createBuffer(@Nullable Supplier<String> bufferNameSupplier, int bufferUsage, ByteBuffer bufferData) {
         final var buffer = createBuffer(bufferNameSupplier, bufferUsage, bufferData.remaining());
         commandEncoder.writeToBuffer(buffer.slice(), bufferData);
         return buffer;
@@ -460,7 +462,7 @@ public class CinnabarDevice implements CinnabarGpuDevice {
     private final Map<RenderPipeline, CinnabarPipeline> pipelineCache = new IdentityHashMap<>();
     
     @Override
-    public CompiledRenderPipeline precompilePipeline(RenderPipeline renderPipeline, @Nullable BiFunction<ResourceLocation, ShaderType, String> shaderSourceProvider) {
+    public CVKCompiledRenderPipeline precompilePipeline(RenderPipeline renderPipeline, @Nullable BiFunction<ResourceLocation, ShaderType, String> shaderSourceProvider) {
         return getPipeline(renderPipeline, shaderSourceProvider);
     }
     

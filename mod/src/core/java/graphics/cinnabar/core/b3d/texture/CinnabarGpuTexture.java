@@ -1,7 +1,7 @@
 package graphics.cinnabar.core.b3d.texture;
 
-import com.mojang.blaze3d.textures.GpuTexture;
 import com.mojang.blaze3d.textures.TextureFormat;
+import graphics.cinnabar.api.cvk.textures.CVKGpuTexture;
 import graphics.cinnabar.core.b3d.CinnabarDevice;
 import graphics.cinnabar.core.vk.VulkanObject;
 import graphics.cinnabar.core.vk.VulkanSampler;
@@ -15,7 +15,7 @@ import static org.lwjgl.util.vma.Vma.vmaCreateImage;
 import static org.lwjgl.util.vma.Vma.vmaDestroyImage;
 import static org.lwjgl.vulkan.VK10.*;
 
-public class CinnabarGpuTexture extends GpuTexture implements VulkanObject {
+public class CinnabarGpuTexture extends CVKGpuTexture implements VulkanObject {
     private final CinnabarDevice device;
     
     private boolean closed = false;

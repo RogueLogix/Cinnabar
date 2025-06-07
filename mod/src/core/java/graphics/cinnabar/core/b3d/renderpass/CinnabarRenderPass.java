@@ -3,9 +3,9 @@ package graphics.cinnabar.core.b3d.renderpass;
 import com.mojang.blaze3d.buffers.GpuBuffer;
 import com.mojang.blaze3d.buffers.GpuBufferSlice;
 import com.mojang.blaze3d.pipeline.RenderPipeline;
-import com.mojang.blaze3d.systems.RenderPass;
 import com.mojang.blaze3d.textures.GpuTextureView;
 import com.mojang.blaze3d.vertex.VertexFormat;
+import graphics.cinnabar.api.cvk.systems.CVKRenderPass;
 import graphics.cinnabar.api.exceptions.NotImplemented;
 import graphics.cinnabar.core.b3d.CinnabarDevice;
 import graphics.cinnabar.core.b3d.buffers.CinnabarGpuBuffer;
@@ -30,7 +30,7 @@ import java.util.function.Supplier;
 import static org.lwjgl.vulkan.KHRPushDescriptor.vkCmdPushDescriptorSetKHR;
 import static org.lwjgl.vulkan.VK13.*;
 
-public class CinnabarRenderPass implements RenderPass {
+public class CinnabarRenderPass implements CVKRenderPass {
     
     private final CinnabarDevice device;
     // TODO: make this private again

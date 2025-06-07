@@ -7,7 +7,7 @@ import com.mojang.blaze3d.platform.Window;
 import com.mojang.blaze3d.platform.WindowEventHandler;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.Tesselator;
-import graphics.cinnabar.api.CinnabarGpuDevice;
+import graphics.cinnabar.api.cvk.systems.CVKGpuDevice;
 import graphics.cinnabar.core.b3d.CinnabarDevice;
 import graphics.cinnabar.lib.annotations.RewriteHierarchy;
 import net.minecraft.client.Minecraft;
@@ -63,7 +63,7 @@ public class CinnabarWindow extends Window {
         RenderSystem.pollEvents();
         Tesselator.getInstance().clear();
         
-        CinnabarGpuDevice.get().endFrame();
+        CVKGpuDevice.get().endFrame();
         
         boolean shouldRecreateSwapchain = !swapchain.present();
         

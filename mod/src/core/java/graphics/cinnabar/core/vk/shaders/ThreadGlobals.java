@@ -1,6 +1,6 @@
 package graphics.cinnabar.core.vk.shaders;
 
-import graphics.cinnabar.api.CinnabarGpuDevice;
+import graphics.cinnabar.api.cvk.systems.CVKGpuDevice;
 import graphics.cinnabar.api.annotations.ThreadSafety;
 import graphics.cinnabar.api.util.Destroyable;
 
@@ -8,7 +8,7 @@ import static org.lwjgl.util.shaderc.Shaderc.*;
 
 public class ThreadGlobals implements Destroyable {
     
-    private static final ThreadLocal<ThreadGlobals> globals = ThreadLocal.withInitial(() -> CinnabarGpuDevice.get().destroyOnShutdown(new ThreadGlobals()));
+    private static final ThreadLocal<ThreadGlobals> globals = ThreadLocal.withInitial(() -> CVKGpuDevice.get().destroyOnShutdown(new ThreadGlobals()));
     
     public static ThreadGlobals get() {
         return globals.get();

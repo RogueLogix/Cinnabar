@@ -1,6 +1,6 @@
 package graphics.cinnabar.core.b3d.texture;
 
-import com.mojang.blaze3d.textures.GpuTextureView;
+import graphics.cinnabar.api.cvk.textures.CVKTextureView;
 import graphics.cinnabar.core.b3d.CinnabarDevice;
 import graphics.cinnabar.core.vk.VulkanObject;
 import org.lwjgl.system.MemoryStack;
@@ -12,7 +12,7 @@ import static graphics.cinnabar.core.b3d.texture.CinnabarGpuTexture.aspects;
 import static graphics.cinnabar.core.b3d.texture.CinnabarGpuTexture.toVk;
 import static org.lwjgl.vulkan.VK10.*;
 
-public class CinnabarGpuTextureView extends GpuTextureView implements VulkanObject {
+public class CinnabarGpuTextureView extends CVKTextureView implements VulkanObject {
     private final CinnabarDevice device;
     
     private final CinnabarGpuTexture texture;

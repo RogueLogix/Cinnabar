@@ -1,7 +1,6 @@
 package graphics.cinnabar.core.b3d.command;
 
 import graphics.cinnabar.api.CinnabarAPI;
-import graphics.cinnabar.api.CinnabarGpuDevice;
 import graphics.cinnabar.api.annotations.NotNullDefault;
 import graphics.cinnabar.api.memory.MagicMemorySizes;
 import graphics.cinnabar.api.memory.PointerWrapper;

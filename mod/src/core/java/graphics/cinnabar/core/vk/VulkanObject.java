@@ -1,7 +1,6 @@
 package graphics.cinnabar.core.vk;
 
 import graphics.cinnabar.api.CinnabarAPI;
-import graphics.cinnabar.api.CinnabarGpuDevice;
 import graphics.cinnabar.api.annotations.Constant;
 import graphics.cinnabar.api.annotations.ThreadSafety;
 import graphics.cinnabar.api.util.Destroyable;

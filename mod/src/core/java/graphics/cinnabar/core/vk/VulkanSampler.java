@@ -1,6 +1,6 @@
 package graphics.cinnabar.core.vk;
 
-import graphics.cinnabar.api.CinnabarGpuDevice;
+import graphics.cinnabar.api.cvk.systems.CVKGpuDevice;
 import graphics.cinnabar.api.annotations.NotNullDefault;
 import it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.objects.ObjectArrayList;
@@ -14,7 +14,7 @@ import static org.lwjgl.vulkan.VK10.*;
 @NotNullDefault
 public class VulkanSampler {
     // TODO: dont pull this statically
-    private static final VkDevice device = CinnabarGpuDevice.get().vkDevice();
+    private static final VkDevice device = CVKGpuDevice.get().vkDevice();
     private static final VkSamplerCreateInfo createInfo = VkSamplerCreateInfo.calloc();
     
     static {

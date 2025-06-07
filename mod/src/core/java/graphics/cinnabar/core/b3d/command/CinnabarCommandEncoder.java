@@ -4,10 +4,9 @@ import com.mojang.blaze3d.buffers.GpuBuffer;
 import com.mojang.blaze3d.buffers.GpuBufferSlice;
 import com.mojang.blaze3d.buffers.GpuFence;
 import com.mojang.blaze3d.platform.NativeImage;
-import com.mojang.blaze3d.systems.CommandEncoder;
-import com.mojang.blaze3d.systems.RenderPass;
 import com.mojang.blaze3d.textures.GpuTexture;
 import com.mojang.blaze3d.textures.GpuTextureView;
+import graphics.cinnabar.api.cvk.systems.CVKCommandEncoder;
 import graphics.cinnabar.api.util.Destroyable;
 import graphics.cinnabar.core.b3d.CinnabarDevice;
 import graphics.cinnabar.core.b3d.buffers.BufferPool;
@@ -38,7 +37,7 @@ import static graphics.cinnabar.api.exceptions.VkException.checkVkCode;
 import static org.lwjgl.vulkan.KHRSwapchain.VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
 import static org.lwjgl.vulkan.VK13.*;
 
-public class CinnabarCommandEncoder implements CommandEncoder, Destroyable {
+public class CinnabarCommandEncoder implements CVKCommandEncoder, Destroyable {
     
     private final CinnabarDevice device;
     
@@ -134,12 +133,12 @@ public class CinnabarCommandEncoder implements CommandEncoder, Destroyable {
     }
     
     @Override
-    public RenderPass createRenderPass(Supplier<String> debugGroup, GpuTextureView colorAttachment, OptionalInt colorClear) {
+    public CinnabarRenderPass createRenderPass(Supplier<String> debugGroup, GpuTextureView colorAttachment, OptionalInt colorClear) {
         return this.createRenderPass(debugGroup, colorAttachment, colorClear, null, OptionalDouble.empty());
     }
     
     @Override
-    public RenderPass createRenderPass(Supplier<String> debugGroup, GpuTextureView colorAttachment, OptionalInt colorClear, @Nullable GpuTextureView depthAttachment, OptionalDouble depthClear) {
+    public CinnabarRenderPass createRenderPass(Supplier<String> debugGroup, GpuTextureView colorAttachment, OptionalInt colorClear, @Nullable GpuTextureView depthAttachment, OptionalDouble depthClear) {
         final var commandBuffer = allocAndInsertCommandBuffer(debugGroup.get());
         fullBarrier(commandBuffer);
         return new CinnabarRenderPass(device, commandBuffer, memoryStack, debugGroup, (CinnabarGpuTextureView) colorAttachment, colorClear, (CinnabarGpuTextureView) depthAttachment, depthClear);

@@ -1,6 +1,6 @@
 package graphics.cinnabar.core.b3d.buffers;
 
-import com.mojang.blaze3d.buffers.GpuBuffer;
+import graphics.cinnabar.api.cvk.buffers.CVKGpuBuffer;
 import graphics.cinnabar.api.util.Destroyable;
 import graphics.cinnabar.core.b3d.CinnabarDevice;
 import graphics.cinnabar.core.util.MagicNumbers;
@@ -9,7 +9,7 @@ import org.jetbrains.annotations.Nullable;
 
 import static org.lwjgl.vulkan.VK13.*;
 
-public sealed abstract class CinnabarGpuBuffer extends GpuBuffer implements Destroyable permits BufferPool.Buffer, CinnabarIndividualGpuBuffer {
+public sealed abstract class CinnabarGpuBuffer extends CVKGpuBuffer implements Destroyable permits BufferPool.Buffer, CinnabarIndividualGpuBuffer {
     protected final CinnabarDevice device;
     private boolean isClosed = false;
     
