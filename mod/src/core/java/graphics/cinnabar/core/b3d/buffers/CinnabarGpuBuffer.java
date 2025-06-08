@@ -66,6 +66,9 @@ public sealed abstract class CinnabarGpuBuffer extends CVKGpuBuffer implements D
     
     protected static int vkUsageBits(int b3dUsage, boolean clientStorage) {
         int bits = 0;
+        if (b3dUsage > ((USAGE_INDIRECT_COMMANDS << 1) - 1)) {
+            throw new IllegalArgumentException("Unknown b3dUsage bits set");
+        }
         // always need transfer_dst for uploads to device buffers
         if (!clientStorage || (b3dUsage & USAGE_COPY_DST) != 0) {
             bits |= VK_BUFFER_USAGE_TRANSFER_DST_BIT;
@@ -84,6 +87,9 @@ public sealed abstract class CinnabarGpuBuffer extends CVKGpuBuffer implements D
         }
         if ((b3dUsage & USAGE_UNIFORM_TEXEL_BUFFER) != 0) {
             bits |= VK_BUFFER_USAGE_UNIFORM_TEXEL_BUFFER_BIT;
+        }
+        if ((b3dUsage & USAGE_INDIRECT_COMMANDS) != 0) {
+            bits |= VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT;
         }
         return bits;
     }

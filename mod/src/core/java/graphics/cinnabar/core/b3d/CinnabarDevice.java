@@ -368,7 +368,7 @@ public class CinnabarDevice implements CVKGpuDevice {
     
     // --------- ExtGpuDevice ---------
     
-    private static final ExtCapabilities extCapabilities = new ExtCapabilities(true);
+    private static final ExtCapabilities extCapabilities = new ExtCapabilities();
     
     @Override
     public ExtCapabilities extCapabilities() {

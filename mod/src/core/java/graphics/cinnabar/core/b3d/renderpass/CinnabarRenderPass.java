@@ -165,6 +165,69 @@ public class CinnabarRenderPass implements CVKRenderPass {
         vkCmdDraw(commandBuffer, vertexCount, instanceCount, firstVertex, firstInstance);
     }
     
+    @Override
+    public void multiDraw(List<DrawCommand> draws) {
+        // TODO: pool these?
+        final var drawsCPUBuffer = new VkBuffer(device, (long) draws.size() * VkDrawIndirectCommand.SIZEOF, VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT, device.hostMemoryType);
+        device.destroyEndOfFrame(drawsCPUBuffer);
+        final var drawCommands = VkDrawIndirectCommand.create(drawsCPUBuffer.allocationInfo.pMappedData(), draws.size());
+        for (int i = 0; i < draws.size(); i++) {
+            drawCommands.position(i);
+            draws.get(i).put(drawCommands);
+        }
+        vkCmdDrawIndirect(commandBuffer, drawsCPUBuffer.handle, 0, draws.size(), VkDrawIndirectCommand.SIZEOF);
+    }
+    
+    @Override
+    public void drawIndirect(GpuBufferSlice buffer) {
+        multiDrawIndirect(buffer.slice(0, VkDrawIndirectCommand.SIZEOF), 0);
+    }
+    
+    @Override
+    public void multiDrawIndirect(GpuBufferSlice buffer, int stride) {
+        if (stride == 0) {
+            stride = VkDrawIndirectCommand.SIZEOF;
+        }
+        final var drawCount = buffer.length() / stride;
+        final var vkBufferSlice = ((CinnabarGpuBuffer) buffer.buffer()).backingSlice().slice(buffer);
+        vkCmdDrawIndirect(commandBuffer, vkBufferSlice.buffer().handle, vkBufferSlice.range.offset(), drawCount, stride);
+    }
+    
+    @Override
+    public void drawIndexed(int indexCount, int instanceCount, int firstIndex, int vertexOffset, int firstInstance) {
+        updateUniforms();
+        vkCmdDrawIndexed(commandBuffer, indexCount, instanceCount, firstIndex, vertexOffset, firstInstance);
+    }
+    
+    @Override
+    public void multiDrawIndexed(List<DrawIndexedCommand> draws) {
+        final var drawsCPUBuffer = new VkBuffer(device, (long) draws.size() * VkDrawIndexedIndirectCommand.SIZEOF, VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT, device.hostMemoryType);
+        device.destroyEndOfFrame(drawsCPUBuffer);
+        final var drawCommands = VkDrawIndexedIndirectCommand.create(drawsCPUBuffer.allocationInfo.pMappedData(), draws.size());
+        for (int i = 0; i < draws.size(); i++) {
+            drawCommands.position(i);
+            draws.get(i).put(drawCommands);
+        }
+        vkCmdDrawIndirect(commandBuffer, drawsCPUBuffer.handle, 0, draws.size(), VkDrawIndexedIndirectCommand.SIZEOF);
+    }
+    
+    @Override
+    public void drawIndexedIndirect(GpuBufferSlice buffer) {
+        multiDrawIndexedIndirect(buffer.slice(0, VkDrawIndexedIndirectCommand.SIZEOF), 0);
+    }
+    
+    @Override
+    public void multiDrawIndexedIndirect(GpuBufferSlice buffer, int stride) {
+        if (stride == 0) {
+            stride = VkDrawIndexedIndirectCommand.SIZEOF;
+        }
+        final var drawCount = buffer.length() / stride;
+        updateUniforms();
+        final var vkBufferSlice = ((CinnabarGpuBuffer) buffer.buffer()).backingSlice().slice(buffer);
+        vkCmdDrawIndexedIndirect(commandBuffer, vkBufferSlice.buffer().handle, vkBufferSlice.range.offset(), drawCount, stride);
+    }
+    
+    
     // ---------- CVKRenderPass ----------
     
     @Override

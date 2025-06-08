@@ -1,5 +1,6 @@
 package graphics.cinnabar.core.vk.memory;
 
+import com.mojang.blaze3d.buffers.GpuBufferSlice;
 import graphics.cinnabar.api.CinnabarAPI;
 import graphics.cinnabar.api.memory.MemoryRange;
 import graphics.cinnabar.core.b3d.CinnabarDevice;
@@ -9,7 +10,6 @@ import org.lwjgl.system.MemoryStack;
 import org.lwjgl.util.vma.VmaAllocationCreateInfo;
 import org.lwjgl.util.vma.VmaAllocationInfo;
 import org.lwjgl.vulkan.VkBufferCreateInfo;
-import org.lwjgl.vulkan.VkMappedMemoryRange;
 
 import static graphics.cinnabar.api.exceptions.VkException.checkVkCode;
 import static graphics.cinnabar.core.CinnabarConfig.defaultVal;
@@ -47,13 +47,13 @@ public class VkBuffer implements VulkanObject {
             final var allocCreateInfo = VmaAllocationCreateInfo.calloc(stack);
             allocCreateInfo.usage(VMA_MEMORY_USAGE_AUTO);
             allocCreateInfo.flags(allocCreateInfo.flags() | (mappableMemory ? (VMA_ALLOCATION_CREATE_MAPPED_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT) : 0));
-            allocCreateInfo.memoryTypeBits( 1 << memoryType.leftInt());
+            allocCreateInfo.memoryTypeBits(1 << memoryType.leftInt());
             
             checkVkCode(vmaCreateBuffer(device.vmaAllocator, createInfo, allocCreateInfo, bufferPtr, allocPtr, allocationInfo));
             vmaAllocation = allocPtr.get(0);
             handle = bufferPtr.get(0);
             
-            if(mappableMemory && allocationInfo.pMappedData() == 0){
+            if (mappableMemory && allocationInfo.pMappedData() == 0) {
                 throw new IllegalStateException();
             }
         }
@@ -100,6 +100,22 @@ public class VkBuffer implements VulkanObject {
         
         public VkBuffer buffer() {
             return VkBuffer.this;
+        }
+        
+        public Slice slice(MemoryRange range) {
+            if (CinnabarAPI.DEBUG_MODE) {
+                if (range.offset() < 0) {
+                    throw new IllegalArgumentException("Attempt to slice buffer before beginning");
+                }
+                if ((range.offset() + range.size()) > this.range.size()) {
+                    throw new IllegalArgumentException("Attempt to slice buffer after end");
+                }
+            }
+            return new Slice(new MemoryRange(this.range.offset() + range.offset(), range.size()));
+        }
+        
+        public Slice slice(GpuBufferSlice slice) {
+            return slice(new MemoryRange(slice.offset(), slice.length()));
         }
     }
 }

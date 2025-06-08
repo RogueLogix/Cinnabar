@@ -1,6 +1,5 @@
 package graphics.cinnabar.core.b3d.buffers;
 
-import com.mojang.blaze3d.buffers.GpuBuffer;
 import graphics.cinnabar.api.memory.MemoryRange;
 import graphics.cinnabar.api.util.Destroyable;
 import graphics.cinnabar.core.CinnabarCore;
