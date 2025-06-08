@@ -85,7 +85,7 @@ public class CinnabarLaunchPlugin implements ILaunchPluginService {
                 }
                 continue;
             }
-            if (annotationName.equals("graphics.cinnabar.lib.annotations.RewriteHierarchy")) {
+            if (annotationName.equals("graphics.cinnabar.api.annotations.RewriteHierarchy")) {
                 final var newClazz = annotation.clazz();
                 for (final var classData : cinnabarScanResults.getClasses()) {
                     if (classData.clazz() == newClazz) {

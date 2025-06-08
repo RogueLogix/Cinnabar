@@ -1,7 +1,7 @@
 package graphics.cinnabar.core.b3d.buffers;
 
 import com.mojang.blaze3d.buffers.Std140SizeCalculator;
-import graphics.cinnabar.lib.annotations.RewriteHierarchy;
+import graphics.cinnabar.api.annotations.RewriteHierarchy;
 import net.minecraft.util.Mth;
 
 @RewriteHierarchy

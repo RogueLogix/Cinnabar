@@ -2,7 +2,7 @@ package graphics.cinnabar.core.rewrites;
 
 import com.mojang.blaze3d.buffers.Std140Builder;
 import graphics.cinnabar.core.b3d.buffers.Std140ArrayBuilder;
-import graphics.cinnabar.lib.annotations.RewriteHierarchy;
+import graphics.cinnabar.api.annotations.RewriteHierarchy;
 import net.minecraft.client.renderer.fog.FogRenderer;
 import org.joml.Vector4f;
 

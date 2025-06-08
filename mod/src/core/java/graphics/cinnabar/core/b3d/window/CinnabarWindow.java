@@ -9,7 +9,7 @@ import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.Tesselator;
 import graphics.cinnabar.api.cvk.systems.CVKGpuDevice;
 import graphics.cinnabar.core.b3d.CinnabarDevice;
-import graphics.cinnabar.lib.annotations.RewriteHierarchy;
+import graphics.cinnabar.api.annotations.RewriteHierarchy;
 import net.minecraft.client.Minecraft;
 import org.lwjgl.system.MemoryStack;
 
