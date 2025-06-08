@@ -7,7 +7,7 @@ import graphics.cinnabar.api.threading.IWorkQueue;
 import graphics.cinnabar.api.threading.ThreadIndex;
 import graphics.cinnabar.api.threading.ThreadIndexRegistry;
 import graphics.cinnabar.api.util.Destroyable;
-import graphics.cinnabar.lib.datastructures.ResizingRingBuffer;
+import graphics.cinnabar.lib.datastructures.RingQueue;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.concurrent.atomic.AtomicLong;
@@ -16,7 +16,7 @@ import static graphics.cinnabar.lib.CinnabarLib.CINNABAR_LIB_LOG;
 
 public abstract class WorkQueue implements IWorkQueue {
     
-    private final ResizingRingBuffer<Work> workRing = new ResizingRingBuffer<>(0);
+    private final RingQueue<Work> workRing = new RingQueue<>(16);
     private final AtomicLong enqueueingThreads = new AtomicLong();
     
     @API
@@ -38,7 +38,7 @@ public abstract class WorkQueue implements IWorkQueue {
     @Override
     @ThreadSafety.Many
     public void enqueue(Work work) {
-        workRing.put(work);
+        workRing.ForceEnqueue(work);
         if (enqueueingThreads.get() == 0) {
             wakeThreads(false);
         }
@@ -58,7 +58,7 @@ public abstract class WorkQueue implements IWorkQueue {
     @ThreadSafety.Many
     boolean runOne(ThreadIndex index) {
         @Nullable
-        final var work = workRing.poll();
+        final var work = workRing.Dequeue();
         if (work == null) {
             return false;
         }
