@@ -157,6 +157,14 @@ public class CinnabarRenderPass implements CVKRenderPass {
         vkEndCommandBuffer(commandBuffer);
     }
     
+    // ---------- ExtRenderPass ----------
+    
+    @Override
+    public void draw(int vertexCount, int instanceCount, int firstVertex, int firstInstance) {
+        updateUniforms();
+        vkCmdDraw(commandBuffer, vertexCount, instanceCount, firstVertex, firstInstance);
+    }
+    
     // ---------- CVKRenderPass ----------
     
     @Override
@@ -702,11 +710,5 @@ public class CinnabarRenderPass implements CVKRenderPass {
                 vkCmdDrawIndexed(commandBuffer, draw.indexCount(), 1, draw.firstIndex(), 0, 0);
             }
         }
-    }
-    
-    @Override
-    public void draw(int first, int count) {
-        updateUniforms();
-        vkCmdDraw(commandBuffer, count, 1, first, 0);
     }
 }
