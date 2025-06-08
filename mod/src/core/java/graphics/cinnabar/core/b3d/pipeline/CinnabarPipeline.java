@@ -8,6 +8,9 @@ import com.mojang.blaze3d.platform.SourceFactor;
 import com.mojang.blaze3d.preprocessor.GlslPreprocessor;
 import com.mojang.blaze3d.shaders.ShaderType;
 import com.mojang.blaze3d.vertex.VertexFormat;
+import com.mojang.blaze3d.vertex.VertexFormatElement;
+import graphics.cinnabar.api.b3dext.pipeline.ExtRenderPipeline;
+import graphics.cinnabar.api.b3dext.vertex.VertexInputBuffer;
 import graphics.cinnabar.api.cvk.pipeline.CVKCompiledRenderPipeline;
 import graphics.cinnabar.api.util.Pair;
 import graphics.cinnabar.core.b3d.CinnabarDevice;
@@ -15,9 +18,9 @@ import graphics.cinnabar.core.util.MagicNumbers;
 import graphics.cinnabar.core.vk.VulkanObject;
 import graphics.cinnabar.core.vk.shaders.ShaderProcessing;
 import graphics.cinnabar.core.vk.shaders.ShaderSet;
-import graphics.cinnabar.core.vk.shaders.vertex.VertexInputState;
 import it.unimi.dsi.fastutil.objects.Object2ReferenceOpenHashMap;
 import net.minecraft.resources.ResourceLocation;
+import org.jetbrains.annotations.Nullable;
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.vulkan.*;
 
@@ -55,7 +58,7 @@ public class CinnabarPipeline implements CVKCompiledRenderPipeline, VulkanObject
     private static final Map<ShaderSourceCacheKey, String> shaderSourceCache = new Object2ReferenceOpenHashMap<>();
     
     // TODO: soft fail, also deferred loading
-    public CinnabarPipeline(CinnabarDevice device, BiFunction<ResourceLocation, ShaderType, String> shaderSourceProvider, RenderPipeline pipeline) {
+    public CinnabarPipeline(CinnabarDevice device, BiFunction<ResourceLocation, ShaderType, String> shaderSourceProvider, ExtRenderPipeline pipeline) {
         this.device = device;
         this.info = pipeline;
         
@@ -115,40 +118,32 @@ public class CinnabarPipeline implements CVKCompiledRenderPipeline, VulkanObject
             multiSampleState.rasterizationSamples(VK_SAMPLE_COUNT_1_BIT);
             multiSampleState.sampleShadingEnable(false);
             
-            final var inputState = VertexInputState.forVertexFormat(pipeline.getVertexFormat(), shaderSet.attribTypes());
-            
-            final var bufferBindings = VkVertexInputBindingDescription.calloc(inputState.buffers().size(), stack);
-            final var buffers = inputState.buffers();
-            for (int i = 0; i < buffers.size(); i++) {
-                final var buffer = buffers.get(i);
-                bufferBindings.position(i);
-                bufferBindings.binding(buffer.bindingIndex());
-                bufferBindings.stride(buffer.stride());
-                bufferBindings.inputRate(buffer.perInstance() ? VK_VERTEX_INPUT_RATE_INSTANCE : VK_VERTEX_INPUT_RATE_VERTEX);
-            }
-            bufferBindings.position(0);
-            
-            final var attribBindings = VkVertexInputAttributeDescription.calloc(inputState.attribs().size(), stack);
-            final var attribs = inputState.attribs();
-            for (int i = 0; i < attribs.size(); i++) {
-                final var attrib = attribs.get(i);
-                if (attrib.name() == null) {
-                    attribBindings.location(attrib.location());
-                } else {
-                    final var location = shaderSet.attribLocation(attrib.name());
-                    if(location == -1){
+            final var attribTypes = shaderSet.attribTypes();
+            final var inputBuffers = pipeline.getVertexInputBuffers();
+            final var bufferBindings = VkVertexInputBindingDescription.calloc(inputBuffers.size(), stack);
+            final var attribBindings = VkVertexInputAttributeDescription.calloc(inputBuffers.stream().mapToInt(binding -> binding.bufferFormat().getElements().size()).sum(), stack);
+            for (VertexInputBuffer vertexInputBuffer : inputBuffers) {
+                final var bufferFormat = vertexInputBuffer.bufferFormat();
+                bufferBindings.binding(vertexInputBuffer.bindingIndex());
+                bufferBindings.stride(bufferFormat.getVertexSize());
+                bufferBindings.inputRate(vertexInputBuffer.inputRate().ordinal());
+                
+                for (VertexFormatElement element : vertexInputBuffer.bufferFormat().getElements()) {
+                    final var name = bufferFormat.getElementName(element);
+                    final var location = shaderSet.attribLocation(name);
+                    if (location == -1) {
                         // skip inputs not used by the shader
                         continue;
                     }
                     attribBindings.location(location);
+                    attribBindings.binding(vertexInputBuffer.bindingIndex());
+                    attribBindings.format(mapTypeAndCountToVkFormat(element.type(), element.count(), element.usage(), isFloatInputType(attribTypes.get(name))));
+                    attribBindings.offset(bufferFormat.getOffset(element));
+                    attribBindings.position(attribBindings.position() + 1);
                 }
-                attribBindings.binding(attrib.bufferBinding());
-                attribBindings.format(attrib.format());
-                attribBindings.offset(attrib.offset());
-                attribBindings.position(attribBindings.position() + 1);
             }
-            attribBindings.limit(attribBindings.position());
-            attribBindings.position(0);
+            bufferBindings.position(0);
+            attribBindings.flip();
             
             final var vertexInputState = VkPipelineVertexInputStateCreateInfo.calloc().sType$Default();
             vertexInputState.pVertexBindingDescriptions(bufferBindings);
@@ -309,6 +304,79 @@ public class CinnabarPipeline implements CVKCompiledRenderPipeline, VulkanObject
             case TRIANGLE_STRIP -> VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP;
             case TRIANGLE_FAN -> VK_PRIMITIVE_TOPOLOGY_TRIANGLE_FAN;
             case QUADS -> VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+        };
+    }
+    
+    @SuppressWarnings("DuplicateBranchesInSwitch")
+    private static boolean isFloatInputType(@Nullable String input) {
+        if (input == null) {
+            // if null for a specific attrib set, then it can be treated as int, it wont actually be read by the shader
+            return false;
+        }
+        return switch (input) {
+            case "uint", "uvec2", "uvec3", "uvec4" -> false;
+            case "int", "ivec2", "ivec3", "ivec4" -> false;
+            case "float", "vec2", "vec3", "vec4" -> true;
+            default -> throw new IllegalStateException("Unexpected value: " + input);
+        };
+    }
+    
+    // TODO: INT vs SCALED for float input types with integers in the buffers    
+    private static int mapTypeAndCountToVkFormat(VertexFormatElement.Type type, int count, VertexFormatElement.Usage usage, boolean floatInput) {
+        final boolean normalized = switch (usage) {
+            case COLOR, NORMAL -> true;
+            default -> false;
+        };
+        return switch (type) {
+            case FLOAT -> switch (count) {
+                case 1 -> VK_FORMAT_R32_SFLOAT;
+                case 2 -> VK_FORMAT_R32G32_SFLOAT;
+                case 3 -> VK_FORMAT_R32G32B32_SFLOAT;
+                case 4 -> VK_FORMAT_R32G32B32A32_SFLOAT;
+                default -> throw new IllegalStateException("Unexpected value: " + count);
+            };
+            case UBYTE -> switch (count) {
+                case 1 -> normalized ? VK_FORMAT_R8_UNORM : VK_FORMAT_R8_UINT;
+                case 2 -> normalized ? VK_FORMAT_R8G8_UNORM : VK_FORMAT_R8G8_UINT;
+                case 3 -> normalized ? VK_FORMAT_R8G8B8_UNORM : VK_FORMAT_R8G8B8_UINT;
+                case 4 -> normalized ? VK_FORMAT_R8G8B8A8_UNORM : VK_FORMAT_R8G8B8A8_UINT;
+                default -> throw new IllegalStateException("Unexpected value: " + count);
+            };
+            case BYTE -> switch (count) {
+                case 1 -> normalized ? VK_FORMAT_R8_SNORM : (floatInput ? VK_FORMAT_R8_SSCALED : VK_FORMAT_R8_SINT);
+                case 2 -> normalized ? VK_FORMAT_R8G8_SNORM : (floatInput ? VK_FORMAT_R8G8_SSCALED : VK_FORMAT_R8G8_SINT);
+                case 3 -> normalized ? VK_FORMAT_R8G8B8_SNORM : (floatInput ? VK_FORMAT_R8G8B8_SSCALED : VK_FORMAT_R8G8B8_SINT);
+                case 4 -> normalized ? VK_FORMAT_R8G8B8A8_SNORM : (floatInput ? VK_FORMAT_R8G8B8A8_SSCALED : VK_FORMAT_R8G8B8A8_SINT);
+                default -> throw new IllegalStateException("Unexpected value: " + count);
+            };
+            case USHORT -> switch (count) {
+                case 1 -> normalized ? VK_FORMAT_R16_UNORM : VK_FORMAT_R16_UINT;
+                case 2 -> normalized ? VK_FORMAT_R16G16_UNORM : VK_FORMAT_R16G16_UINT;
+                case 3 -> normalized ? VK_FORMAT_R16G16B16_UNORM : VK_FORMAT_R16G16B16_UINT;
+                case 4 -> normalized ? VK_FORMAT_R16G16B16A16_UNORM : VK_FORMAT_R16G16B16A16_UINT;
+                default -> throw new IllegalStateException("Unexpected value: " + count);
+            };
+            case SHORT -> switch (count) {
+                case 1 -> normalized ? VK_FORMAT_R16_SNORM : (floatInput ? VK_FORMAT_R16_SSCALED : VK_FORMAT_R16_SINT);
+                case 2 -> normalized ? VK_FORMAT_R16G16_SNORM : (floatInput ? VK_FORMAT_R16G16_SSCALED : VK_FORMAT_R16G16_SINT);
+                case 3 -> normalized ? VK_FORMAT_R16G16B16_SNORM : (floatInput ? VK_FORMAT_R16G16B16_SSCALED : VK_FORMAT_R16G16B16_SINT);
+                case 4 -> normalized ? VK_FORMAT_R16G16B16A16_SNORM : (floatInput ? VK_FORMAT_R16G16B16A16_SSCALED : VK_FORMAT_R16G16B16A16_SINT);
+                default -> throw new IllegalStateException("Unexpected value: " + count);
+            };
+            case UINT -> switch (count) {
+                case 1 -> VK_FORMAT_R32_UINT;
+                case 2 -> VK_FORMAT_R32G32_UINT;
+                case 3 -> VK_FORMAT_R32G32B32_UINT;
+                case 4 -> VK_FORMAT_R32G32B32A32_UINT;
+                default -> throw new IllegalStateException("Unexpected value: " + count);
+            };
+            case INT -> switch (count) {
+                case 1 -> VK_FORMAT_R32_SINT;
+                case 2 -> VK_FORMAT_R32G32_SINT;
+                case 3 -> VK_FORMAT_R32G32B32_SINT;
+                case 4 -> VK_FORMAT_R32G32B32A32_SINT;
+                default -> throw new IllegalStateException("Unexpected value: " + count);
+            };
         };
     }
 }

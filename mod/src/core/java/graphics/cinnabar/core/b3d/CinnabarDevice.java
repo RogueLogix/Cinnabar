@@ -3,11 +3,10 @@ package graphics.cinnabar.core.b3d;
 import com.mojang.blaze3d.buffers.GpuBuffer;
 import com.mojang.blaze3d.pipeline.RenderPipeline;
 import com.mojang.blaze3d.shaders.ShaderType;
-import com.mojang.blaze3d.textures.GpuTexture;
 import com.mojang.blaze3d.textures.TextureFormat;
+import graphics.cinnabar.api.b3dext.pipeline.ExtRenderPipeline;
 import graphics.cinnabar.api.b3dext.systems.ExtCapabilities;
 import graphics.cinnabar.api.b3dext.textures.ExtGpuTexture;
-import graphics.cinnabar.api.b3dext.textures.ExtGpuTextureView;
 import graphics.cinnabar.api.cvk.buffers.CVKGpuBuffer;
 import graphics.cinnabar.api.cvk.pipeline.CVKCompiledRenderPipeline;
 import graphics.cinnabar.api.cvk.systems.CVKGpuDevice;
@@ -483,7 +482,8 @@ public class CinnabarDevice implements CVKGpuDevice {
     }
     
     public CinnabarPipeline getPipeline(RenderPipeline renderPipeline, @Nullable BiFunction<ResourceLocation, ShaderType, String> shaderSourceProvider) {
-        return pipelineCache.computeIfAbsent(renderPipeline, __ -> new CinnabarPipeline(this, shaderSourceProvider == null ? this.shaderSourceProvider : shaderSourceProvider, renderPipeline));
+        assert renderPipeline instanceof ExtRenderPipeline;
+        return pipelineCache.computeIfAbsent(renderPipeline, __ -> new CinnabarPipeline(this, shaderSourceProvider == null ? this.shaderSourceProvider : shaderSourceProvider, (ExtRenderPipeline) renderPipeline));
     }
     
     @Override
