@@ -1,7 +1,6 @@
 package graphics.cinnabar.core.util;
 
 import static org.lwjgl.vulkan.KHRSurface.*;
-import static org.lwjgl.vulkan.KHRSurface.VK_PRESENT_MODE_FIFO_KHR;
 import static org.lwjgl.vulkan.VK10.*;
 
 public class MagicNumbers {

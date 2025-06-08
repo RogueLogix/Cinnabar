@@ -8,7 +8,7 @@ public class CinnabarConfig {
     @RegisterConfig(name = "cinnabar", type = ConfigType.CLIENT, format = ConfigFormat.JSON5, comment = """
             Hey, you! Yes, you, the person reading this.
             You probably shouldn't be editing this config.
-            The main purpose of this config is for debugging purposes, and it shouldn't be effecting compatability
+            The main purpose of this config is for debugging purposes, and it shouldn't be effecting compatibility
             if changing a value in this fixes an issue you are having, REPORT IT
             """)
     public static final CinnabarConfig CONFIG = new CinnabarConfig();

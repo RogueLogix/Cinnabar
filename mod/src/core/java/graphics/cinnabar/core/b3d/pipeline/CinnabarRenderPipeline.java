@@ -37,7 +37,6 @@ import org.lwjgl.vulkan.*;
 import java.nio.ByteBuffer;
 import java.util.Map;
 import java.util.Objects;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.function.BiFunction;
@@ -200,7 +199,6 @@ public class CinnabarRenderPipeline implements CVKCompiledRenderPipeline, Destro
                     vtxOutputsByLocation.put(outputLocation, new IntIntImmutablePair(baseType, vectorWidth));
                 }
                 
-                final var fraInputInfo = new Object2ObjectArrayMap<String, @Nullable IntReferenceImmutablePair<IntIntImmutablePair>>();
                 for (SpvcReflectedResource fraInput : fraInputs) {
                     final var inputName = fraInput.nameString();
                     final var type = spvc_compiler_get_type_handle(spvcFraCompiler, fraInput.type_id());
@@ -237,8 +235,6 @@ public class CinnabarRenderPipeline implements CVKCompiledRenderPipeline, Destro
                             fragmentSpvIntBuffer.put(decorationLocation, inputLocation);
                         }
                     }
-                    
-                    fraInputInfo.put(inputName, new IntReferenceImmutablePair<>(inputLocation, new IntIntImmutablePair(baseType, vectorWidth)));
                 }
             }
             

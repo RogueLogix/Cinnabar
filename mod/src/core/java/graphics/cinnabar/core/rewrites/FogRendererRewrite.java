@@ -4,6 +4,7 @@ import com.mojang.blaze3d.buffers.Std140Builder;
 import graphics.cinnabar.core.b3d.buffers.Std140ArrayBuilder;
 import graphics.cinnabar.api.annotations.RewriteHierarchy;
 import net.minecraft.client.renderer.fog.FogRenderer;
+import org.jetbrains.annotations.NotNull;
 import org.joml.Vector4f;
 
 import java.nio.ByteBuffer;
@@ -15,7 +16,7 @@ public class FogRendererRewrite extends FogRenderer {
     protected void updateBuffer(
             ByteBuffer p_423489_,
             int p_423628_,
-            Vector4f p_423543_,
+            @NotNull Vector4f p_423543_,
             float p_423485_,
             float p_423650_,
             float p_423492_,

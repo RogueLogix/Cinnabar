@@ -50,7 +50,7 @@ public record PointerWrapper(long pointer, long size) implements Comparable<Poin
     private static final long INT_ARRAY_BASE_OFFSET = THE_UNSAFE.arrayBaseOffset(byte[].class);
     private static final long LONG_ARRAY_BASE_OFFSET = THE_UNSAFE.arrayBaseOffset(byte[].class);
     
-    public static PointerWrapper NULLPTR = new PointerWrapper(0, 0);
+    public static final PointerWrapper NULLPTR = new PointerWrapper(0, 0);
     
     public boolean isNull() {
         return pointer == 0;

@@ -547,7 +547,7 @@ public class CinnabarCommandEncoder implements CVKCommandEncoder, Destroyable {
             blitRegion.dstSubresource(imageSubresource);
             blitRegion.dstOffsets(dstOffsets);
             
-            // these barriers are for the src texture, they should be relaxed, but thats a later problem
+            // these barriers are for the src texture, they should be relaxed, but that's a later problem
             fullBarrier(blitCommandBuffer);
             vkCmdBlitImage(blitCommandBuffer, ((CinnabarGpuTexture) imageView.texture()).imageHandle, VK_IMAGE_LAYOUT_GENERAL, swapchain.acquiredImage(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, blitRegion, VK_FILTER_NEAREST);
             fullBarrier(blitCommandBuffer);

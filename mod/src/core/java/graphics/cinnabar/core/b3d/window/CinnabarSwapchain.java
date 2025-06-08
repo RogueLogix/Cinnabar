@@ -1,6 +1,5 @@
 package graphics.cinnabar.core.b3d.window;
 
-import graphics.cinnabar.api.CinnabarAPI;
 import graphics.cinnabar.core.b3d.CinnabarDevice;
 import graphics.cinnabar.core.util.MagicNumbers;
 import graphics.cinnabar.core.vk.VulkanObject;
@@ -79,9 +78,9 @@ public class CinnabarSwapchain implements VulkanObject {
             createInfo.imageColorSpace(MagicNumbers.SwapchainColorSpace);
             createInfo.imageExtent(extent);
             createInfo.imageArrayLayers(1);
-            // images are always blitted onto the swapchain instead of rendering directly to it
+            // images are always blit onto the swapchain instead of rendering directly to it
             createInfo.imageUsage(VK_IMAGE_USAGE_TRANSFER_DST_BIT);
-            // always blitted on the graphics queue
+            // always blit on the graphics queue
             createInfo.imageSharingMode(VK_SHARING_MODE_EXCLUSIVE);
             createInfo.preTransform(surfaceCapabilities.currentTransform());
             createInfo.compositeAlpha(VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR);

@@ -1,6 +1,5 @@
 package graphics.cinnabar.core.vk.shaders;
 
-import graphics.cinnabar.api.CinnabarAPI;
 import graphics.cinnabar.api.annotations.ThreadSafety;
 import graphics.cinnabar.core.b3d.CinnabarDevice;
 import graphics.cinnabar.core.vk.VulkanObject;

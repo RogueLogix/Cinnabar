@@ -43,7 +43,7 @@ public class VulkanTransientCommandBufferPool implements Destroyable {
         final var allocInfoPtr = allocInfo.pointer();
         VkCommandBufferAllocateInfo.nsType(allocInfoPtr, VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO);
         VkCommandBufferAllocateInfo.ncommandPool(allocInfoPtr, commandPool);
-        // TODO: secondary command buffers? dont really need them because of dynamic rendering
+        // TODO: secondary command buffers? don't really need them because of dynamic rendering
         VkCommandBufferAllocateInfo.nlevel(allocInfoPtr, VK_COMMAND_BUFFER_LEVEL_PRIMARY);
         VkCommandBufferAllocateInfo.ncommandBufferCount(allocInfoPtr, COMMAND_BUFFER_ALLOC_SIZE);
     }

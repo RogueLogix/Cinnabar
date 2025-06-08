@@ -39,7 +39,7 @@ public class VulkanStartup {
     private static final List<String> requiredDeviceExtensions = List.of(
             VK_KHR_SWAPCHAIN_EXTENSION_NAME,
             // TODO: drop use of push descriptors in favor of dynamic descriptor sets (or get Mojang to mirror descriptor sets),
-            //       also, should probably query the number supported, but i also never use that maney
+            //       also, should probably query the number supported, but i also never use that many
             VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME
     );
     
@@ -53,7 +53,7 @@ public class VulkanStartup {
             final var appInfo = VkApplicationInfo.calloc(stack);
             final var appName = stack.UTF8("Minecraft");
             final var engineName = stack.UTF8("Cinnabar");
-            // TODO: pull this from FML/MC, so i dont have to update this every MC update
+            // TODO: pull this from FML/MC, so i don't have to update this every MC update
             final var appVersion = VK_MAKE_VERSION(1, 21, 5);
             final var engineVersion = VK_MAKE_VERSION(0, 0, 0);
             appInfo.sType(VK_STRUCTURE_TYPE_APPLICATION_INFO);
@@ -210,7 +210,6 @@ public class VulkanStartup {
             final var selectedPhysicalDeviceProperties = VkPhysicalDeviceProperties2.calloc(stack).sType$Default();
             final var properties2 = VkPhysicalDeviceProperties2.calloc().sType$Default();
             final var deviceProperties = properties2.properties();
-            final var limits = properties2.properties().limits();
             
             final var physicalDeviceFeatures = VkPhysicalDeviceFeatures2.calloc(stack).sType$Default();
             final var physicalDeviceFeatures10 = physicalDeviceFeatures.features();
@@ -346,7 +345,7 @@ public class VulkanStartup {
                         break;
                     }
                     // this physical device will work (probably), but might be suboptimal (ie: actually the CPU)
-                    // if the currently selected device is better (ie: discrete vs integrated), dont use this one
+                    // if the currently selected device is better (ie: discrete vs integrated), don't use this one
                     if (selectedPhysicalDevice != null) {
                         vkGetPhysicalDeviceProperties2(selectedPhysicalDevice, selectedPhysicalDeviceProperties);
                         final var selectedDeviceType = selectedPhysicalDeviceProperties.properties().deviceType();

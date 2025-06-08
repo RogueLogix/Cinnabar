@@ -11,6 +11,7 @@ import graphics.cinnabar.api.cvk.systems.CVKGpuDevice;
 import graphics.cinnabar.core.b3d.CinnabarDevice;
 import graphics.cinnabar.api.annotations.RewriteHierarchy;
 import net.minecraft.client.Minecraft;
+import org.jetbrains.annotations.Nullable;
 import org.lwjgl.system.MemoryStack;
 
 import static graphics.cinnabar.api.exceptions.VkException.checkVkCode;
@@ -24,6 +25,7 @@ public class CinnabarWindow extends Window {
     @SuppressWarnings("DataFlowIssue")
     private CinnabarDevice device = null;
     private long surface;
+    @Nullable
     private CinnabarSwapchain swapchain;
     private boolean actuallyVSync = this.vsync;
     
@@ -54,17 +56,19 @@ public class CinnabarWindow extends Window {
     }
     
     public void detachDevice(){
+        assert swapchain != null;
         swapchain.destroy();
         vkDestroySurfaceKHR(device.vkInstance, surface, null);
     }
     
     @Override
-    public void updateDisplay(TracyFrameCapture tracyFrameCapture) {
+    public void updateDisplay(@Nullable TracyFrameCapture tracyFrameCapture) {
         RenderSystem.pollEvents();
         Tesselator.getInstance().clear();
         
         CVKGpuDevice.get().endFrame();
         
+        assert swapchain != null;
         boolean shouldRecreateSwapchain = !swapchain.present();
         
         if (this.fullscreen != this.actuallyFullscreen) {

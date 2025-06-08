@@ -8,7 +8,6 @@ import graphics.cinnabar.core.vk.VulkanObject;
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.vulkan.VkImageViewCreateInfo;
 
-import static com.mojang.blaze3d.textures.GpuTexture.USAGE_CUBEMAP_COMPATIBLE;
 import static graphics.cinnabar.api.exceptions.VkException.checkVkCode;
 import static graphics.cinnabar.core.b3d.texture.CinnabarGpuTexture.aspects;
 import static graphics.cinnabar.core.b3d.texture.CinnabarGpuTexture.toVk;

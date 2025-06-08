@@ -13,7 +13,6 @@ import static graphics.cinnabar.api.exceptions.VkException.checkVkCode;
 import static org.lwjgl.vulkan.EXTDebugReport.VK_DEBUG_REPORT_OBJECT_TYPE_DESCRIPTOR_SET_LAYOUT_EXT;
 import static org.lwjgl.vulkan.KHRPushDescriptor.VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT_KHR;
 import static org.lwjgl.vulkan.VK10.*;
-import static org.lwjgl.vulkan.VK10.VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
 
 public class DescriptorSetLayout implements VulkanObject {
     

@@ -538,7 +538,6 @@ public class CinnabarRenderPass implements CVKRenderPass {
         
         if (dynamicUniforms.size() == 1) {
             final var dynamicUniformName = dynamicUniforms.stream().findFirst().get();
-            boolean isSSBO = false;
             for (DescriptorSetBinding binding : boundPipeline.descriptorSetLayout().bindings) {
                 if (binding instanceof SSBOBinding(String name, int bindingPoint, int size) && name.equals(dynamicUniformName)) {
                     fastDrawMultipleIndexed(draws, indexBuffer, indexType, dynamicUniforms, userData);
@@ -574,7 +573,7 @@ public class CinnabarRenderPass implements CVKRenderPass {
     }
     
     public <T> void fastDrawMultipleIndexed(Collection<Draw<T>> draws, @Nullable GpuBuffer indexBuffer, @Nullable VertexFormat.IndexType indexType, Collection<String> dynamicUniforms, T userData) {
-        // the single largest cost is in the descriptor set updates, if those can be avoided (they can) thats a large win (and a step toward multidraw)
+        // the single largest cost is in the descriptor set updates, if those can be avoided (they can) that's a large win (and a step toward multidraw)
         if (dynamicUniforms.size() != 1) {
             // for memory reasons, its assumed there is only a single dynamic uniform in this path, this is currently always the case
             throw new IllegalStateException();
@@ -615,7 +614,7 @@ public class CinnabarRenderPass implements CVKRenderPass {
         var canBatchIndexType = true;
         final var vertexSize = boundPipeline.info.getVertexFormat().getVertexSize();
         
-        // if all draws dont share the same GPU buffer, i cant compact the descriptor updates
+        // if all draws don't share the same GPU buffer, i cant compact the descriptor updates
         // they all also must be at a multiple of the array stride
         final var expectedDynamicUniformGpuBuffer = orderedDynamicUniformValues.getFirst().buffer();
         final var firstDraw = orderedDraws.getFirst();

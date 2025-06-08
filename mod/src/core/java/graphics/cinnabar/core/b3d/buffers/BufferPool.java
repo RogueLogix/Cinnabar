@@ -138,11 +138,12 @@ public class BufferPool implements Destroyable {
             return;
         }
         
+        assert mainBuffer != null;
         final var newSize = MathUtil.roundUpPo2(mainBuffer.size + overflowSinceLastRealloc);
         overflowSinceLastRealloc = 0;
         CinnabarCore.CINNABAR_CORE_LOG.info("BufferPool {} resizing, new size: {}", name, newSize);
         
-        // it is safe for me to stall the device right now, and because im about to recreate the pool, i need device idle
+        // it is safe for me to stall the device right now, and because im about to recreate the pool, I need device idle
         final var commandPool = new VulkanTransientCommandBufferPool(device, device.graphicsQueueFamily);
         
         @Nullable

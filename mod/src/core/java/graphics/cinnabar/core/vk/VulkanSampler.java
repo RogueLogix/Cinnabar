@@ -13,7 +13,7 @@ import static org.lwjgl.vulkan.VK10.*;
 
 @NotNullDefault
 public class VulkanSampler {
-    // TODO: dont pull this statically
+    // TODO: don't pull this statically
     private static final VkDevice device = CVKGpuDevice.get().vkDevice();
     private static final VkSamplerCreateInfo createInfo = VkSamplerCreateInfo.calloc();
     
@@ -40,7 +40,7 @@ public class VulkanSampler {
     
     private static final Object2ObjectOpenHashMap<SamplerInfo, VulkanSampler> samplers = new Object2ObjectOpenHashMap<>();
     
-    public static VulkanSampler DEFAULT = new VulkanSampler(new SamplerInfo(false, true, VK_SAMPLER_ADDRESS_MODE_REPEAT, 0));
+    public static final VulkanSampler DEFAULT = new VulkanSampler(new SamplerInfo(false, true, VK_SAMPLER_ADDRESS_MODE_REPEAT, 0));
     
     static {
         samplers.put(DEFAULT.samplerInfo, DEFAULT);

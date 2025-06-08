@@ -81,17 +81,6 @@ public class CinnabarEarlyWindowProvider implements ImmediateWindowProvider {
     
     @Override
     public void updateModuleReads(final ModuleLayer layer) {
-        // bootstrap Cinnabar
-//        final var cinnabarModule = layer.findModule("cinnabar");
-//        if (cinnabarModule.isPresent()) {
-//            final var clazz = Class.forName(cinnabarModule.orElse(null), "graphics.cinnabar.core.CinnabarCore");
-//            try {
-//                final var startupFunc = clazz.getDeclaredMethod("startup");
-//                startupFunc.invoke(null);
-//            } catch (NoSuchMethodException | InvocationTargetException | IllegalAccessException e) {
-//                throw new RuntimeException(e);
-//            }
-//        }
     }
     
     @Override

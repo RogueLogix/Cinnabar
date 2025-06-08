@@ -235,9 +235,9 @@ public class CinnabarDevice implements CVKGpuDevice {
         CINNABAR_CORE_LOG.info("CinnabarDevice Shutdown");
     }
     
-    ReferenceArrayList<Destroyable> submitDestroy = new ReferenceArrayList<>();
-    ReferenceArrayList<ReferenceArrayList<Destroyable>> toDestroy = new ReferenceArrayList<>();
-    ReferenceArrayList<Destroyable> shutdownDestroy = new ReferenceArrayList<>();
+    private final ReferenceArrayList<Destroyable> submitDestroy = new ReferenceArrayList<>();
+    private final ReferenceArrayList<ReferenceArrayList<Destroyable>> toDestroy = new ReferenceArrayList<>();
+    private final ReferenceArrayList<Destroyable> shutdownDestroy = new ReferenceArrayList<>();
     
     {
         for (int i = 0; i < MagicNumbers.MaximumFramesInFlight; i++) {

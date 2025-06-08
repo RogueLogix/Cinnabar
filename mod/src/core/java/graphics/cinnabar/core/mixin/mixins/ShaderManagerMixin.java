@@ -1,6 +1,5 @@
 package graphics.cinnabar.core.mixin.mixins;
 
-import com.mojang.blaze3d.pipeline.CompiledRenderPipeline;
 import com.mojang.blaze3d.pipeline.RenderPipeline;
 import com.mojang.blaze3d.systems.RenderSystem;
 import net.minecraft.client.renderer.ShaderManager;
@@ -17,6 +16,7 @@ import java.util.Set;
 @Mixin(ShaderManager.class)
 public class ShaderManagerMixin {
     
+    @SuppressWarnings("SpellCheckingInspection")
     @Inject(method = "apply", at = @At(value = "INVOKE", target = "Lcom/mojang/blaze3d/systems/GpuDevice;clearPipelineCache()V"),  locals = LocalCapture.CAPTURE_FAILHARD)
     protected void cinnabar$kickPipelinesFirst(ShaderManager.Configs configs, ResourceManager resourceManager, ProfilerFiller profilerFiller, CallbackInfo callbackInfo, ShaderManager.CompilationCache sourceCache, Set<RenderPipeline> pipelineSet) {
         for (RenderPipeline renderPipeline : pipelineSet) {
