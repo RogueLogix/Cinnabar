@@ -6,13 +6,14 @@ import com.mojang.blaze3d.textures.GpuTextureView;
 import graphics.cinnabar.api.b3dext.systems.ExtCommandEncoder;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.List;
 import java.util.OptionalDouble;
 import java.util.OptionalInt;
 import java.util.function.Supplier;
 
 public interface CVKCommandEncoder extends ExtCommandEncoder {
     
-    void copyBufferToBufferExternallySynced(GpuBufferSlice src, GpuBufferSlice dst, BufferCopy... copies);
+    void copyBufferToBufferExternallySynced(GpuBufferSlice src, GpuBufferSlice dst, List<BufferCopy> copies);
     
     // ---------- Deprecated in favor of alternative, function unmodified ----------
     

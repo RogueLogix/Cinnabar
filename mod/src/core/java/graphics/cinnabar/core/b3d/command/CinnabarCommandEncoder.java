@@ -135,24 +135,24 @@ public class CinnabarCommandEncoder implements CVKCommandEncoder, Destroyable {
     // ---------- CVKCommandEncoder ----------
     
     @Override
-    public void copyBufferToBufferExternallySynced(GpuBufferSlice src, GpuBufferSlice dst, BufferCopy... copies) {
+    public void copyBufferToBufferExternallySynced(GpuBufferSlice src, GpuBufferSlice dst, List<BufferCopy> copies) {
         try (final var stack = memoryStack.push()) {
             
             final var srcBufferSlice = ((CinnabarGpuBuffer) src.buffer()).backingSlice();
             final var dstBufferSlice = ((CinnabarGpuBuffer) dst.buffer()).backingSlice();
             
             final VkBufferCopy.Buffer bufferCopies;
-            if (copies.length == 0) {
+            if (copies.isEmpty()) {
                 // special case for copy the whole thing
                 bufferCopies = VkBufferCopy.calloc(1, stack);
                 bufferCopies.srcOffset(srcBufferSlice.range.offset() + src.offset());
                 bufferCopies.dstOffset(dstBufferSlice.range.offset() + dst.offset());
                 bufferCopies.size(Math.min(src.length(), dst.length()));
             } else {
-                bufferCopies = VkBufferCopy.calloc(copies.length, stack);
+                bufferCopies = VkBufferCopy.calloc(copies.size(), stack);
                 
-                for (int i = 0; i < copies.length; i++) {
-                    final var copy = copies[i];
+                for (int i = 0; i < copies.size(); i++) {
+                    final var copy = copies.get(i);
                     bufferCopies.position(i);
                     bufferCopies.srcOffset(srcBufferSlice.range.offset() + src.offset() + copy.srcOffset());
                     bufferCopies.dstOffset(dstBufferSlice.range.offset() + dst.offset() + copy.dstOffset());
@@ -170,7 +170,7 @@ public class CinnabarCommandEncoder implements CVKCommandEncoder, Destroyable {
     // ---------- ExtCommandEncoder ----------
     
     @Override
-    public void copyBufferToBuffer(GpuBufferSlice src, GpuBufferSlice dst, BufferCopy... copies) {
+    public void copyBufferToBuffer(GpuBufferSlice src, GpuBufferSlice dst, List<BufferCopy> copies) {
         fullBarrier(getMainDrawCommandBuffer());
         copyBufferToBufferExternallySynced(src, dst, copies);
         fullBarrier(getMainDrawCommandBuffer());
@@ -286,7 +286,7 @@ public class CinnabarCommandEncoder implements CVKCommandEncoder, Destroyable {
                 final var stagingSlice = stagingBuffer.backingSlice();
                 LibCString.nmemcpy(stagingSlice.buffer().allocationInfo.pMappedData() + stagingSlice.range.offset(), MemoryUtil.memAddress(data), data.remaining());
                 
-                copyBufferToBufferExternallySynced(stagingBuffer.slice(), gpuBufferSlice);
+                copyBufferToBufferExternallySynced(stagingBuffer.slice(), gpuBufferSlice, List.of());
                 
                 final var copyRegion = VkBufferCopy.calloc(1, stack);
                 copyRegion.srcOffset(stagingSlice.range.offset());
