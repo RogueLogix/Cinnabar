@@ -3,14 +3,11 @@ package graphics.cinnabar.services;
 import com.mojang.logging.LogUtils;
 import cpw.mods.jarhandling.JarContents;
 import cpw.mods.jarhandling.SecureJar;
-import cpw.mods.modlauncher.Launcher;
-import cpw.mods.modlauncher.ModuleLayerHandler;
-import cpw.mods.modlauncher.api.IModuleLayerManager;
 import net.neoforged.fml.loading.FMLEnvironment;
-import net.neoforged.fml.loading.FMLLoader;
 import net.neoforged.fml.loading.moddiscovery.readers.JarModsDotTomlModFileReader;
 import net.neoforged.neoforgespi.ILaunchContext;
 import net.neoforged.neoforgespi.locating.*;
+import org.lwjgl.system.Platform;
 import org.slf4j.Logger;
 
 import java.nio.file.Path;
@@ -51,9 +48,18 @@ public class CinnabarLocator implements IModFileCandidateLocator {
     
     private static void loadLibs(IDiscoveryPipeline pipeline, IModFile parent) {
         try {
+            final var nativesSuffix = "natives-" + switch (Platform.get()) {
+                case LINUX -> "linux";
+                case MACOSX -> "macos";
+                case WINDOWS -> "windows";
+            } + (Platform.getArchitecture() == Platform.Architecture.ARM64 ? "-arm64" : "");
             walk(Path.of(CinnabarLocator.class.getResource("/META-INF/lib/").toURI()), 1).forEach(path -> {
                 final var filename = path.getFileName().toString();
                 if (!filename.endsWith(".jar")) {
+                    return;
+                }
+                if (filename.contains("natives") && !filename.contains(nativesSuffix)) {
+                    // dont load natives for different platforms
                     return;
                 }
                 LOGGER.debug("Loading lib {}", filename);
