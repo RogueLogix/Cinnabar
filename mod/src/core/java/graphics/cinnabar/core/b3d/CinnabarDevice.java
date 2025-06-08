@@ -5,11 +5,14 @@ import com.mojang.blaze3d.pipeline.RenderPipeline;
 import com.mojang.blaze3d.shaders.ShaderType;
 import com.mojang.blaze3d.textures.GpuTexture;
 import com.mojang.blaze3d.textures.TextureFormat;
+import graphics.cinnabar.api.b3dext.systems.ExtCapabilities;
+import graphics.cinnabar.api.b3dext.textures.ExtGpuTexture;
+import graphics.cinnabar.api.b3dext.textures.ExtGpuTextureView;
 import graphics.cinnabar.api.cvk.buffers.CVKGpuBuffer;
 import graphics.cinnabar.api.cvk.pipeline.CVKCompiledRenderPipeline;
 import graphics.cinnabar.api.cvk.systems.CVKGpuDevice;
 import graphics.cinnabar.api.cvk.textures.CVKGpuTexture;
-import graphics.cinnabar.api.cvk.textures.CVKTextureView;
+import graphics.cinnabar.api.cvk.textures.CVKGpuTextureView;
 import graphics.cinnabar.api.util.Destroyable;
 import graphics.cinnabar.api.util.Triple;
 import graphics.cinnabar.core.CinnabarCore;
@@ -339,7 +342,7 @@ public class CinnabarDevice implements CVKGpuDevice {
         list.addAll(commandEncoder.debugStrings());
     }
     
-    // --------- CinnabarGpuDevice ---------
+    // --------- CVKGpuDevice ---------
     
     @Override
     public VkInstance vkInstance() {
@@ -363,7 +366,36 @@ public class CinnabarDevice implements CVKGpuDevice {
         return debugMarkerEnabled;
     }
     
-    // --------- NeoGpuDevice ---------
+    // --------- ExtGpuDevice ---------
+    
+    private static final ExtCapabilities extCapabilities = new ExtCapabilities(true);
+    
+    @Override
+    public ExtCapabilities extCapabilities() {
+        return extCapabilities;
+    }
+    
+    @Override
+    public CVKGpuTexture createTexture(@Nullable String label, int usage, ExtGpuTexture.Type type, TextureFormat format, int width, int height, int depth, int layers, int mips) {
+        if (label == null) {
+            label = "Texture";
+        }
+        final var texture = new CinnabarGpuTexture(this, usage, label, type, format, width, height, depth, layers, mips);
+        commandEncoder.setupTexture(texture);
+        return texture;
+    }
+    
+    @Override
+    public CVKGpuTexture createTexture(@Nullable Supplier<String> label, int usage, ExtGpuTexture.Type type, TextureFormat format, int width, int height, int depth, int layers, int mips) {
+        @Nullable
+        var textureName = label != null && debugMarkerEnabled ? label.get() : null;
+        return createTexture(textureName, usage, type, format, width, height, depth, layers, mips);
+    }
+    
+    @Override
+    public CVKGpuTextureView createTextureView(ExtGpuTexture texture, ExtGpuTexture.Type type, TextureFormat format, int baseMipLevel, int mipLevels, int baseArrayLayer, int layerCount) {
+        return new CinnabarGpuTextureView(this, (CinnabarGpuTexture) texture, type, format, baseMipLevel, mipLevels, baseArrayLayer, layerCount);
+    }
     
     // --------- Vanilla GpuDevice ---------
     
@@ -372,31 +404,6 @@ public class CinnabarDevice implements CVKGpuDevice {
     @Override
     public CinnabarCommandEncoder createCommandEncoder() {
         return commandEncoder;
-    }
-    
-    @Override
-    public CVKGpuTexture createTexture(@Nullable Supplier<String> textureNameSupplier, int usage, TextureFormat format, int width, int height, int depth, int mips) {
-        return createTexture(debugMarkerEnabled && textureNameSupplier != null ? textureNameSupplier.get() : null, usage, format, width, height, depth, mips);
-    }
-    
-    @Override
-    public CVKGpuTexture createTexture(@Nullable String textureName, int usage, TextureFormat format, int width, int height, int depth, int mips) {
-        if (textureName == null) {
-            textureName = "Texture";
-        }
-        final var texture = new CinnabarGpuTexture(this, usage, textureName, format, width, height, depth, mips);
-        commandEncoder.setupTexture(texture);
-        return texture;
-    }
-    
-    @Override
-    public CVKTextureView createTextureView(GpuTexture texture) {
-        return createTextureView(texture, 0, texture.getMipLevels());
-    }
-    
-    @Override
-    public CVKTextureView createTextureView(GpuTexture gpuTexture, int baseMip, int mipLevels) {
-        return new CinnabarGpuTextureView(this, (CinnabarGpuTexture) gpuTexture, baseMip, mipLevels);
     }
     
     @Override

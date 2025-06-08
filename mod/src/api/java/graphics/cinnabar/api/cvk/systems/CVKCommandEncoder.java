@@ -24,7 +24,7 @@ public interface CVKCommandEncoder extends ExtCommandEncoder {
     @Deprecated
     void clearColorAndDepthTextures(GpuTexture colorTexture, int clearColor, GpuTexture depthTexture, double clearDepth, int scissorX, int scissorY, int scissorWidth, int scissorHeight);
     
-    // ---------- Overrides for return time, function unmodified ----------
+    // ---------- Overrides for return type, function unmodified ----------
     
     CVKRenderPass createRenderPass(Supplier<String> debugGroup, GpuTextureView colorAttachment, OptionalInt colorClear);
     

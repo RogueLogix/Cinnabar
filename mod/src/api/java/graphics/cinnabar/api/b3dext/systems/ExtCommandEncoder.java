@@ -60,7 +60,7 @@ public interface ExtCommandEncoder extends CommandEncoder {
         copyBufferToBuffer(src, dst, new BufferCopy(size));
     }
     
-    // ---------- Overrides for return time, function unmodified ----------
+    // ---------- Overrides for return type, function unmodified ----------
     
     ExtRenderPass createRenderPass(Supplier<String> debugGroup, GpuTextureView colorAttachment, OptionalInt colorClear);
     

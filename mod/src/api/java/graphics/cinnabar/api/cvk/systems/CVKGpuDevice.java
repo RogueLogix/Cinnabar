@@ -3,15 +3,15 @@ package graphics.cinnabar.api.cvk.systems;
 import com.mojang.blaze3d.pipeline.RenderPipeline;
 import com.mojang.blaze3d.shaders.ShaderType;
 import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.blaze3d.textures.GpuTexture;
 import com.mojang.blaze3d.textures.TextureFormat;
 import graphics.cinnabar.api.annotations.API;
 import graphics.cinnabar.api.annotations.Internal;
 import graphics.cinnabar.api.b3dext.systems.ExtGpuDevice;
+import graphics.cinnabar.api.b3dext.textures.ExtGpuTexture;
 import graphics.cinnabar.api.cvk.buffers.CVKGpuBuffer;
 import graphics.cinnabar.api.cvk.pipeline.CVKCompiledRenderPipeline;
 import graphics.cinnabar.api.cvk.textures.CVKGpuTexture;
-import graphics.cinnabar.api.cvk.textures.CVKTextureView;
+import graphics.cinnabar.api.cvk.textures.CVKGpuTextureView;
 import graphics.cinnabar.api.util.Destroyable;
 import net.minecraft.resources.ResourceLocation;
 import org.jetbrains.annotations.Nullable;
@@ -44,22 +44,23 @@ public interface CVKGpuDevice extends ExtGpuDevice {
     @Internal
     void endFrame();
     
-    // ---------- Overrides for return time, function unmodified ----------
+    // ---------- Overrides for return type, function unmodified ----------
+    
+    // ----- Ext -----
+    
+    @Override
+    CVKGpuTexture createTexture(@Nullable String label, int usage, ExtGpuTexture.Type type, TextureFormat format, int width, int height, int depth, int layers, int mips);
+    
+    @Override
+    CVKGpuTexture createTexture(@Nullable Supplier<String> label, int usage, ExtGpuTexture.Type type, TextureFormat format, int width, int height, int depth, int layers, int mips);
+    
+    @Override
+    CVKGpuTextureView createTextureView(ExtGpuTexture texture, ExtGpuTexture.Type type, TextureFormat format, int baseMipLevel, int mipLevels, int baseArrayLayer, int layerCount);
+    
+    // ----- Vanilla -----
     
     @Override
     CVKCommandEncoder createCommandEncoder();
-    
-    @Override
-    CVKGpuTexture createTexture(@Nullable Supplier<String> label, int usage, TextureFormat format, int width, int height, int depthOrLayers, int mips);
-    
-    @Override
-    CVKGpuTexture createTexture(@Nullable String label, int usage, TextureFormat format, int width, int height, int depthOrLayers, int mips);
-    
-    @Override
-    CVKTextureView createTextureView(GpuTexture texture);
-    
-    @Override
-    CVKTextureView createTextureView(GpuTexture texture, int baseMipLevel, int mipLevels);
     
     @Override
     CVKGpuBuffer createBuffer(@Nullable Supplier<String> label, int usage, int size);

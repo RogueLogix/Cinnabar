@@ -23,16 +23,20 @@ public class CinnabarGpuTexture extends CVKGpuTexture implements VulkanObject {
     public final long vmaAllocation;
     private int liveViews = 0;
     
-    public CinnabarGpuTexture(CinnabarDevice device, int usage, String label, TextureFormat format, int width, int height, int depth, int mips) {
-        super(usage, label, format, width, height, depth, mips);
+    public CinnabarGpuTexture(CinnabarDevice device, int usage, String label, Type type, TextureFormat format, int width, int height, int depth, int layers, int mips) {
+        super(usage, label, type, format, width, height, depth, layers, mips);
         this.device = device;
         final var cubemap = (usage & USAGE_CUBEMAP_COMPATIBLE) != 0;
         try (final var stack = MemoryStack.stackPush()) {
             final var imageCreateInfo = VkImageCreateInfo.calloc(stack).sType$Default();
-            imageCreateInfo.imageType(VK_IMAGE_TYPE_2D);
-            imageCreateInfo.extent().set(width, height, cubemap ? 1 : depth);
+            imageCreateInfo.imageType(switch (type) {
+                case TYPE_1D, TYPE_1D_ARRAY -> VK_IMAGE_TYPE_1D;
+                case TYPE_2D, TYPE_2D_ARRAY, TYPE_CUBE, TYPE_CUBE_ARRAY -> VK_IMAGE_TYPE_2D;
+                case TYPE_3D -> VK_IMAGE_TYPE_3D;
+            });
+            imageCreateInfo.extent().set(width, height, depth);
             imageCreateInfo.mipLevels(mips);
-            imageCreateInfo.arrayLayers(cubemap ? depth : 1);
+            imageCreateInfo.arrayLayers(layers);
             imageCreateInfo.format(toVk(format));
             imageCreateInfo.tiling(VK_IMAGE_TILING_OPTIMAL);
             imageCreateInfo.initialLayout(VK_IMAGE_LAYOUT_UNDEFINED);
