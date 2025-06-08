@@ -13,9 +13,4 @@ public record UBOBinding(String name, int binding, int size) implements Descript
     public int type() {
         return VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
     }
-    
-    @Override
-    public int count() {
-        return 1;
-    }
 }

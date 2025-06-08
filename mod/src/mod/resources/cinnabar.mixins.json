@@ -10,7 +10,8 @@
     "CachedOrthoProjectionMatrixBufferMixin",
     "RenderSystemMixin",
     "GameRendererMixin",
-    "TimerQueryMixin"
+    "TimerQueryMixin",
+    "ShaderManagerMixin"
   ],
   "injectors": {
     "defaultRequire": 1

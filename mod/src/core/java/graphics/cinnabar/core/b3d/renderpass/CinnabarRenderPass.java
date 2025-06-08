@@ -10,7 +10,7 @@ import graphics.cinnabar.api.cvk.systems.CVKRenderPass;
 import graphics.cinnabar.api.exceptions.NotImplemented;
 import graphics.cinnabar.core.b3d.CinnabarDevice;
 import graphics.cinnabar.core.b3d.buffers.CinnabarGpuBuffer;
-import graphics.cinnabar.core.b3d.pipeline.CinnabarPipeline;
+import graphics.cinnabar.core.b3d.pipeline.CinnabarRenderPipeline;
 import graphics.cinnabar.core.b3d.texture.CinnabarGpuTexture;
 import graphics.cinnabar.core.b3d.texture.CinnabarGpuTextureView;
 import graphics.cinnabar.core.vk.descriptors.*;
@@ -43,7 +43,7 @@ public class CinnabarRenderPass implements CVKRenderPass {
     private final ScissorState scissorState = new ScissorState();
     
     @Nullable
-    private CinnabarPipeline boundPipeline;
+    private CinnabarRenderPipeline boundPipeline;
     
     protected final Map<String, GpuBufferSlice> uniforms = new Object2ObjectOpenHashMap<>();
     protected final Map<String, GpuTextureView> samplers = new Object2ObjectOpenHashMap<>();
@@ -301,7 +301,10 @@ public class CinnabarRenderPass implements CVKRenderPass {
         }
         
         boundPipeline = device.getPipeline(pipeline);
-        vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, boundPipeline.pipelineHandle);
+        if (!boundPipeline.isValid()) {
+            throw new IllegalStateException("Attempt to bind invalid pipeline");
+        }
+        vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, boundPipeline.pipelineHandle());
         
     }
     
@@ -382,9 +385,9 @@ public class CinnabarRenderPass implements CVKRenderPass {
         
         final var allowIncrementalUpdate = !device.workarounds.allowIncrementalDescriptorPush;
         
-        for (int i = 0; i < boundPipeline.shaderSet.descriptorSetLayouts.size(); i++) {
-            for (DescriptorSetBinding binding : boundPipeline.shaderSet.descriptorSetLayouts.get(i).bindings) {
-                if (binding instanceof UBOBinding(String name, int bindingPoint, int size)) {
+        for (DescriptorSetBinding binding : boundPipeline.descriptorSetLayout().bindings) {
+            switch (binding) {
+                case UBOBinding(String name, int bindingPoint, int size) -> {
                     if (allowIncrementalUpdate && !dirtyUniforms.remove(name)) {
                         continue;
                     }
@@ -410,7 +413,8 @@ public class CinnabarRenderPass implements CVKRenderPass {
                     
                     descriptorWrites.position(descriptorWrites.position() + 1);
                     descriptorBufferInfos.position(descriptorBufferInfos.position() + 1);
-                } else if (binding instanceof SSBOBinding(String name, int bindingPoint, int arrayStride)) {
+                }
+                case SSBOBinding(String name, int bindingPoint, int arrayStride) -> {
                     if (allowIncrementalUpdate && !dirtyUniforms.remove(name)) {
                         continue;
                     }
@@ -436,7 +440,8 @@ public class CinnabarRenderPass implements CVKRenderPass {
                     
                     descriptorWrites.position(descriptorWrites.position() + 1);
                     descriptorBufferInfos.position(descriptorBufferInfos.position() + 1);
-                } else if (binding instanceof TexelBufferBinding(String name, int bindingPoint, int format)) {
+                }
+                case TexelBufferBinding(String name, int bindingPoint, int format) -> {
                     if (allowIncrementalUpdate && !dirtyUniforms.remove(name)) {
                         continue;
                     }
@@ -475,7 +480,8 @@ public class CinnabarRenderPass implements CVKRenderPass {
                     
                     descriptorWrites.position(descriptorWrites.position() + 1);
                     descriptorBufferInfos.position(descriptorBufferInfos.position() + 1);
-                } else if (binding instanceof SamplerBinding(String name, int bindingPoint)) {
+                }
+                case SamplerBinding(String name, int bindingPoint) -> {
                     if (allowIncrementalUpdate && !dirtySamplers.remove(name)) {
                         continue;
                     }
@@ -499,19 +505,21 @@ public class CinnabarRenderPass implements CVKRenderPass {
                     descriptorWrites.position(descriptorWrites.position() + 1);
                     descriptorSamplerInfos.position(descriptorSamplerInfos.position() + 1);
                 }
+                default -> {
+                }
             }
-            if (descriptorWrites.position() != 0) {
-                descriptorWrites.limit(descriptorWrites.position());
-                descriptorWrites.position(0);
-                vkCmdPushDescriptorSetKHR(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, boundPipeline.shaderSet.pipelineLayout, i, descriptorWrites);
-            }
-            descriptorWrites.position(0);
-            descriptorBufferInfos.position(0);
-            descriptorSamplerInfos.position(0);
-            descriptorWrites.limit(descriptorWrites.capacity());
-            descriptorBufferInfos.limit(descriptorBufferInfos.capacity());
-            descriptorSamplerInfos.limit(descriptorSamplerInfos.capacity());
         }
+        if (descriptorWrites.position() != 0) {
+            descriptorWrites.limit(descriptorWrites.position());
+            descriptorWrites.position(0);
+            vkCmdPushDescriptorSetKHR(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, boundPipeline.pipelineLayout(), 0, descriptorWrites);
+        }
+        descriptorWrites.position(0);
+        descriptorBufferInfos.position(0);
+        descriptorSamplerInfos.position(0);
+        descriptorWrites.limit(descriptorWrites.capacity());
+        descriptorBufferInfos.limit(descriptorBufferInfos.capacity());
+        descriptorSamplerInfos.limit(descriptorSamplerInfos.capacity());
         
         dirtySamplers.clear();
         dirtyUniforms.clear();
@@ -531,21 +539,12 @@ public class CinnabarRenderPass implements CVKRenderPass {
         if (dynamicUniforms.size() == 1) {
             final var dynamicUniformName = dynamicUniforms.stream().findFirst().get();
             boolean isSSBO = false;
-            for (int i = 0; i < boundPipeline.shaderSet.descriptorSetLayouts.size(); i++) {
-                for (DescriptorSetBinding binding : boundPipeline.shaderSet.descriptorSetLayouts.get(i).bindings) {
-                    if (binding instanceof SSBOBinding(String name, int bindingPoint, int size) && name.equals(dynamicUniformName)) {
-                        isSSBO = true;
-                        break;
-                    }
-                }
-                if (isSSBO) {
-                    break;
+            for (DescriptorSetBinding binding : boundPipeline.descriptorSetLayout().bindings) {
+                if (binding instanceof SSBOBinding(String name, int bindingPoint, int size) && name.equals(dynamicUniformName)) {
+                    fastDrawMultipleIndexed(draws, indexBuffer, indexType, dynamicUniforms, userData);
+                    return;
                 }
             }
-            if (isSSBO) {
-                fastDrawMultipleIndexed(draws, indexBuffer, indexType, dynamicUniforms, userData);
-            }
-            return;
         }
         
         @Nullable
@@ -584,17 +583,10 @@ public class CinnabarRenderPass implements CVKRenderPass {
         assert !draws.isEmpty();
         assert boundPipeline != null;
         
-        boolean isSSBO = false;
         int ssboArrayStride = 0;
-        for (int i = 0; i < boundPipeline.shaderSet.descriptorSetLayouts.size(); i++) {
-            for (DescriptorSetBinding binding : boundPipeline.shaderSet.descriptorSetLayouts.get(i).bindings) {
-                if (binding instanceof SSBOBinding(String name, int bindingPoint, int arrayStride) && name.equals(dynamicUniformName)) {
-                    isSSBO = true;
-                    ssboArrayStride = arrayStride;
-                    break;
-                }
-            }
-            if (isSSBO) {
+        for (DescriptorSetBinding binding : boundPipeline.descriptorSetLayout().bindings) {
+            if (binding instanceof SSBOBinding(String name, int bindingPoint, int arrayStride) && name.equals(dynamicUniformName)) {
+                ssboArrayStride = arrayStride;
                 break;
             }
         }

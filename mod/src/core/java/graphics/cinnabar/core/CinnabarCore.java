@@ -3,11 +3,16 @@ package graphics.cinnabar.core;
 import com.mojang.logging.LogUtils;
 import graphics.cinnabar.api.annotations.CinnabarRedirectIMPL;
 import graphics.cinnabar.core.b3d.CinnabarDevice;
+import graphics.cinnabar.lib.CinnabarLibBootstrapper;
 import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 
 public class CinnabarCore {
     public static final Logger CINNABAR_CORE_LOG = LogUtils.getLogger();
+    
+    static {
+        CinnabarLibBootstrapper.bootstrap();
+    }
     
     @Nullable
     public static CinnabarDevice cinnabarDeviceSingleton;

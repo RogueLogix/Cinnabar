@@ -19,7 +19,7 @@ import graphics.cinnabar.core.DriverWorkarounds;
 import graphics.cinnabar.core.b3d.buffers.BufferPool;
 import graphics.cinnabar.core.b3d.buffers.CinnabarIndividualGpuBuffer;
 import graphics.cinnabar.core.b3d.command.CinnabarCommandEncoder;
-import graphics.cinnabar.core.b3d.pipeline.CinnabarPipeline;
+import graphics.cinnabar.core.b3d.pipeline.CinnabarRenderPipeline;
 import graphics.cinnabar.core.b3d.texture.CinnabarGpuTexture;
 import graphics.cinnabar.core.b3d.texture.CinnabarGpuTextureView;
 import graphics.cinnabar.core.b3d.window.CinnabarWindow;
@@ -465,7 +465,7 @@ public class CinnabarDevice implements CVKGpuDevice {
         return physicalDeviceProperties.limits().maxImageDimension2D();
     }
     
-    private final Map<RenderPipeline, CinnabarPipeline> pipelineCache = new IdentityHashMap<>();
+    private final Map<RenderPipeline, CinnabarRenderPipeline> pipelineCache = new IdentityHashMap<>();
     
     @Override
     public CVKCompiledRenderPipeline precompilePipeline(RenderPipeline renderPipeline, @Nullable BiFunction<ResourceLocation, ShaderType, String> shaderSourceProvider) {
@@ -477,19 +477,20 @@ public class CinnabarDevice implements CVKGpuDevice {
         return Math.toIntExact(limits.minUniformBufferOffsetAlignment());
     }
     
-    public CinnabarPipeline getPipeline(RenderPipeline renderPipeline) {
+    public CinnabarRenderPipeline getPipeline(RenderPipeline renderPipeline) {
         return getPipeline(renderPipeline, null);
     }
     
-    public CinnabarPipeline getPipeline(RenderPipeline renderPipeline, @Nullable BiFunction<ResourceLocation, ShaderType, String> shaderSourceProvider) {
+    public CinnabarRenderPipeline getPipeline(RenderPipeline renderPipeline, @Nullable BiFunction<ResourceLocation, ShaderType, String> shaderSourceProvider) {
         assert renderPipeline instanceof ExtRenderPipeline;
-        return pipelineCache.computeIfAbsent(renderPipeline, __ -> new CinnabarPipeline(this, shaderSourceProvider == null ? this.shaderSourceProvider : shaderSourceProvider, (ExtRenderPipeline) renderPipeline));
+        return pipelineCache.computeIfAbsent(renderPipeline, __ -> new CinnabarRenderPipeline(this, (ExtRenderPipeline) renderPipeline, shaderSourceProvider == null ? this.shaderSourceProvider : shaderSourceProvider));
     }
     
     @Override
     public void clearPipelineCache() {
         vkDeviceWaitIdle(vkDevice);
-        pipelineCache.values().forEach(CinnabarPipeline::destroy);
+        CinnabarRenderPipeline.clearSourceCache();
+        pipelineCache.values().forEach(Destroyable::destroy);
         pipelineCache.clear();
     }
     

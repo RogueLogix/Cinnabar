@@ -13,9 +13,4 @@ public record SSBOBinding(String name, int binding, int arrayStride) implements 
     public int type() {
         return VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
     }
-    
-    @Override
-    public int count() {
-        return 1;
-    }
 }
