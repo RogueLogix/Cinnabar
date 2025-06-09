@@ -9,6 +9,10 @@ import static org.lwjgl.vulkan.VK10.VK_SHADER_STAGE_VERTEX_BIT;
 public interface DescriptorSetBinding {
     @Constant
     @ThreadSafety.Many
+    String name();
+    
+    @Constant
+    @ThreadSafety.Many
     int bindingPoint();
     
     @Constant

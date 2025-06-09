@@ -489,7 +489,7 @@ public class CinnabarDevice implements CVKGpuDevice {
     @Override
     public void clearPipelineCache() {
         vkDeviceWaitIdle(vkDevice);
-        CinnabarRenderPipeline.clearSourceCache();
+//        CinnabarRenderPipeline.clearSourceCache();
         pipelineCache.values().forEach(Destroyable::destroy);
         pipelineCache.clear();
     }

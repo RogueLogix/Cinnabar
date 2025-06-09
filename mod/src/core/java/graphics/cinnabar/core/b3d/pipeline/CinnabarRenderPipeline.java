@@ -7,6 +7,7 @@ import com.mojang.blaze3d.platform.LogicOp;
 import com.mojang.blaze3d.platform.SourceFactor;
 import com.mojang.blaze3d.preprocessor.GlslPreprocessor;
 import com.mojang.blaze3d.shaders.ShaderType;
+import com.mojang.blaze3d.shaders.UniformType;
 import com.mojang.blaze3d.vertex.VertexFormat;
 import com.mojang.blaze3d.vertex.VertexFormatElement;
 import graphics.cinnabar.api.b3dext.pipeline.ExtRenderPipeline;
@@ -98,10 +99,12 @@ public class CinnabarRenderPipeline implements CVKCompiledRenderPipeline, Destro
     
     @Override
     public boolean isValid() {
-        try {
-            builtPipeline.get();
-        } catch (InterruptedException | ExecutionException e) {
-            throw new RuntimeException(e);
+        if(builtPipeline.state() == Future.State.RUNNING) {
+            try {
+                builtPipeline.get();
+            } catch (InterruptedException | ExecutionException e) {
+                CINNABAR_CORE_LOG.error(e.getCause().toString());
+            }
         }
         return builtPipeline.state() == Future.State.SUCCESS;
     }
@@ -299,23 +302,38 @@ public class CinnabarRenderPipeline implements CVKCompiledRenderPipeline, Destro
                                 case SPVC_RESOURCE_TYPE_UNIFORM_BUFFER -> {
                                     final var type = spvc_compiler_get_type_handle(resource.leftLong(), resource.right().type_id());
                                     spvc_compiler_get_declared_struct_size(resource.leftLong(), type, ptrReturn);
+                                    // TODO: fix the pipelines, for now, these are always bound by RenderSystem.bindDefaultUniforms 
+                                    if (!"Projection".equals(resourceName) && !"Fog".equals(resourceName) && !"Globals".equals(resourceName) && !"Lighting".equals(resourceName)
+                                                && pipeline.getUniforms().stream().noneMatch(uniformDescription -> uniformDescription.type() == UniformType.UNIFORM_BUFFER && uniformDescription.name().equals(resourceName))) {
+                                        throw new IllegalArgumentException(String.format("UBO (%s) found in shader without matching definition in pipeline %s", resourceName, pipelineName));
+                                    }
                                     yield new UBOBinding(resourceName, bindingLocation, Math.toIntExact(ptrReturn.get(0)));
                                 }
                                 case SPVC_RESOURCE_TYPE_STORAGE_BUFFER -> {
                                     final var type = spvc_compiler_get_type_handle(resource.leftLong(), resource.right().type_id());
                                     spvc_compiler_type_struct_member_array_stride(resource.leftLong(), type, 0, intReturn);
+                                    if (pipeline.getUniforms().stream().noneMatch(uniformDescription -> uniformDescription.type() == UniformType.UNIFORM_BUFFER && uniformDescription.name().equals(resourceName))) {
+                                        throw new IllegalArgumentException(String.format("SSBO (%s) found in shader without matching definition in pipeline %s", resourceName, pipelineName));
+                                    }
                                     yield new SSBOBinding(resourceName, bindingLocation, intReturn.get(0));
                                 }
-                                case SPVC_RESOURCE_TYPE_SEPARATE_IMAGE -> new TexelBufferBinding(resourceName, bindingLocation, CinnabarGpuTexture.toVk(Objects.requireNonNull(uniformDescriptions.get(resourceName).textureFormat())));
-                                case SPVC_RESOURCE_TYPE_SAMPLED_IMAGE -> new SamplerBinding(resourceName, bindingLocation);
+                                case SPVC_RESOURCE_TYPE_SEPARATE_IMAGE -> {
+                                    if (pipeline.getUniforms().stream().noneMatch(uniformDescription -> uniformDescription.type() == UniformType.TEXEL_BUFFER && uniformDescription.name().equals(resourceName))) {
+                                        throw new IllegalArgumentException(String.format("UTB (%s) found in shader without matching definition in pipeline %s", resourceName, pipelineName));
+                                    }
+                                    yield new TexelBufferBinding(resourceName, bindingLocation, CinnabarGpuTexture.toVk(Objects.requireNonNull(uniformDescriptions.get(resourceName).textureFormat())));
+                                }
+                                case SPVC_RESOURCE_TYPE_SAMPLED_IMAGE -> {
+                                    if (pipeline.getSamplers().stream().noneMatch(samplerName -> samplerName.equals(resourceName))) {
+                                        throw new IllegalArgumentException(String.format("Sampler (%s) found in shader without matching definition in pipeline %s", resourceName, pipelineName));
+                                    }
+                                    yield new SamplerBinding(resourceName, bindingLocation);
+                                }
                                 default -> throw new IllegalStateException("Unexpected value: " + resourceType);
                             }
                     );
                 }
             }
-            // TODO: validate that what the pipeline expects is what the shader actually has 
-            //       defining something the shader doesn't use is fine
-            //       the shader requiring something the pipeline doesn't have, isn't
         } finally {
             if (spvcContext != 0) {
                 spvc_context_destroy(spvcContext);
