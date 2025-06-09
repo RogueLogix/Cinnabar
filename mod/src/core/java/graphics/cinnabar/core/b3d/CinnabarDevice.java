@@ -285,7 +285,7 @@ public class CinnabarDevice implements CVKGpuDevice {
         return destroyable;
     }
     
-    public <T extends Destroyable> T destroyOnShutdown(T destroyable) {
+    public synchronized <T extends Destroyable> T destroyOnShutdown(T destroyable) {
         shutdownDestroy.add(destroyable);
         return destroyable;
     }
