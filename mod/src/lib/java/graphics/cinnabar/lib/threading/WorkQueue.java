@@ -128,6 +128,7 @@ public abstract class WorkQueue implements IWorkQueue {
                 final var thread = new Thread(this::threadFunc);
                 thread.setUncaughtExceptionHandler(handler);
                 thread.setDaemon(true);
+                thread.setName("CinnabarWorker" + i);
                 thread.start();
                 threads[i] = thread;
             }
