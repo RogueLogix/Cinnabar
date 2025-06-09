@@ -119,6 +119,16 @@ public class CinnabarRenderPipeline implements CVKCompiledRenderPipeline, Destro
     }
     
     private static BuiltPipeline buildPipeline(CinnabarDevice device, ExtRenderPipeline pipeline, String vertexSource, String fragmentSource) {
+        
+        // TODO: remove this when the shader gets fixed
+        if ("minecraft:core/entity".equals(pipeline.getVertexShader().toString())) {
+            vertexSource = vertexSource.replace("overlayColor = texelFetch(Sampler1, UV1, 0);", """
+                        #ifndef NO_OVERLAY
+                        overlayColor = texelFetch(Sampler1, UV1, 0);
+                        #endif
+                    """);
+        }
+        
         final var glVertexGLSL = GlslPreprocessor.injectDefines(vertexSource, pipeline.getShaderDefines());
         final var glFragmentGLSL = GlslPreprocessor.injectDefines(fragmentSource, pipeline.getShaderDefines());
         
@@ -303,6 +313,9 @@ public class CinnabarRenderPipeline implements CVKCompiledRenderPipeline, Destro
                     );
                 }
             }
+            // TODO: validate that what the pipeline expects is what the shader actually has 
+            //       defining something the shader doesn't use is fine
+            //       the shader requiring something the pipeline doesn't have, isn't
         } finally {
             if (spvcContext != 0) {
                 spvc_context_destroy(spvcContext);
