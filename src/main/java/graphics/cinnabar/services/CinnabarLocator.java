@@ -3,6 +3,8 @@ package graphics.cinnabar.services;
 import com.mojang.logging.LogUtils;
 import cpw.mods.jarhandling.JarContents;
 import cpw.mods.jarhandling.SecureJar;
+import net.neoforged.fml.ModLoadingException;
+
 import net.neoforged.fml.loading.FMLEnvironment;
 import net.neoforged.fml.loading.moddiscovery.readers.JarModsDotTomlModFileReader;
 import net.neoforged.neoforgespi.ILaunchContext;
@@ -23,16 +25,21 @@ public class CinnabarLocator implements IModFileCandidateLocator {
     
     @Override
     public void findCandidates(ILaunchContext context, IDiscoveryPipeline pipeline) {
-        if (!FMLEnvironment.production) {
-            LOGGER.warn("Skipping locating Cinnabar and libs in dev environment");
-            return;
-        }
         if (!FMLEnvironment.dist.isClient()) {
             LOGGER.info("Skipping locating Cinnabar and libs on non-client environment");
             return;
         }
         try {
-            walk(Path.of(CinnabarLocator.class.getResource("/META-INF/mod/").toURI()), 1).forEach(path -> {
+            final var resource = CinnabarLocator.class.getResource("/META-INF/modjar/");
+            if (resource == null) {
+                if (!FMLEnvironment.production) {
+                    // this is fine, probably means in my own dev environment
+                    return;
+                } else {
+                    throw new ModFileLoadingException("Unable to locate Cinnabar mod files");
+                }
+            }
+            walk(Path.of(resource.toURI()), 1).forEach(path -> {
                 final var filename = path.getFileName().toString();
                 if (!filename.endsWith(".jar")) {
                     return;
@@ -43,6 +50,10 @@ public class CinnabarLocator implements IModFileCandidateLocator {
             });
         } catch (Exception e) {
             LOGGER.error("Fatal error encountered locating Cinnabar jars", e);
+            if (e instanceof ModFileLoadingException loadingException) {
+                throw loadingException;
+            }
+            throw new ModFileLoadingException(e.getMessage());
         }
     }
     
@@ -52,13 +63,13 @@ public class CinnabarLocator implements IModFileCandidateLocator {
                 case LINUX -> "linux";
                 case MACOSX -> "macos";
                 case WINDOWS -> "windows";
-            } + (Platform.getArchitecture() == Platform.Architecture.ARM64 ? "-arm64" : "");
+            } + (Platform.getArchitecture() == Platform.Architecture.ARM64 ? "-arm64" : "") + ".jar";
             walk(Path.of(CinnabarLocator.class.getResource("/META-INF/lib/").toURI()), 1).forEach(path -> {
                 final var filename = path.getFileName().toString();
                 if (!filename.endsWith(".jar")) {
                     return;
                 }
-                if (filename.contains("natives") && !filename.contains(nativesSuffix)) {
+                if (filename.contains("natives") && !filename.endsWith(nativesSuffix)) {
                     // dont load natives for different platforms
                     return;
                 }

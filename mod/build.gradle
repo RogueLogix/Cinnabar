@@ -13,16 +13,9 @@ configurations {
     }
 }
 
-version = mod_version
-group = mod_group_id
-
 repositories {
     mavenLocal()
     mavenCentral()
-    maven {
-        name = "TauMC"
-        url = "https://maven.taumc.org/releases"
-    }
     maven {
         name 'Maven for PR #2297' // https://github.com/neoforged/NeoForge/pull/2297
         url 'https://prmaven.neoforged.net/NeoForge/pr2297'
@@ -178,9 +171,6 @@ dependencies {
     for (lib in getParent().property("modLibsToAdd")) {
         implementation(lib)
     }
-
-    implementation("org.anarres:jcpp:1.4.14")
-    implementation("org.taumc:glsl-transformation-lib:0.2.0-20.ge3cb096")
 }
 
 // This block of code expands all declared replace properties in the specified resource targets.
@@ -242,13 +232,24 @@ idea {
     }
 }
 
+tasks.register('apiJar', Jar).configure { Jar jar1 ->
+    jar1.duplicatesStrategy(DuplicatesStrategy.FAIL)
+    jar1.archiveBaseName = "$mod_id-$minecraft_version"
+    jar1.archiveClassifier = "api"
+    jar1.from([
+            sourceSets.api.output,
+            sourceSets.api.allJava
+    ])
+}
 
 tasks.named('jar', Jar).configure { Jar jar ->
+    dependsOn(apiJar)
     jar.duplicatesStrategy(DuplicatesStrategy.FAIL)
     jar.from([
             sourceSets.api.output,
             sourceSets.lib.output,
             sourceSets.mclib.output,
             sourceSets.core.output,
-            sourceSets.main.output])
+            sourceSets.main.output,
+    ])
 }
