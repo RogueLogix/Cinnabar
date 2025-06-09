@@ -55,7 +55,7 @@ public class CinnabarWindow extends Window {
         swapchain.acquire();
     }
     
-    public void detachDevice(){
+    public void detachDevice() {
         assert swapchain != null;
         swapchain.destroy();
         vkDestroySurfaceKHR(device.vkInstance, surface, null);
@@ -88,18 +88,29 @@ public class CinnabarWindow extends Window {
         }
         
         if (shouldRecreateSwapchain) {
-            final var newSwapchain = new CinnabarSwapchain(device, surface, this.vsync, getWidth(), getHeight(), swapchain.handle());
-            swapchain.destroy(); // delayed destroy?
-            swapchain = newSwapchain;
+            recreateSwapchain();
         }
         
-        swapchain.acquire();
+        while (!swapchain.acquire()) {
+            // if the swapchain failed to acquire here, 
+            refreshFramebufferSize();
+            recreateSwapchain();
+        }
+        
         RenderSystem.getDynamicUniforms().reset();
         Minecraft.getInstance().levelRenderer.endFrame();
         RenderSystem.pollEvents();
     }
     
+    private void recreateSwapchain() {
+        assert swapchain != null;
+        final var newSwapchain = new CinnabarSwapchain(device, surface, this.vsync, getWidth(), getHeight(), swapchain.handle());
+        swapchain.destroy(); // delayed destroy?
+        swapchain = newSwapchain;
+    }
+    
     public CinnabarSwapchain swapchain() {
+        assert swapchain != null;
         return swapchain;
     }
 }

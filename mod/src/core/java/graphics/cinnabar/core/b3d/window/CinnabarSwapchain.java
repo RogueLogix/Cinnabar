@@ -149,12 +149,14 @@ public class CinnabarSwapchain implements VulkanObject {
             // at that point, the semaphore is reset, and i can put it back into the list of free semaphores
             int code = vkAcquireNextImageKHR(device.vkDevice, swapchainHandle, Long.MAX_VALUE, nextSemaphore, VK_NULL_HANDLE, frameIndexPtr);
             currentImageIndex = frameIndexPtr.get(0);
-            if (acquirePresentSemaphores[currentImageIndex] != VK_NULL_HANDLE) {
-                freeSemaphores.push(acquirePresentSemaphores[currentImageIndex]);
+            if(currentImageIndex != -1) {
+                if (acquirePresentSemaphores[currentImageIndex] != VK_NULL_HANDLE) {
+                    freeSemaphores.push(acquirePresentSemaphores[currentImageIndex]);
+                }
+                acquirePresentSemaphores[currentImageIndex] = nextSemaphore;
             }
-            acquirePresentSemaphores[currentImageIndex] = nextSemaphore;
             checkVkCode(code);
-            return code != VK_SUBOPTIMAL_KHR;
+            return code == VK_SUCCESS;
         }
     }
     
@@ -174,7 +176,7 @@ public class CinnabarSwapchain implements VulkanObject {
                 code = vkQueuePresentKHR(device.graphicsQueue, presentInfo);
             }
             checkVkCode(code);
-            return code != VK_SUBOPTIMAL_KHR;
+            return code == VK_SUCCESS;
         }
     }
     
