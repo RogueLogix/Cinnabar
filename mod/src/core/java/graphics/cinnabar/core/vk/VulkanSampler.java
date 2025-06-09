@@ -1,10 +1,8 @@
 package graphics.cinnabar.core.vk;
 
-import graphics.cinnabar.api.cvk.systems.CVKGpuDevice;
 import graphics.cinnabar.api.annotations.NotNullDefault;
+import graphics.cinnabar.api.cvk.systems.CVKGpuDevice;
 import it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap;
-import it.unimi.dsi.fastutil.objects.ObjectArrayList;
-import org.jetbrains.annotations.Nullable;
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.vulkan.VkDevice;
 import org.lwjgl.vulkan.VkSamplerCreateInfo;
@@ -38,13 +36,7 @@ public class VulkanSampler {
         createInfo.unnormalizedCoordinates(false);
     }
     
-    private static final Object2ObjectOpenHashMap<SamplerInfo, VulkanSampler> samplers = new Object2ObjectOpenHashMap<>();
-    
-    public static final VulkanSampler DEFAULT = new VulkanSampler(new SamplerInfo(false, true, VK_SAMPLER_ADDRESS_MODE_REPEAT, 0));
-    
-    static {
-        samplers.put(DEFAULT.samplerInfo, DEFAULT);
-    }
+    private static final Object2ObjectOpenHashMap<State, VulkanSampler> samplers = new Object2ObjectOpenHashMap<>();
     
     public static void startup() {
     }
@@ -56,19 +48,18 @@ public class VulkanSampler {
     
     public final long vulkanHandle;
     
-    private record SamplerInfo(boolean minMagLinear, boolean mipmap, int edgeMode, int lodBias) {
+    public record State(int minFilter, int magFilter, boolean mipmap, int edgeModeU, int edgeModeV, int lodBias) {
+        public VulkanSampler sampler() {
+            return samplers.computeIfAbsent(this, VulkanSampler::new);
+        }
     }
     
-    private final SamplerInfo samplerInfo;
-    
-    private VulkanSampler(SamplerInfo samplerInfo) {
-        this.samplerInfo = samplerInfo;
-        
-        createInfo.magFilter(samplerInfo.minMagLinear ? VK_FILTER_LINEAR : VK_FILTER_NEAREST);
-        createInfo.minFilter(samplerInfo.minMagLinear ? VK_FILTER_LINEAR : VK_FILTER_NEAREST);
+    private VulkanSampler(State samplerInfo) {
+        createInfo.magFilter(samplerInfo.minFilter);
+        createInfo.minFilter(samplerInfo.magFilter);
         createInfo.mipmapMode(VK_SAMPLER_MIPMAP_MODE_LINEAR);
-        createInfo.addressModeU(samplerInfo.edgeMode);
-        createInfo.addressModeV(samplerInfo.edgeMode);
+        createInfo.addressModeU(samplerInfo.edgeModeU);
+        createInfo.addressModeV(samplerInfo.edgeModeV);
         createInfo.mipLodBias(samplerInfo.lodBias);
         createInfo.maxLod(samplerInfo.mipmap ? VK_LOD_CLAMP_NONE : 0.0f);
         try (final var stack = MemoryStack.stackPush()) {
@@ -76,69 +67,5 @@ public class VulkanSampler {
             vkCreateSampler(device, createInfo, null, longPtr);
             vulkanHandle = longPtr.get(0);
         }
-    }
-    
-    @Nullable
-    private VulkanSampler minMagOpposite;
-    
-    public VulkanSampler withMinMagLinear(boolean linear) {
-        if (linear == samplerInfo.minMagLinear) {
-            return this;
-        }
-        if (minMagOpposite == null) {
-            final var newSamplerInfo = new SamplerInfo(linear, samplerInfo.mipmap, samplerInfo.edgeMode, samplerInfo.lodBias);
-            var sampler = samplers.get(newSamplerInfo);
-            if (sampler == null) {
-                sampler = new VulkanSampler(newSamplerInfo);
-                samplers.put(newSamplerInfo, sampler);
-            }
-            minMagOpposite = sampler;
-        }
-        return minMagOpposite;
-    }
-    
-    @Nullable
-    private VulkanSampler mipmapOpposite;
-    
-    public VulkanSampler withMipmap(boolean mipmap) {
-        if (mipmap == samplerInfo.mipmap) {
-            return this;
-        }
-        if (mipmapOpposite == null) {
-            final var newSamplerInfo = new SamplerInfo(samplerInfo.minMagLinear, mipmap, samplerInfo.edgeMode, samplerInfo.lodBias);
-            var sampler = samplers.get(newSamplerInfo);
-            if (sampler == null) {
-                sampler = new VulkanSampler(newSamplerInfo);
-                samplers.put(newSamplerInfo, sampler);
-            }
-            mipmapOpposite = sampler;
-        }
-        return mipmapOpposite;
-    }
-    
-    private final ObjectArrayList<VulkanSampler> edgeModes = new ObjectArrayList<>();
-    {
-        edgeModes.size(3);
-    }
-    
-    public VulkanSampler withEdgeMode(int edgeMode) {
-        if (edgeMode == samplerInfo.edgeMode) {
-            return this;
-        }
-        if(edgeMode < 0 || edgeMode > VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE){
-            throw new IllegalArgumentException("Unsupported edge mode");
-        }
-        var newEdgeModeSampler = edgeModes.get(edgeMode);
-        if (newEdgeModeSampler == null) {
-            final var newSamplerInfo = new SamplerInfo(samplerInfo.minMagLinear, samplerInfo.mipmap, edgeMode, samplerInfo.lodBias);
-            var sampler = samplers.get(newSamplerInfo);
-            if (sampler == null) {
-                sampler = new VulkanSampler(newSamplerInfo);
-                samplers.put(newSamplerInfo, sampler);
-                edgeModes.set(edgeMode, sampler);
-            }
-            newEdgeModeSampler = sampler;
-        }
-        return newEdgeModeSampler;
     }
 }

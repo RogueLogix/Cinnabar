@@ -9,7 +9,6 @@ import org.lwjgl.system.MemoryStack;
 import org.lwjgl.util.vma.VmaAllocationCreateInfo;
 import org.lwjgl.vulkan.VkImageCreateInfo;
 
-import static com.mojang.blaze3d.textures.FilterMode.LINEAR;
 import static graphics.cinnabar.api.exceptions.VkException.checkVkCode;
 import static org.lwjgl.util.vma.Vma.vmaCreateImage;
 import static org.lwjgl.util.vma.Vma.vmaDestroyImage;
@@ -46,7 +45,7 @@ public class CinnabarGpuTexture extends CVKGpuTexture implements VulkanObject {
             imageCreateInfo.flags(cubemap ? VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT : 0);
             
             final var allocCreateInfo = VmaAllocationCreateInfo.calloc(stack);
-            allocCreateInfo.memoryTypeBits( 1 << device.deviceMemoryType.leftInt());
+            allocCreateInfo.memoryTypeBits(1 << device.deviceMemoryType.leftInt());
             final var imagePtr = stack.callocLong(1);
             final var allocationPtr = stack.callocPointer(1);
             checkVkCode(vmaCreateImage(device.vmaAllocator, imageCreateInfo, allocCreateInfo, imagePtr, allocationPtr, null));
@@ -78,11 +77,7 @@ public class CinnabarGpuTexture extends CVKGpuTexture implements VulkanObject {
     }
     
     public VulkanSampler sampler() {
-        // TODO: split U/V edge mode
-        return VulkanSampler.DEFAULT.withEdgeMode(switch (this.addressModeU) {
-            case REPEAT -> VK_SAMPLER_ADDRESS_MODE_REPEAT;
-            case CLAMP_TO_EDGE -> VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-        }).withMipmap(this.useMipmaps).withMinMagLinear(this.minFilter == LINEAR);
+        return new VulkanSampler.State(minFilter.ordinal(), magFilter.ordinal(), useMipmaps, addressModeU.ordinal() * 2, addressModeV.ordinal() * 2, 0).sampler();
     }
     
     public static int toVk(TextureFormat format) {
