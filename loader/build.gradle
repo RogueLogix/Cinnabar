@@ -1,0 +1,59 @@
+plugins {
+    id 'java-library'
+    id 'idea'
+}
+
+allprojects {
+    version = mod_version + (release_type != "release" ? "-$release_type" : "")
+    group = mod_group_id
+}
+
+base {
+    archivesName = "$mod_id-$minecraft_version"
+}
+
+repositories {
+    maven { url "https://maven.neoforged.net/releases" }
+    maven { url "https://libraries.minecraft.net/" }
+    mavenCentral()
+}
+
+configurations {
+    jijMod {}
+    jijLib {}
+    fullJar {}
+}
+
+dependencies {
+    compileOnly("net.neoforged.fancymodloader:loader:$fml_version")
+    compileOnly("cpw.mods:securejarhandler:3.0.8")
+    compileOnly("org.jetbrains:annotations:24.1.0")
+    compileOnly("org.lwjgl:lwjgl-glfw:3.3.3")
+    compileOnly("org.lwjgl:lwjgl-tinyfd:3.3.3")
+    compileOnly("net.sf.jopt-simple:jopt-simple:5.0.4")
+    for (lib in getParent().property("loaderLibsToPack")) {
+        jijLib((String)lib)
+    }
+    jijMod(project(path: ":", configuration: "builtModJar"))
+}
+
+jar {
+    manifest {
+        attributes["FMLModType"] = "LIBRARY"
+        attributes["Automatic-Module-Name"] = "cinnabar_locator"
+    }
+    into("META-INF/modjar") {
+        from(configurations.jijMod)
+    }
+    into("META-INF/lib") {
+        from(configurations.jijLib) {
+            exclude("lwjgl-3.3.3.jar")
+        }
+    }
+}
+
+artifacts {
+    fullJar(tasks.jar.archiveFile) {
+        builtBy(jar)
+    }
+}

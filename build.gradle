@@ -2,9 +2,11 @@ import net.darkhax.curseforgegradle.TaskPublishCurseForge
 
 plugins {
     id 'java-library'
-    id 'idea'
+    id 'maven-publish'
+    id 'net.neoforged.moddev' version '1.0.21'
     id("net.darkhax.curseforgegradle") version "1.1.26"
 }
+
 
 allprojects {
     version = mod_version + (release_type != "release" ? "-$release_type" : "")
@@ -13,20 +15,6 @@ allprojects {
 
 base {
     archivesName = "$mod_id-$minecraft_version"
-}
-
-repositories {
-    maven { url "https://maven.neoforged.net/releases" }
-    maven { url "https://libraries.minecraft.net/" }
-    mavenCentral()
-}
-
-configurations {
-    jijMod {}
-}
-
-configurations {
-    jijLib {}
 }
 
 switch (org.gradle.internal.os.OperatingSystem.current()) {
@@ -71,67 +59,246 @@ def lwjglNativePlatforms = [
         "natives-windows-arm64",
 ]
 
-modLibsToAdd = []
 
-dependencies {
-    compileOnly("net.neoforged.fancymodloader:loader:$fml_version")
-    compileOnly("cpw.mods:securejarhandler:3.0.8")
-    compileOnly("org.jetbrains:annotations:24.1.0")
-    compileOnly("org.lwjgl:lwjgl-glfw:3.3.3")
-    compileOnly("org.lwjgl:lwjgl-tinyfd:3.3.3")
-    compileOnly("net.sf.jopt-simple:jopt-simple:5.0.4")
-    // removed in sync because it creates a dependency on a compiling build for sync to work
-    if (System.getProperty("idea.sync.active") == null) {
-        jijMod(project(path: ":cinnabar", configuration: "builtModJar"))
+configurations {
+    builtModJar {
+        canBeConsumed = true
+        canBeResolved = true
+    }
+}
+
+repositories {
+    maven { url "https://maven.neoforged.net/releases" }
+    maven { url "https://libraries.minecraft.net/" }
+    mavenCentral()
+    mavenLocal()
+    maven {
+        name 'Maven for PR #2297' // https://github.com/neoforged/NeoForge/pull/2297
+        url 'https://prmaven.neoforged.net/NeoForge/pr2297'
+        content {
+            includeModule('net.neoforged', 'neoforge')
+        }
+    }
+}
+
+base {
+    archivesName = mod_id
+}
+
+java.toolchain.languageVersion = JavaLanguageVersion.of(21)
+
+sourceSets {
+    // externally accessible API
+    api {
+        //The API has no resources
+        resources.srcDirs = []
+        compileClasspath += main.compileClasspath.filter { File element ->
+            // API requires javax.annotation for TypeQualifierDefault
+            return true
+        }
+    }
+    // internal library
+    lib {
+        compileClasspath += api.output
+        compileClasspath += main.compileClasspath.filter { File element ->
+            // MC and all related classes
+            if (element.name.startsWith("neoforge")) {
+                return false
+            }
+            // javax.annotation
+            if (element.name.startsWith("annotations-3.0.1") || element.name.startsWith("jsr305")) {
+                return false
+            }
+            return true
+        }
+    }
+    // internal library, parts that need access to MC
+    mclib {
+        java {
+            srcDirs = ['src/libmc/java']
+        }
+        compileClasspath += api.output
+        compileClasspath += lib.output
+        compileClasspath += main.compileClasspath.filter { File element ->
+            // javax.annotation
+            if (element.name.startsWith("annotations-3.0.1") || element.name.startsWith("jsr305")) {
+                return false
+            }
+            return true
+        }
+    }
+    // the main renderer core
+    core {
+        resources.srcDirs = []
+        compileClasspath += api.output
+        compileClasspath += lib.output
+        compileClasspath += mclib.output
+        compileClasspath += main.compileClasspath.filter { File element ->
+            // javax.annotation
+            if (element.name.startsWith("annotations-3.0.1") || element.name.startsWith("jsr305")) {
+                return false
+            }
+            return true
+        }
+    }
+    main {
+        java {
+            srcDirs = ["src/mod/java"]
+        }
+        resources.srcDirs = ["src/mod/resources"]
+        compileClasspath += api.output
+        compileClasspath += core.output
+        compileClasspath += lib.output
+        compileClasspath += mclib.output
+    }
+}
+
+neoForge {
+    version = project.neo_version
+
+    parchment {
+        mappingsVersion = project.parchment_mappings_version
+        minecraftVersion = project.parchment_minecraft_version
     }
 
-    modLibsToAdd.add("org.lwjgl:lwjgl-vulkan:$lwjglVersion")
-    modLibsToAdd.add("org.lwjgl:lwjgl-spvc:$lwjglVersion")
-    modLibsToAdd.add("org.lwjgl:lwjgl-shaderc:$lwjglVersion")
+     accessTransformers = project.files('src/mod/resources/META-INF/accesstransformer.cfg')
+
+    runs {
+        client {
+            client()
+            systemProperty 'neoforge.enabledGameTestNamespaces', project.mod_id
+            programArguments.addAll "--CinnabarLaunchedFromIDE"
+        }
+
+        configureEach {
+            systemProperty 'forge.logging.markers', 'REGISTRIES'
+            logLevel = org.slf4j.event.Level.DEBUG
+        }
+    }
+
+    mods {
+        "${mod_id}" {
+            sourceSet(sourceSets.api)
+            sourceSet(sourceSets.core)
+            sourceSet(sourceSets.lib)
+            sourceSet(sourceSets.mclib)
+            sourceSet(sourceSets.main)
+        }
+    }
+}
+
+sourceSets.main.resources { srcDir 'src/generated/resources' }
+
+loaderLibsToPack = []
+
+dependencies {
+
+    additionalRuntimeClasspath(project(":loader"))
 
     for (lib in lwjglJavaLibs) {
         var baseLibName = "org.lwjgl:lwjgl-$lib:$lwjglVersion"
-        modLibsToAdd.add(baseLibName)
-        jijLib(baseLibName)
-        runtimeOnly(baseLibName)
+        implementation(baseLibName)
+        additionalRuntimeClasspath(baseLibName)
+        loaderLibsToPack.add(baseLibName)
     }
     for (lib in lwjglNativeLibs) {
         var baseLibName = "org.lwjgl:lwjgl-$lib:$lwjglVersion"
-        modLibsToAdd.add(baseLibName)
-        jijLib(baseLibName)
-        runtimeOnly(baseLibName)
-        runtimeOnly(baseLibName + ":$lwjglNatives")
+        implementation(baseLibName)
+        additionalRuntimeClasspath(baseLibName)
+        loaderLibsToPack.add(baseLibName)
+        additionalRuntimeClasspath(baseLibName + ":$lwjglNatives")
         for (nativePlatform in lwjglNativePlatforms) {
-            jijLib(baseLibName + ":$nativePlatform")
+            loaderLibsToPack.add(baseLibName + ":$nativePlatform")
         }
     }
 
-    jijLib("org.lwjgl:lwjgl-vulkan:$lwjglVersion:natives-macos")
-    jijLib("org.lwjgl:lwjgl-vulkan:$lwjglVersion:natives-macos-arm64")
-
+    loaderLibsToPack.add("org.lwjgl:lwjgl-vulkan:$lwjglVersion:natives-macos")
+    loaderLibsToPack.add("org.lwjgl:lwjgl-vulkan:$lwjglVersion:natives-macos-arm64")
 }
 
-jar {
-    manifest {
-        attributes["FMLModType"] = "LIBRARY"
-        attributes["Automatic-Module-Name"] = "cinnabar_locator"
+var generateModMetadata = tasks.register("generateModMetadata", ProcessResources) {
+    var replaceProperties = [
+            minecraft_version      : minecraft_version,
+            minecraft_version_range: minecraft_version_range,
+            neo_version            : neo_version,
+            neo_version_range      : neo_version_range,
+            loader_version_range   : loader_version_range,
+            mod_id                 : mod_id,
+            mod_name               : mod_name,
+            mod_license            : mod_license,
+            mod_version            : mod_version,
+            mod_authors            : mod_authors,
+            mod_description        : mod_description
+    ]
+    inputs.properties replaceProperties
+    expand replaceProperties
+    from "src/mod/templates"
+    into "build/generated/sources/modMetadata"
+}
+sourceSets.main.resources.srcDir generateModMetadata
+neoForge.ideSyncTask generateModMetadata
+
+artifacts {
+    builtModJar(tasks.jar.archiveFile) {
+        builtBy(jar)
     }
-    into("META-INF/modjar") {
-        from(configurations.jijMod)
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8' // Use the UTF-8 charset for Java compilation
+}
+
+// IDEA no longer automatically downloads sources/javadoc jars for dependencies, so we need to explicitly enable the behavior.
+idea {
+    module {
+        downloadSources = true
+        downloadJavadoc = true
     }
-    into("META-INF/lib") {
-        from(configurations.jijLib) {
-            exclude("lwjgl-3.3.3.jar")
-        }
-    }
+}
+
+tasks.register('apiJar', Jar).configure { Jar jar1 ->
+    jar1.duplicatesStrategy(DuplicatesStrategy.FAIL)
+    jar1.archiveBaseName = "$mod_id-$minecraft_version"
+    jar1.archiveClassifier = "api"
+    jar1.from([
+            sourceSets.api.output,
+            sourceSets.api.allJava
+    ])
+}
+
+tasks.register('sourcesJar', Jar).configure { Jar jar1 ->
+    jar1.duplicatesStrategy(DuplicatesStrategy.FAIL)
+    jar1.archiveBaseName = "$mod_id-$minecraft_version"
+    jar1.archiveClassifier = "sources"
+    jar1.from([
+            sourceSets.api.output,
+            sourceSets.lib.output,
+            sourceSets.mclib.output,
+            sourceSets.core.output,
+            sourceSets.main.output,
+            sourceSets.api.allJava,
+            sourceSets.lib.allJava,
+            sourceSets.mclib.allJava,
+            sourceSets.core.allJava,
+            sourceSets.main.allJava,
+    ])
+}
+
+
+tasks.named('jar', Jar).configure { Jar jar1 ->
+    jar1.duplicatesStrategy(DuplicatesStrategy.FAIL)
+    jar1.archiveBaseName = "$mod_id-$minecraft_version"
+    jar1.archiveVersion = jar1.archiveVersion.get() + "-packed"
+    jar1.from([
+            sourceSets.api.output,
+            sourceSets.lib.output,
+            sourceSets.mclib.output,
+            sourceSets.core.output,
+            sourceSets.main.output,
+    ])
 }
 
 tasks.named('wrapper', Wrapper).configure {
-    // Define wrapper values here so as to not have to always do so when updating gradlew.properties.
-    // Switching this to Wrapper.DistributionType.ALL will download the full gradle sources that comes with
-    // documentation attached on cursor hover of gradle classes and methods. However, this comes with increased
-    // file size for Gradle. If you do switch this to ALL, run the Gradle wrapper task twice afterwards.
-    // (Verify by checking gradle/wrapper/gradle-wrapper.properties to see if distributionUrl now points to `-all`)
     distributionType = Wrapper.DistributionType.BIN
 }
 
@@ -145,13 +312,11 @@ def changelog = """
 // prevents accidentally publishing as submodule project
 if (curseforgeToken != null && this.project == this.rootProject) {
     tasks.register('publishCurseForge', TaskPublishCurseForge) {
-
-        debugMode = true
-
+        
         apiToken = curseforgeToken
         def projectId = "552238"
 
-        def mainFile = upload(projectId, jar)
+        def mainFile = upload(projectId, project(":loader").jar)
         mainFile.changelog = changelog
         mainFile.changelogType = 'markdown'
         mainFile.releaseType = release_type
@@ -160,6 +325,9 @@ if (curseforgeToken != null && this.project == this.rootProject) {
         mainFile.addJavaVersion('Java 21')
         mainFile.addModLoader('NeoForge')
 
+        mainFile.withAdditionalFile(apiJar)
+        mainFile.withAdditionalFile(sourcesJar)
+        
         mainFile.curseFileId
     }
 }
