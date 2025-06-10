@@ -8,6 +8,13 @@ import org.lwjgl.system.Configuration;
 import org.lwjgl.util.tinyfd.TinyFileDialogs;
 import org.slf4j.Logger;
 
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
+import java.util.Arrays;
+import java.util.function.Function;
+import java.util.stream.Collectors;
+
 import static org.lwjgl.glfw.GLFW.*;
 
 public class CinnabarEarlyWindowProvider implements ImmediateWindowProvider {
@@ -23,6 +30,8 @@ public class CinnabarEarlyWindowProvider implements ImmediateWindowProvider {
     private static boolean configInjected = false;
     private int winWidth;
     private int winHeight;
+    
+    private static Method VK_SUPPORTED;
     
     public static void attemptConfigInit() {
         if (nameQueried || configInjected) {
@@ -81,12 +90,23 @@ public class CinnabarEarlyWindowProvider implements ImmediateWindowProvider {
     
     @Override
     public void updateModuleReads(final ModuleLayer layer) {
+        var fm = layer.findModule("cinnabar");
+        if (fm.isPresent()) {
+            getClass().getModule().addReads(fm.get());
+            var clz = fm.map(l -> Class.forName(l, "graphics.cinnabar.core.vk.VulkanStartup")).orElseThrow();
+            var methods = Arrays.stream(clz.getMethods()).filter(m -> Modifier.isStatic(m.getModifiers())).collect(Collectors.toMap(Method::getName, Function.identity()));
+            VK_SUPPORTED = methods.get("isSupported");
+        }
     }
     
     @Override
     public long takeOverGlfwWindow() {
-        if (CinnabarLaunchPlugin.initCompleted()) {
-            glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
+        try {
+            if (CinnabarLaunchPlugin.initCompleted() && (boolean)VK_SUPPORTED.invoke(null)) {
+                glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
+            }
+        } catch (IllegalAccessException | InvocationTargetException e) {
+            throw new RuntimeException(e);
         }
         return glfwCreateWindow(winWidth, winHeight, "Cinnabar", 0, 0);
     }

@@ -7,9 +7,9 @@ import com.mojang.blaze3d.platform.Window;
 import com.mojang.blaze3d.platform.WindowEventHandler;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.Tesselator;
+import graphics.cinnabar.api.annotations.RewriteHierarchy;
 import graphics.cinnabar.api.cvk.systems.CVKGpuDevice;
 import graphics.cinnabar.core.b3d.CinnabarDevice;
-import graphics.cinnabar.api.annotations.RewriteHierarchy;
 import net.minecraft.client.Minecraft;
 import org.jetbrains.annotations.Nullable;
 import org.lwjgl.system.MemoryStack;
@@ -22,13 +22,12 @@ import static org.lwjgl.vulkan.VK10.VK_NULL_HANDLE;
 @RewriteHierarchy
 public class CinnabarWindow extends Window {
     
-    @SuppressWarnings("DataFlowIssue")
+    @Nullable
     private CinnabarDevice device = null;
     private long surface;
     @Nullable
     private CinnabarSwapchain swapchain;
     private boolean actuallyVSync = this.vsync;
-    
     
     public CinnabarWindow(WindowEventHandler eventHandler, ScreenManager screenManager, DisplayData displayData, String preferredFullscreenVideoMode, String title) {
         super(eventHandler, screenManager, displayData, preferredFullscreenVideoMode, title);
@@ -36,9 +35,12 @@ public class CinnabarWindow extends Window {
     
     @Override
     public void updateVsync(boolean vsync) {
+        if (device == null) {
+            super.updateVsync(vsync);
+            return;
+        }
         RenderSystem.assertOnRenderThread();
         this.vsync = vsync;
-        
     }
     
     public void attachDevice(CinnabarDevice device) {
@@ -56,6 +58,9 @@ public class CinnabarWindow extends Window {
     }
     
     public void detachDevice() {
+        if (device == null) {
+            return;
+        }
         assert swapchain != null;
         swapchain.destroy();
         vkDestroySurfaceKHR(device.vkInstance, surface, null);
@@ -63,6 +68,10 @@ public class CinnabarWindow extends Window {
     
     @Override
     public void updateDisplay(@Nullable TracyFrameCapture tracyFrameCapture) {
+        if(device == null){
+            super.updateDisplay(tracyFrameCapture);
+            return;
+        }
         RenderSystem.pollEvents();
         Tesselator.getInstance().clear();
         

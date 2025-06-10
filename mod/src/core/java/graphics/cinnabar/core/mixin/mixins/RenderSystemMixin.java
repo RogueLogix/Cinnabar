@@ -1,12 +1,14 @@
 package graphics.cinnabar.core.mixin.mixins;
 
 import com.mojang.blaze3d.buffers.GpuBuffer;
+import com.mojang.blaze3d.opengl.GlDevice;
 import com.mojang.blaze3d.shaders.ShaderType;
 import com.mojang.blaze3d.systems.GpuDevice;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.*;
 import graphics.cinnabar.core.CinnabarCore;
 import graphics.cinnabar.core.b3d.CinnabarDevice;
+import graphics.cinnabar.core.vk.VulkanStartup;
 import net.minecraft.client.renderer.DynamicUniforms;
 import net.minecraft.resources.ResourceLocation;
 import org.jetbrains.annotations.Nullable;
@@ -33,7 +35,11 @@ public class RenderSystemMixin {
     
     @Overwrite
     public static void initRenderer(long windowHandle, int debugLevel, boolean syncDebug, BiFunction<ResourceLocation, ShaderType, String> shaderSourceProvider, boolean debugLabels) {
-        DEVICE = new CinnabarDevice(windowHandle, debugLevel, syncDebug, shaderSourceProvider, debugLabels);
+        if (VulkanStartup.isSupported()) {
+            DEVICE = new CinnabarDevice(windowHandle, debugLevel, syncDebug, shaderSourceProvider, debugLabels);
+        } else {
+            DEVICE = new GlDevice(windowHandle, debugLevel, syncDebug, shaderSourceProvider, debugLabels);
+        }
         apiDescription = DEVICE.getImplementationInformation();
         dynamicUniforms = new DynamicUniforms();
         
@@ -54,10 +60,12 @@ public class RenderSystemMixin {
     // this is used for debug things
     @Overwrite
     public static GpuDevice getDevice() {
-        if (CinnabarCore.cinnabarDeviceSingleton == null) {
-            throw new IllegalStateException("Can't getDevice() before it was initialized");
-        } else {
+        if (DEVICE != null) {
+            return DEVICE;
+        }
+        if (CinnabarCore.cinnabarDeviceSingleton != null){
             return CinnabarCore.cinnabarDeviceSingleton;
         }
+        throw new IllegalStateException("Can't getDevice() before it was initialized");
     }
 }

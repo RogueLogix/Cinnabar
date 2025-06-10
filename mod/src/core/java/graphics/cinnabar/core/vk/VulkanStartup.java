@@ -16,6 +16,7 @@ import org.lwjgl.vulkan.*;
 
 import java.util.Collections;
 import java.util.List;
+import java.util.function.Supplier;
 
 import static graphics.cinnabar.api.exceptions.VkException.checkVkCode;
 import static graphics.cinnabar.core.CinnabarConfig.CONFIG;
@@ -24,8 +25,7 @@ import static graphics.cinnabar.lib.helpers.GLFWClassloadHelper.glfwExtGetPhysic
 import static org.lwjgl.glfw.GLFWVulkan.glfwGetRequiredInstanceExtensions;
 import static org.lwjgl.vulkan.EXTDebugMarker.VK_EXT_DEBUG_MARKER_EXTENSION_NAME;
 import static org.lwjgl.vulkan.EXTDebugReport.VK_EXT_DEBUG_REPORT_EXTENSION_NAME;
-import static org.lwjgl.vulkan.EXTDebugUtils.VK_EXT_DEBUG_UTILS_EXTENSION_NAME;
-import static org.lwjgl.vulkan.EXTDebugUtils.vkCreateDebugUtilsMessengerEXT;
+import static org.lwjgl.vulkan.EXTDebugUtils.*;
 import static org.lwjgl.vulkan.KHRPushDescriptor.VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME;
 import static org.lwjgl.vulkan.KHRSwapchain.VK_KHR_SWAPCHAIN_EXTENSION_NAME;
 import static org.lwjgl.vulkan.VK13.*;
@@ -47,6 +47,30 @@ public class VulkanStartup {
             new Pair<>(VK_EXT_DEBUG_MARKER_EXTENSION_NAME, List.of(VK_EXT_DEBUG_REPORT_EXTENSION_NAME))
     );
     
+    private static final boolean supported = ((Supplier<Boolean>) () -> {
+        CINNABAR_CORE_LOG.info("Querying Vulkan support");
+        try {
+            final var instanceTriple = createVkInstance(false, new VulkanDebug.MessageSeverity[]{}, new VulkanDebug.MessageType[]{});
+            try {
+                selectPhysicalDevice(instanceTriple.first());
+                // if we made it here, there is a supported device, so it will be used
+                CINNABAR_CORE_LOG.info("Compatible card found, using Vulkan");
+                return true;
+            } finally {
+                if (instanceTriple.second() != -1) {
+                    vkDestroyDebugUtilsMessengerEXT(instanceTriple.first(), instanceTriple.second(), null);
+                }
+                vkDestroyInstance(instanceTriple.first(), null);
+            }
+        } catch (RuntimeException ignored) {
+        }
+        CINNABAR_CORE_LOG.info("No compatible card found, using OpenGL");
+        return false;
+    }).get();
+    
+    public static boolean isSupported() {
+        return supported;
+    }
     
     public static Triple<VkInstance, Long, List<String>> createVkInstance(boolean validationLayers, VulkanDebug.MessageSeverity[] messageSeverities, VulkanDebug.MessageType[] messageTypes) {
         try (var stack = MemoryStack.stackPush()) {
@@ -54,8 +78,8 @@ public class VulkanStartup {
             final var appName = stack.UTF8("Minecraft");
             final var engineName = stack.UTF8("Cinnabar");
             // TODO: pull this from FML/MC, so i don't have to update this every MC update
-            final var appVersion = VK_MAKE_VERSION(1, 21, 5);
-            final var engineVersion = VK_MAKE_VERSION(0, 0, 0);
+            final var appVersion = VK_MAKE_VERSION(1, 21, 6);
+            final var engineVersion = VK_MAKE_VERSION(0, 0, 1);
             appInfo.sType(VK_STRUCTURE_TYPE_APPLICATION_INFO);
             appInfo.pApplicationName(appName);
             appInfo.applicationVersion(appVersion);
@@ -233,6 +257,11 @@ public class VulkanStartup {
                 vkGetPhysicalDeviceProperties2(physicalDevice, properties2);
                 
                 CINNABAR_CORE_LOG.info("Considering device {}", deviceProperties.deviceNameString());
+                
+                if (deviceProperties.apiVersion() < VK_API_VERSION_1_3) {
+                    CINNABAR_CORE_LOG.info("Skipping device, version too low");
+                    continue;
+                }
                 
                 vkGetPhysicalDeviceQueueFamilyProperties2(physicalDevice, queueFamilyCountPtr, null);
                 final var queueFamilyCount = queueFamilyCountPtr.get(0);
@@ -857,5 +886,4 @@ public class VulkanStartup {
             return new Triple<>(logicalDevice, queues, Collections.unmodifiableList(enabledExtensions));
         }
     }
-    
 }

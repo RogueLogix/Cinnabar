@@ -1,5 +1,6 @@
 package graphics.cinnabar.core.mixin.mixins;
 
+import graphics.cinnabar.core.vk.VulkanStartup;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.GameRenderer;
 import org.joml.Matrix4f;
@@ -27,7 +28,7 @@ public class GameRendererMixin {
                 (float) this.minecraft.getWindow().getWidth() / this.minecraft.getWindow().getHeight(),
                 0.05F,
                 this.getDepthFar(),
-                true
+                VulkanStartup.isSupported()
         );
     }
 }

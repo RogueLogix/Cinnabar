@@ -1,7 +1,4 @@
-#ifndef CINNABAR_VK
-#error This shader is only compatible with Cinnabar Vulkan 
-#endif
-
+#ifdef CINNABAR_VK
 
 #if !defined(CINNABAR_VERTEX_SHADER) && !defined(CINNABAR_FRAGMENT_SHADER)
 #error CINNABAR_VERTEX_SHADER or CINNABAR_FRAGMENT_SHADER must be defined
@@ -59,3 +56,16 @@ void main() {
 }
 
 #define main realMain
+
+#else 
+
+// if not running on VK, fallback to the normal UBO definition
+layout(std140) uniform DynamicTransforms {
+    mat4 ModelViewMat;
+    vec4 ColorModulator;
+    vec3 ModelOffset;
+    mat4 TextureMat;
+    float LineWidth;
+};
+
+#endif
