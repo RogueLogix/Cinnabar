@@ -65,6 +65,9 @@ configurations {
         canBeConsumed = true
         canBeResolved = true
     }
+    jijMod {}
+    jijLib {}
+    loader {}
 }
 
 repositories {
@@ -161,7 +164,7 @@ neoForge {
         minecraftVersion = project.parchment_minecraft_version
     }
 
-     accessTransformers = project.files('src/mod/resources/META-INF/accesstransformer.cfg')
+    accessTransformers = project.files('src/mod/resources/META-INF/accesstransformer.cfg')
 
     runs {
         client {
@@ -193,7 +196,7 @@ loaderLibsToPack = []
 
 dependencies {
 
-    additionalRuntimeClasspath(project(":loader"))
+    additionalRuntimeClasspath(project(path: ":loader", configuration: "minimalJar"))
 
     for (lib in lwjglJavaLibs) {
         var baseLibName = "org.lwjgl:lwjgl-$lib:$lwjglVersion"
@@ -214,6 +217,12 @@ dependencies {
 
     loaderLibsToPack.add("org.lwjgl:lwjgl-vulkan:$lwjglVersion:natives-macos")
     loaderLibsToPack.add("org.lwjgl:lwjgl-vulkan:$lwjglVersion:natives-macos-arm64")
+
+    for (lib in loaderLibsToPack) {
+        jijLib((String) lib)
+    }
+    jijMod(project(path: ":", configuration: "builtModJar"))
+    loader(project(":loader"))
 }
 
 var generateModMetadata = tasks.register("generateModMetadata", ProcessResources) {
@@ -298,6 +307,30 @@ tasks.named('jar', Jar).configure { Jar jar1 ->
     ])
 }
 
+tasks.register('fatJar', Jar).configure { Jar jar1 ->
+    jar1.duplicatesStrategy(DuplicatesStrategy.FAIL)
+    jar1.archiveBaseName = "$mod_id-$minecraft_version"
+    jar1.archiveClassifier = ""
+    jar1.from([
+            configurations.loader.collect { it.isDirectory() ? it : zipTree(it) },
+    ])
+}
+
+fatJar {
+    manifest {
+        attributes["FMLModType"] = "LIBRARY"
+        attributes["Automatic-Module-Name"] = "cinnabar_locator"
+    }
+    into("META-INF/modjar") {
+        from(configurations.jijMod)
+    }
+    from(configurations.jijLib.collect { it.isDirectory() ? it : zipTree(it) }) {
+        exclude("META-INF/**")
+        exclude("org/lwjgl/*")
+        exclude("org/lwjgl/system/**")
+    }
+}
+
 tasks.named('wrapper', Wrapper).configure {
     distributionType = Wrapper.DistributionType.BIN
 }
@@ -312,9 +345,9 @@ def changelog = """
 // prevents accidentally publishing as submodule project
 if (curseforgeToken != null && this.project == this.rootProject) {
     tasks.register('publishCurseForge', TaskPublishCurseForge) {
-        
+
         debugMode = true
-        
+
         apiToken = curseforgeToken
         def projectId = "552238"
 
@@ -329,7 +362,7 @@ if (curseforgeToken != null && this.project == this.rootProject) {
 
         mainFile.withAdditionalFile(apiJar)
         mainFile.withAdditionalFile(sourcesJar)
-        
+
         mainFile.curseFileId
     }
 }

@@ -19,9 +19,7 @@ repositories {
 }
 
 configurations {
-    jijMod {}
-    jijLib {}
-    fullJar {}
+    minimalJar {}
 }
 
 dependencies {
@@ -31,10 +29,15 @@ dependencies {
     compileOnly("org.lwjgl:lwjgl-glfw:3.3.3")
     compileOnly("org.lwjgl:lwjgl-tinyfd:3.3.3")
     compileOnly("net.sf.jopt-simple:jopt-simple:5.0.4")
-    for (lib in getParent().property("loaderLibsToPack")) {
-        jijLib((String)lib)
-    }
-    jijMod(project(path: ":", configuration: "builtModJar"))
+
+}
+
+
+tasks.register('minJar', Jar).configure { Jar jar1 ->
+    jar1.duplicatesStrategy(DuplicatesStrategy.FAIL)
+    jar1.archiveBaseName = "$mod_id-$minecraft_version"
+    jar1.archiveClassifier = "loader"
+    jar1.from([sourceSets.main.output])
 }
 
 jar {
@@ -42,18 +45,10 @@ jar {
         attributes["FMLModType"] = "LIBRARY"
         attributes["Automatic-Module-Name"] = "cinnabar_locator"
     }
-    into("META-INF/modjar") {
-        from(configurations.jijMod)
-    }
-    into("META-INF/lib") {
-        from(configurations.jijLib) {
-            exclude("lwjgl-3.3.3.jar")
-        }
-    }
 }
 
 artifacts {
-    fullJar(tasks.jar.archiveFile) {
-        builtBy(jar)
+    minimalJar(tasks.jar.archiveFile) {
+        builtBy(minJar)
     }
 }
