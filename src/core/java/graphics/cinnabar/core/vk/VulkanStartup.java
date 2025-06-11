@@ -443,10 +443,6 @@ public class VulkanStartup {
             logMissingFeature("storageBuffer16BitAccess");
             hasAllFeatures = false;
         }
-        if (!physicalDeviceFeatures11.uniformAndStorageBuffer16BitAccess()) {
-            logMissingFeature("uniformAndStorageBuffer16BitAccess");
-            hasAllFeatures = false;
-        }
         if (!physicalDeviceFeatures11.shaderDrawParameters()) {
             logMissingFeature("shaderDrawParameters");
             hasAllFeatures = false;
@@ -546,10 +542,6 @@ public class VulkanStartup {
         }
         if (!physicalDeviceFeatures12.timelineSemaphore()) {
             logMissingFeature("timelineSemaphore");
-            hasAllFeatures = false;
-        }
-        if (!physicalDeviceFeatures12.uniformAndStorageBuffer8BitAccess()) {
-            logMissingFeature("uniformAndStorageBuffer8BitAccess");
             hasAllFeatures = false;
         }
         if (!physicalDeviceFeatures12.uniformBufferStandardLayout()) {
@@ -727,7 +719,6 @@ public class VulkanStartup {
             physicalDeviceFeatures10.multiDrawIndirect(true);
             
             physicalDeviceFeatures11.storageBuffer16BitAccess(true);
-            physicalDeviceFeatures11.uniformAndStorageBuffer16BitAccess(true);
             physicalDeviceFeatures11.shaderDrawParameters(true);
             
             physicalDeviceFeatures12.drawIndirectCount(true);
@@ -754,7 +745,6 @@ public class VulkanStartup {
             physicalDeviceFeatures12.shaderUniformTexelBufferArrayNonUniformIndexing(true);
             physicalDeviceFeatures12.storageBuffer8BitAccess(true);
             physicalDeviceFeatures12.timelineSemaphore(true);
-            physicalDeviceFeatures12.uniformAndStorageBuffer8BitAccess(true);
             physicalDeviceFeatures12.uniformBufferStandardLayout(true); // low support, 80%
             physicalDeviceFeatures12.vulkanMemoryModel(true);
             
