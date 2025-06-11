@@ -197,7 +197,7 @@ vkJavaLibs = []
 
 dependencies {
 
-    additionalRuntimeClasspath(project(path: ":loader", configuration: "minimalJar"))
+    additionalRuntimeClasspath(project(":loader"))
     implementation(project(":loader"))
 
     for (lib in lwjglJavaLibs) {
@@ -311,28 +311,34 @@ tasks.named('jar', Jar).configure { Jar jar1 ->
     ])
 }
 
-tasks.register('fatJar', Jar).configure { Jar jar1 ->
-    jar1.duplicatesStrategy(DuplicatesStrategy.FAIL)
-    jar1.archiveBaseName = "$mod_id-$minecraft_version"
-    jar1.archiveClassifier = ""
-    jar1.from([
-            configurations.loader.collect { it.isDirectory() ? it : zipTree(it) },
-    ])
-}
+afterEvaluate {
+    evaluationDependsOnChildren()
 
-fatJar {
-    manifest {
-        attributes["FMLModType"] = "LIBRARY"
-        attributes["Automatic-Module-Name"] = "cinnabar_locator"
+    tasks.register('fatJar', Jar).configure { Jar jar1 ->
+        dependsOn(project(":loader").tasks.jar)
+        jar1.duplicatesStrategy(DuplicatesStrategy.FAIL)
+        jar1.archiveBaseName = "$mod_id-$minecraft_version"
+        jar1.archiveClassifier = ""
+        jar1.from([
+                configurations.loader.collect { it.isDirectory() ? it : zipTree(it) },
+        ])
     }
-    into("META-INF/modjar") {
-        from(configurations.jijMod)
+
+    fatJar {
+        manifest {
+            attributes["FMLModType"] = "LIBRARY"
+            attributes["Automatic-Module-Name"] = "cinnabar_locator"
+        }
+        into("META-INF/modjar") {
+            from(configurations.jijMod)
+        }
+        from(configurations.jijLib.collect { it.isDirectory() ? it : zipTree(it) }) {
+            exclude("META-INF/**")
+            exclude("org/lwjgl/*")
+            exclude("org/lwjgl/system/**")
+        }
     }
-    from(configurations.jijLib.collect { it.isDirectory() ? it : zipTree(it) }) {
-        exclude("META-INF/**")
-        exclude("org/lwjgl/*")
-        exclude("org/lwjgl/system/**")
-    }
+
 }
 
 tasks.named('wrapper', Wrapper).configure {

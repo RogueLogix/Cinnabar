@@ -9,7 +9,7 @@ allprojects {
 }
 
 base {
-    archivesName = "$mod_id-$minecraft_version"
+    archivesName = "$mod_id-loader-$minecraft_version"
 }
 
 repositories {
@@ -35,25 +35,4 @@ dependencies {
         compileOnly((String) lib)
     }
 
-}
-
-
-tasks.register('minJar', Jar).configure { Jar jar1 ->
-    jar1.duplicatesStrategy(DuplicatesStrategy.FAIL)
-    jar1.archiveBaseName = "$mod_id-$minecraft_version"
-    jar1.archiveClassifier = "loader"
-    jar1.from([sourceSets.main.output])
-}
-
-jar {
-    manifest {
-        attributes["FMLModType"] = "LIBRARY"
-        attributes["Automatic-Module-Name"] = "cinnabar_locator"
-    }
-}
-
-artifacts {
-    minimalJar(tasks.jar.archiveFile) {
-        builtBy(minJar)
-    }
 }
