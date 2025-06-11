@@ -8,7 +8,7 @@ import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.*;
 import graphics.cinnabar.core.CinnabarCore;
 import graphics.cinnabar.core.b3d.CinnabarDevice;
-import graphics.cinnabar.core.vk.VulkanStartup;
+import graphics.cinnabar.earlywindow.VulkanStartup;
 import net.minecraft.client.renderer.DynamicUniforms;
 import net.minecraft.resources.ResourceLocation;
 import org.jetbrains.annotations.Nullable;

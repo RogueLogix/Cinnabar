@@ -1,6 +1,6 @@
 package graphics.cinnabar.core.mixin.mixins;
 
-import graphics.cinnabar.core.vk.VulkanStartup;
+import graphics.cinnabar.earlywindow.VulkanStartup;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.GameRenderer;
 import org.joml.Matrix4f;

@@ -1,78 +1,95 @@
-package graphics.cinnabar.core.vk;
+package graphics.cinnabar.earlywindow;
 
-import graphics.cinnabar.api.util.Pair;
-import graphics.cinnabar.api.util.Triple;
-import graphics.cinnabar.lib.vulkan.VulkanDebug;
+import com.mojang.logging.LogUtils;
+import it.unimi.dsi.fastutil.Pair;
 import it.unimi.dsi.fastutil.ints.IntArrayList;
-import it.unimi.dsi.fastutil.ints.IntReferenceImmutablePair;
-import it.unimi.dsi.fastutil.ints.IntReferencePair;
 import it.unimi.dsi.fastutil.objects.ObjectArrayList;
+import it.unimi.dsi.fastutil.objects.ObjectObjectImmutablePair;
 import it.unimi.dsi.fastutil.objects.ReferenceArrayList;
 import net.neoforged.fml.loading.FMLLoader;
 import org.jetbrains.annotations.Nullable;
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.util.tinyfd.TinyFileDialogs;
 import org.lwjgl.vulkan.*;
+import org.slf4j.Logger;
 
 import java.util.Collections;
 import java.util.List;
 import java.util.function.Supplier;
 
-import static graphics.cinnabar.api.exceptions.VkException.checkVkCode;
-import static graphics.cinnabar.core.CinnabarConfig.CONFIG;
-import static graphics.cinnabar.core.CinnabarCore.CINNABAR_CORE_LOG;
-import static graphics.cinnabar.lib.helpers.GLFWClassloadHelper.glfwExtGetPhysicalDevicePresentationSupport;
+import static graphics.cinnabar.earlywindow.GLFWClassloadHelper.glfwExtGetPhysicalDevicePresentationSupport;
 import static org.lwjgl.glfw.GLFWVulkan.glfwGetRequiredInstanceExtensions;
 import static org.lwjgl.vulkan.EXTDebugMarker.VK_EXT_DEBUG_MARKER_EXTENSION_NAME;
 import static org.lwjgl.vulkan.EXTDebugReport.VK_EXT_DEBUG_REPORT_EXTENSION_NAME;
 import static org.lwjgl.vulkan.EXTDebugUtils.*;
 import static org.lwjgl.vulkan.KHRPushDescriptor.VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME;
 import static org.lwjgl.vulkan.KHRSwapchain.VK_KHR_SWAPCHAIN_EXTENSION_NAME;
+import static org.lwjgl.vulkan.VK10.*;
+import static org.lwjgl.vulkan.VK11.*;
+import static org.lwjgl.vulkan.VK13.VK_SUCCESS;
+import static org.lwjgl.vulkan.VK13.vkDestroyDevice;
 import static org.lwjgl.vulkan.VK13.*;
 
 public class VulkanStartup {
-    
+
+    private static final Logger LOGGER = LogUtils.getLogger();
+
+    public record Instance(VkInstance instance, long debugCallback, List<String> enabledInsanceExtensions) {
+        void destroy() {
+            if (debugCallback != -1) {
+                vkDestroyDebugUtilsMessengerEXT(instance, debugCallback, null);
+            }
+            vkDestroyInstance(instance, null);
+        }
+    }
+
+    public record Queue(int queueFamily, VkQueue queue) {
+    }
+
+    public record Device(VkDevice device, List<Queue> queues, List<String> enabledDeviceExtensions) {
+        void destroy() {
+            vkDestroyDevice(device, null);
+        }
+    }
+
     private static final List<String> optionalInstanceExtensions = List.of(
             VK_EXT_DEBUG_REPORT_EXTENSION_NAME
     );
-    
+
     private static final List<String> requiredDeviceExtensions = List.of(
             VK_KHR_SWAPCHAIN_EXTENSION_NAME,
             // TODO: drop use of push descriptors in favor of dynamic descriptor sets (or get Mojang to mirror descriptor sets),
             //       also, should probably query the number supported, but i also never use that many
             VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME
     );
-    
+
     private static final List<Pair<String, List<String>>> optionalDeviceExtensions = List.of(
-            new Pair<>(VK_EXT_DEBUG_MARKER_EXTENSION_NAME, List.of(VK_EXT_DEBUG_REPORT_EXTENSION_NAME))
+            new ObjectObjectImmutablePair<>(VK_EXT_DEBUG_MARKER_EXTENSION_NAME, List.of(VK_EXT_DEBUG_REPORT_EXTENSION_NAME))
     );
-    
+
     private static final boolean supported = ((Supplier<Boolean>) () -> {
-        CINNABAR_CORE_LOG.info("Querying Vulkan support");
+        LOGGER.info("Querying Vulkan support");
         try {
-            final var instanceTriple = createVkInstance(false, new VulkanDebug.MessageSeverity[]{}, new VulkanDebug.MessageType[]{});
+            final var instanceRecord = createVkInstance(false, false, null);
             try {
-                selectPhysicalDevice(instanceTriple.first());
+                selectPhysicalDevice(instanceRecord.instance, false, -1);
                 // if we made it here, there is a supported device, so it will be used
-                CINNABAR_CORE_LOG.info("Compatible card found, using Vulkan");
+                LOGGER.info("Compatible card found, using Vulkan");
                 return true;
             } finally {
-                if (instanceTriple.second() != -1) {
-                    vkDestroyDebugUtilsMessengerEXT(instanceTriple.first(), instanceTriple.second(), null);
-                }
-                vkDestroyInstance(instanceTriple.first(), null);
+                instanceRecord.destroy();
             }
         } catch (RuntimeException ignored) {
         }
-        CINNABAR_CORE_LOG.info("No compatible card found, using OpenGL");
+        LOGGER.info("No compatible card found, using OpenGL");
         return false;
     }).get();
-    
+
     public static boolean isSupported() {
         return supported;
     }
-    
-    public static Triple<VkInstance, Long, List<String>> createVkInstance(boolean validationLayers, VulkanDebug.MessageSeverity[] messageSeverities, VulkanDebug.MessageType[] messageTypes) {
+
+    public static Instance createVkInstance(boolean validationLayers, boolean enableMesaOverlay, VkDebugUtilsMessengerCreateInfoEXT debugCreateInfo) {
         try (var stack = MemoryStack.stackPush()) {
             final var appInfo = VkApplicationInfo.calloc(stack);
             final var appName = stack.UTF8("Minecraft");
@@ -86,16 +103,14 @@ public class VulkanStartup {
             appInfo.pEngineName(engineName);
             appInfo.engineVersion(engineVersion);
             appInfo.apiVersion(VK_API_VERSION_1_3);
-            
+
             final var enabledInstanceExtensions = new ReferenceArrayList<String>();
             final var enabledLayerNames = new ReferenceArrayList<String>();
-            
-            
+
+
             final var createInfo = VkInstanceCreateInfo.calloc(stack).sType$Default();
             createInfo.pApplicationInfo(appInfo);
-            
-            @Nullable
-            VkDebugUtilsMessengerCreateInfoEXT debugCreateInfo = null;
+
             if (FMLLoader.isProduction() && validationLayers) {
                 TinyFileDialogs.tinyfd_messageBox("Minecraft: Cinnabar", """
                         Debug mode enabled
@@ -107,14 +122,14 @@ public class VulkanStartup {
             final var layerCount = layerCountPtr.get(0);
             final var layerProperties = VkLayerProperties.calloc(layerCount, stack);
             vkEnumerateInstanceLayerProperties(layerCountPtr, layerProperties);
-            
+
             final var extensionCount = stack.mallocInt(1);
             vkEnumerateInstanceExtensionProperties((String) null, extensionCount, null);
             final var extensionProperties = VkExtensionProperties.calloc(extensionCount.get(0), stack);
             vkEnumerateInstanceExtensionProperties((String) null, extensionCount, extensionProperties);
-            
+
             if (validationLayers) {
-                CINNABAR_CORE_LOG.info("Vulkan validation layers requested");
+                LOGGER.info("Vulkan validation layers requested");
                 boolean hasKHRValidation = false;
                 for (int i = 0; i < layerProperties.capacity(); i++) {
                     layerProperties.position(i);
@@ -132,9 +147,9 @@ public class VulkanStartup {
                     }
                 }
                 if (!hasKHRValidation) {
-                    CINNABAR_CORE_LOG.error("Unable to initialize validation layers, are they installed?");
+                    LOGGER.error("Unable to initialize validation layers, are they installed?");
                 } else if (!hasEXTDebug) {
-                    CINNABAR_CORE_LOG.error("Unable to initialize validation layers, VK_EXT_debug_utils not present");
+                    LOGGER.error("Unable to initialize validation layers, VK_EXT_debug_utils not present");
                 } else {
                     if (FMLLoader.isProduction()) {
                         TinyFileDialogs.tinyfd_messageBox("Minecraft: Cinnabar", """
@@ -142,16 +157,16 @@ public class VulkanStartup {
                                 Enabling this options significantly hurts performance
                                 """, "ok", "warn", false);
                     }
-                    CINNABAR_CORE_LOG.warn("Vulkan validation layers enabled, performance may suffer!");
-                    
+                    LOGGER.warn("Vulkan validation layers enabled, performance may suffer!");
+
                     enabledLayerNames.add("VK_LAYER_KHRONOS_validation");
                     enabledInstanceExtensions.add(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
-                    
-                    debugCreateInfo = VulkanDebug.getCreateInfo(stack, messageSeverities, messageTypes);
-                    createInfo.pNext(debugCreateInfo.address());
+
+                    if (debugCreateInfo != null)
+                        createInfo.pNext(debugCreateInfo.address());
                 }
             }
-            if (CONFIG.EnableMesaOverlay && System.getenv().get("ENABLE_VULKAN_RENDERDOC_CAPTURE") == null) {
+            if (enableMesaOverlay && System.getenv().get("ENABLE_VULKAN_RENDERDOC_CAPTURE") == null) {
                 for (int i = 0; i < layerCount; i++) {
                     layerProperties.position(i);
                     // overlay requested, renderdoc isn't attached, and we have the mesa overlay, enable it
@@ -161,7 +176,7 @@ public class VulkanStartup {
                     }
                 }
             }
-            
+
             for (int i = 0; i < optionalInstanceExtensions.size(); i++) {
                 final var extensionName = optionalInstanceExtensions.get(i);
                 boolean hasExtension = false;
@@ -174,25 +189,24 @@ public class VulkanStartup {
                     }
                 }
                 if (!hasExtension) {
-                    CINNABAR_CORE_LOG.info("Missing optional instance extension {}", extensionName);
+                    LOGGER.info("Missing optional instance extension {}", extensionName);
                     continue;
                 }
                 enabledInstanceExtensions.add(extensionName);
             }
-            
+
             var layerPointers = stack.mallocPointer(enabledLayerNames.size());
             for (int i = 0; i < enabledLayerNames.size(); i++) {
                 layerPointers.put(i, stack.UTF8(enabledLayerNames.get(i)));
             }
             createInfo.ppEnabledLayerNames(layerPointers);
-            
-            
-            @Nullable
-            final var glfwExtensions = glfwGetRequiredInstanceExtensions();
+
+
+            @Nullable final var glfwExtensions = glfwGetRequiredInstanceExtensions();
             if (glfwExtensions == null) {
                 throw new IllegalStateException("GLFW unable to present VK image");
             }
-            
+
             final var extensionPointers = stack.mallocPointer(enabledInstanceExtensions.size() + glfwExtensions.capacity());
             for (int i = 0; i < enabledInstanceExtensions.size(); i++) {
                 extensionPointers.put(i, stack.UTF8(enabledInstanceExtensions.get(i)));
@@ -202,39 +216,46 @@ public class VulkanStartup {
                 extensionPointers.put(index, glfwExtensions.get(i));
             }
             createInfo.ppEnabledExtensionNames(extensionPointers);
-            
+
             final var instancePointer = stack.mallocPointer(1);
-            checkVkCode(vkCreateInstance(createInfo, null, instancePointer));
+            final var instanceCreateCode = vkCreateInstance(createInfo, null, instancePointer);
+            if (instanceCreateCode != VK_SUCCESS) {
+                throw new RuntimeException("Failed to create Vulkan instance");
+            }
             final var vkInstance = new VkInstance(instancePointer.get(0), createInfo);
-            CINNABAR_CORE_LOG.info("VkInstance created");
-            
+            LOGGER.info("VkInstance created");
+
             final long debugCallback;
-            if (debugCreateInfo != null) {
+            if (validationLayers && debugCreateInfo != null) {
                 var lp = stack.mallocLong(1);
-                checkVkCode(vkCreateDebugUtilsMessengerEXT(vkInstance, debugCreateInfo, null, lp));
+                final var debugCallbackCode = vkCreateDebugUtilsMessengerEXT(vkInstance, debugCreateInfo, null, lp);
+                if (debugCallbackCode != VK_SUCCESS) {
+                    vkDestroyInstance(vkInstance, null);
+                    throw new RuntimeException("Failed to create Vulkan instance");
+                }
                 debugCallback = lp.get();
             } else {
                 debugCallback = -1;
             }
-            
+
             enabledLayerNames.addAll(enabledInstanceExtensions);
-            return new Triple<>(vkInstance, debugCallback, Collections.unmodifiableList(enabledLayerNames));
+            return new Instance(vkInstance, debugCallback, Collections.unmodifiableList(enabledLayerNames));
         }
     }
-    
-    public static VkPhysicalDevice selectPhysicalDevice(VkInstance vkInstance) {
+
+    public static VkPhysicalDevice selectPhysicalDevice(VkInstance vkInstance, boolean manualDeviceSelection, int forcedDeviceIndex) {
         try (var stack = MemoryStack.stackPush()) {
             final var physicalDeviceCountPtr = stack.callocInt(1);
             vkEnumeratePhysicalDevices(vkInstance, physicalDeviceCountPtr, null);
             final var physicalDeviceCount = physicalDeviceCountPtr.get(0);
             final var physicalDevices = stack.callocPointer(physicalDeviceCount);
             vkEnumeratePhysicalDevices(vkInstance, physicalDeviceCountPtr, physicalDevices);
-            
+
             final var queueFamilyCountPtr = stack.callocInt(1);
             final var selectedPhysicalDeviceProperties = VkPhysicalDeviceProperties2.calloc(stack).sType$Default();
             final var properties2 = VkPhysicalDeviceProperties2.calloc().sType$Default();
             final var deviceProperties = properties2.properties();
-            
+
             final var physicalDeviceFeatures = VkPhysicalDeviceFeatures2.calloc(stack).sType$Default();
             final var physicalDeviceFeatures10 = physicalDeviceFeatures.features();
             final var physicalDeviceFeatures11 = VkPhysicalDeviceVulkan11Features.calloc(stack).sType$Default();
@@ -243,26 +264,26 @@ public class VulkanStartup {
             physicalDeviceFeatures.pNext(physicalDeviceFeatures11);
             physicalDeviceFeatures.pNext(physicalDeviceFeatures12);
             physicalDeviceFeatures.pNext(physicalDeviceFeatures13);
-            
+
             @Nullable
             VkPhysicalDevice selectedPhysicalDevice = null;
             for (int i = 0; i < physicalDeviceCount; i++) {
-                if (CONFIG.ForcedVulkanDeviceIndex != -1 && i != CONFIG.ForcedVulkanDeviceIndex) {
-                    CINNABAR_CORE_LOG.info("Skipping device index {} as specific device index {} requested", i, CONFIG.ForcedVulkanDeviceIndex);
+                if (forcedDeviceIndex != -1 && i != forcedDeviceIndex) {
+                    LOGGER.info("Skipping device index {} as specific device index {} requested", i, forcedDeviceIndex);
                     continue;
                 }
                 final var physicalDevicePtr = physicalDevices.get(i);
                 final var physicalDevice = new VkPhysicalDevice(physicalDevicePtr, vkInstance);
-                
+
                 vkGetPhysicalDeviceProperties2(physicalDevice, properties2);
-                
-                CINNABAR_CORE_LOG.info("Considering device {}", deviceProperties.deviceNameString());
-                
+
+                LOGGER.info("Considering device {}", deviceProperties.deviceNameString());
+
                 if (deviceProperties.apiVersion() < VK_API_VERSION_1_3) {
-                    CINNABAR_CORE_LOG.info("Skipping device, version too low");
+                    LOGGER.info("Skipping device, version too low");
                     continue;
                 }
-                
+
                 vkGetPhysicalDeviceQueueFamilyProperties2(physicalDevice, queueFamilyCountPtr, null);
                 final var queueFamilyCount = queueFamilyCountPtr.get(0);
                 final var queueFamilyProperties2 = VkQueueFamilyProperties2.calloc(queueFamilyCount, stack);
@@ -305,19 +326,19 @@ public class VulkanStartup {
                     }
                 }
                 if (!hasGraphicsQueue) {
-                    CINNABAR_CORE_LOG.info("Skipping device, could not find suitable graphics queue");
+                    LOGGER.info("Skipping device, could not find suitable graphics queue");
                     continue;
                 }
-                
+
                 vkGetPhysicalDeviceFeatures2(physicalDevice, physicalDeviceFeatures);
                 if (!hasAllRequiredFeatures(physicalDeviceFeatures10, physicalDeviceFeatures11, physicalDeviceFeatures12, physicalDeviceFeatures13)) {
-                    CINNABAR_CORE_LOG.info("Skipping device, missing required features");
+                    LOGGER.info("Skipping device, missing required features");
                     continue;
                 }
-                
+
                 final var currentDeviceType = deviceProperties.deviceType();
-                if (CONFIG.ManualDeviceSelection && CONFIG.ForcedVulkanDeviceIndex == -1) {
-                    
+                if (manualDeviceSelection && forcedDeviceIndex == -1) {
+
                     final var deviceName = deviceProperties.deviceNameString();
                     final var deviceTypeStr = switch (deviceProperties.deviceType()) {
                         case VK_PHYSICAL_DEVICE_TYPE_OTHER -> "Unknown";
@@ -325,11 +346,12 @@ public class VulkanStartup {
                         case VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU -> "Discrete GPU";
                         case VK_PHYSICAL_DEVICE_TYPE_VIRTUAL_GPU -> "Virtual GPU";
                         case VK_PHYSICAL_DEVICE_TYPE_CPU -> "CPU (Software)";
-                        default -> throw new IllegalStateException("Unexpected value: " + deviceProperties.deviceType());
+                        default ->
+                                throw new IllegalStateException("Unexpected value: " + deviceProperties.deviceType());
                     };
                     final var APIVersionEncoded = deviceProperties.apiVersion();
                     final var driverVersionEncoded = deviceProperties.driverVersion();
-                    
+
                     final var baseMessageStr = """
                             Manual Vulkan device selection
                             
@@ -353,13 +375,13 @@ public class VulkanStartup {
                             VK_VERSION_MAJOR(driverVersionEncoded), VK_VERSION_MINOR(driverVersionEncoded), VK_VERSION_PATCH(driverVersionEncoded));
                     final var result = TinyFileDialogs.tinyfd_messageBox("Minecraft: Cinnabar", formattedMessageStr, "yesno", "info", true);
                     if (result) {
-                        CINNABAR_CORE_LOG.info("Device {} selected by user", deviceName);
+                        LOGGER.info("Device {} selected by user", deviceName);
                         selectedPhysicalDevice = physicalDevice;
                         break;
                     }
-                    CINNABAR_CORE_LOG.info("Device {} rejected by user", deviceName);
+                    LOGGER.info("Device {} rejected by user", deviceName);
                     if (i == physicalDeviceCount - 1) {
-                        CINNABAR_CORE_LOG.info("All vulkan devices rejected by user");
+                        LOGGER.info("All vulkan devices rejected by user");
                         TinyFileDialogs.tinyfd_messageBox("Minecraft: Cinnabar", """
                                 Manual Vulkan device selection
                                 
@@ -400,20 +422,20 @@ public class VulkanStartup {
                 throw new IllegalStateException("Failed to select VkPhysicalDevice");
             }
             vkGetPhysicalDeviceProperties2(selectedPhysicalDevice, properties2);
-            CINNABAR_CORE_LOG.info("VkPhysicalDevice selected!");
+            LOGGER.info("VkPhysicalDevice selected!");
             final var APIVersionEncoded = deviceProperties.apiVersion();
             final var driverVersionEncoded = deviceProperties.driverVersion();
-            CINNABAR_CORE_LOG.info("Device name: {}", deviceProperties.deviceNameString());
-            CINNABAR_CORE_LOG.info("Device API version: {}.{}.{}", VK_VERSION_MAJOR(APIVersionEncoded), VK_VERSION_MINOR(APIVersionEncoded), VK_VERSION_PATCH(APIVersionEncoded));
-            CINNABAR_CORE_LOG.info("Device driver version: {}.{}.{}", VK_VERSION_MAJOR(driverVersionEncoded), VK_VERSION_MINOR(driverVersionEncoded), VK_VERSION_PATCH(driverVersionEncoded));
+            LOGGER.info("Device name: {}", deviceProperties.deviceNameString());
+            LOGGER.info("Device API version: {}.{}.{}", VK_VERSION_MAJOR(APIVersionEncoded), VK_VERSION_MINOR(APIVersionEncoded), VK_VERSION_PATCH(APIVersionEncoded));
+            LOGGER.info("Device driver version: {}.{}.{}", VK_VERSION_MAJOR(driverVersionEncoded), VK_VERSION_MINOR(driverVersionEncoded), VK_VERSION_PATCH(driverVersionEncoded));
             return selectedPhysicalDevice;
         }
     }
-    
+
     private static void logMissingFeature(String featureName) {
-        CINNABAR_CORE_LOG.info("Skipping device, missing required feature {}", featureName);
+        LOGGER.info("Skipping device, missing required feature {}", featureName);
     }
-    
+
     private static boolean hasAllRequiredFeatures(
             VkPhysicalDeviceFeatures physicalDeviceFeatures10,
             VkPhysicalDeviceVulkan11Features physicalDeviceFeatures11,
@@ -421,7 +443,7 @@ public class VulkanStartup {
             VkPhysicalDeviceVulkan13Features physicalDeviceFeatures13
     ) {
         boolean hasAllFeatures = true;
-        
+
         if (!physicalDeviceFeatures10.drawIndirectFirstInstance()) {
             logMissingFeature("drawIndirectFirstInstance");
             hasAllFeatures = false;
@@ -438,7 +460,7 @@ public class VulkanStartup {
             logMissingFeature("multiDrawIndirect");
             hasAllFeatures = false;
         }
-        
+
         if (!physicalDeviceFeatures11.storageBuffer16BitAccess()) {
             logMissingFeature("storageBuffer16BitAccess");
             hasAllFeatures = false;
@@ -447,7 +469,7 @@ public class VulkanStartup {
             logMissingFeature("shaderDrawParameters");
             hasAllFeatures = false;
         }
-        
+
         if (!physicalDeviceFeatures12.drawIndirectCount()) {
             logMissingFeature("drawIndirectCount");
             hasAllFeatures = false;
@@ -552,7 +574,7 @@ public class VulkanStartup {
             logMissingFeature("vulkanMemoryModel");
             hasAllFeatures = false;
         }
-        
+
         if (!physicalDeviceFeatures13.computeFullSubgroups()) {
             logMissingFeature("computeFullSubgroups");
             hasAllFeatures = false;
@@ -589,13 +611,13 @@ public class VulkanStartup {
             logMissingFeature("synchronization2");
             hasAllFeatures = false;
         }
-        
+
         return hasAllFeatures;
     }
-    
-    public static Triple<VkDevice, List<IntReferencePair<VkQueue>>, List<String>> createLogicalDeviceAndQueues(VkInstance vkInstance, VkPhysicalDevice vkPhysicalDevice, List<String> enabledLayersAndInstanceExtensions) {
+
+    public static Device createLogicalDeviceAndQueues(VkInstance vkInstance, VkPhysicalDevice vkPhysicalDevice, List<String> enabledLayersAndInstanceExtensions) {
         try (var stack = MemoryStack.stackPush()) {
-            
+
             int graphicsQueueFamily = 0;
             int graphicsQueueIndex = 0;
             int computeQueueFamily = -1;
@@ -667,7 +689,7 @@ public class VulkanStartup {
                         }
                     }
                 }
-                
+
                 queueFamilies.add(graphicsQueueFamily);
                 queueCounts.add(1);
                 if (queueFamilies.contains(computeQueueFamily)) {
@@ -689,7 +711,7 @@ public class VulkanStartup {
                     queueCounts.add(1);
                 }
             }
-            
+
             final var prioritiesPtr = stack.callocFloat(16);
             for (int i = 0; i < 16; i++) {
                 prioritiesPtr.put(i, 1.0f);
@@ -698,29 +720,29 @@ public class VulkanStartup {
             for (int i = 0; i < queueCounts.size(); i++) {
                 queueCreateInfos.position(i);
                 queueCreateInfos.sType$Default();
-                
+
                 final var queueFamilyIndex = queueFamilies.getInt(i);
                 final var queueCount = queueCounts.getInt(i);
-                
+
                 queueCreateInfos.queueFamilyIndex(queueFamilyIndex);
                 prioritiesPtr.limit(Math.min(prioritiesPtr.capacity(), queueCount));
                 queueCreateInfos.pQueuePriorities(prioritiesPtr);
             }
             queueCreateInfos.position(0);
-            
+
             final var physicalDeviceFeatures10 = VkPhysicalDeviceFeatures.calloc(stack);
             final var physicalDeviceFeatures11 = VkPhysicalDeviceVulkan11Features.calloc(stack).sType$Default();
             final var physicalDeviceFeatures12 = VkPhysicalDeviceVulkan12Features.calloc(stack).sType$Default();
             final var physicalDeviceFeatures13 = VkPhysicalDeviceVulkan13Features.calloc(stack).sType$Default();
-            
+
             physicalDeviceFeatures10.drawIndirectFirstInstance(true);
             physicalDeviceFeatures10.fillModeNonSolid(true);
             physicalDeviceFeatures10.logicOp(true);
             physicalDeviceFeatures10.multiDrawIndirect(true);
-            
+
             physicalDeviceFeatures11.storageBuffer16BitAccess(true);
             physicalDeviceFeatures11.shaderDrawParameters(true);
-            
+
             physicalDeviceFeatures12.drawIndirectCount(true);
             physicalDeviceFeatures12.descriptorIndexing(true);
             physicalDeviceFeatures12.descriptorBindingUniformBufferUpdateAfterBind(true);
@@ -747,7 +769,7 @@ public class VulkanStartup {
             physicalDeviceFeatures12.timelineSemaphore(true);
             physicalDeviceFeatures12.uniformBufferStandardLayout(true); // low support, 80%
             physicalDeviceFeatures12.vulkanMemoryModel(true);
-            
+
             physicalDeviceFeatures13.computeFullSubgroups(true);
             physicalDeviceFeatures13.descriptorBindingInlineUniformBlockUpdateAfterBind(true);
             physicalDeviceFeatures13.dynamicRendering(true);
@@ -757,15 +779,15 @@ public class VulkanStartup {
             physicalDeviceFeatures13.shaderTerminateInvocation(true);
             physicalDeviceFeatures13.subgroupSizeControl(true);
             physicalDeviceFeatures13.synchronization2(true);
-            
+
             final var deviceCreateInfo = VkDeviceCreateInfo.calloc(stack).sType$Default();
             deviceCreateInfo.pQueueCreateInfos(queueCreateInfos);
-            
+
             deviceCreateInfo.pEnabledFeatures(physicalDeviceFeatures10);
             deviceCreateInfo.pNext(physicalDeviceFeatures11);
             deviceCreateInfo.pNext(physicalDeviceFeatures12);
             deviceCreateInfo.pNext(physicalDeviceFeatures13);
-            
+
             final var extensionCountPtr = stack.callocInt(1);
             int totalExtensionProperties = 0;
             vkEnumerateDeviceExtensionProperties(vkPhysicalDevice, (String) null, extensionCountPtr, null);
@@ -786,14 +808,14 @@ public class VulkanStartup {
                 extensionProperties.position(extensionProperties.position() + extensionCountPtr.get(0));
             }
             extensionProperties.position(0);
-            
-            CINNABAR_CORE_LOG.debug("Listing device extensions");
+
+            LOGGER.debug("Listing device extensions");
             for (int j = 0; j < totalExtensionProperties; j++) {
                 extensionProperties.position(j);
                 final var currentExtension = extensionProperties.extensionNameString();
-                CINNABAR_CORE_LOG.debug(currentExtension);
+                LOGGER.debug(currentExtension);
             }
-            
+
             var enabledExtensions = new ObjectArrayList<String>();
             for (int i = 0; i < requiredDeviceExtensions.size(); i++) {
                 final var extensionName = requiredDeviceExtensions.get(i);
@@ -823,7 +845,7 @@ public class VulkanStartup {
                     if (enabledLayersAndInstanceExtensions.contains(dependency)) {
                         continue;
                     }
-                    CINNABAR_CORE_LOG.info("Optional device extension {} missing dependency {}", extensionName, dependency);
+                    LOGGER.info("Optional device extension {} missing dependency {}", extensionName, dependency);
                     missingDependency = true;
                 }
                 if (missingDependency) {
@@ -839,7 +861,7 @@ public class VulkanStartup {
                     }
                 }
                 if (!hasExtension) {
-                    CINNABAR_CORE_LOG.info("Missing optional device extension {}", extensionName);
+                    LOGGER.info("Missing optional device extension {}", extensionName);
                     continue;
                 }
                 enabledExtensions.add(extensionName);
@@ -849,31 +871,34 @@ public class VulkanStartup {
                 enabledExtensionsPtr.put(i, stack.UTF8(enabledExtensions.get(i)));
             }
             deviceCreateInfo.ppEnabledExtensionNames(enabledExtensionsPtr);
-            
+
             final var pointerPointer = stack.mallocPointer(1);
-            checkVkCode(vkCreateDevice(vkPhysicalDevice, deviceCreateInfo, null, pointerPointer));
-            CINNABAR_CORE_LOG.info("VkDevice created");
-            
+            final var deviceCreateCode = vkCreateDevice(vkPhysicalDevice, deviceCreateInfo, null, pointerPointer);
+            if (deviceCreateCode != VK_SUCCESS) {
+                throw new RuntimeException("Failed to create Vulkan device");
+            }
+            LOGGER.info("VkDevice created");
+
             final var logicalDevice = new VkDevice(pointerPointer.get(0), vkPhysicalDevice, deviceCreateInfo);
-            final var queues = new ReferenceArrayList<IntReferencePair<VkQueue>>();
+            final var queues = new ReferenceArrayList<Queue>();
             vkGetDeviceQueue(logicalDevice, graphicsQueueFamily, graphicsQueueIndex, pointerPointer);
-            queues.add(new IntReferenceImmutablePair<>(graphicsQueueFamily, new VkQueue(pointerPointer.get(0), logicalDevice)));
+            queues.add(new Queue(graphicsQueueFamily, new VkQueue(pointerPointer.get(0), logicalDevice)));
             if (computeQueueFamily != -1) {
                 vkGetDeviceQueue(logicalDevice, computeQueueFamily, computeQueueIndex, pointerPointer);
-                queues.add(new IntReferenceImmutablePair<>(computeQueueFamily, new VkQueue(pointerPointer.get(0), logicalDevice)));
+                queues.add(new Queue(computeQueueFamily, new VkQueue(pointerPointer.get(0), logicalDevice)));
             } else {
                 // no compute queue? alias graphics queue
                 queues.add(queues.get(0));
             }
             if (transferQueueFamily != -1) {
                 vkGetDeviceQueue(logicalDevice, transferQueueFamily, transferQueueIndex, pointerPointer);
-                queues.add(new IntReferenceImmutablePair<>(transferQueueFamily, new VkQueue(pointerPointer.get(0), logicalDevice)));
+                queues.add(new Queue(transferQueueFamily, new VkQueue(pointerPointer.get(0), logicalDevice)));
             } else {
                 // no transfer queue? alias compute queue
                 // note: may be the graphics queue
                 queues.add(queues.get(1));
             }
-            return new Triple<>(logicalDevice, queues, Collections.unmodifiableList(enabledExtensions));
+            return new Device(logicalDevice, queues, Collections.unmodifiableList(enabledExtensions));
         }
     }
 }

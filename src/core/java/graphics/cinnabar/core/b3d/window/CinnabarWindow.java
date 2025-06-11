@@ -15,7 +15,7 @@ import org.jetbrains.annotations.Nullable;
 import org.lwjgl.system.MemoryStack;
 
 import static graphics.cinnabar.api.exceptions.VkException.checkVkCode;
-import static graphics.cinnabar.lib.helpers.GLFWClassloadHelper.glfwExtCreateWindowSurface;
+import static graphics.cinnabar.earlywindow.GLFWClassloadHelper.glfwExtCreateWindowSurface;
 import static org.lwjgl.vulkan.KHRSurface.vkDestroySurfaceKHR;
 import static org.lwjgl.vulkan.VK10.VK_NULL_HANDLE;
 

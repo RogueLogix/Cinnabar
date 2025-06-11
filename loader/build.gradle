@@ -29,6 +29,11 @@ dependencies {
     compileOnly("org.lwjgl:lwjgl-glfw:3.3.3")
     compileOnly("org.lwjgl:lwjgl-tinyfd:3.3.3")
     compileOnly("net.sf.jopt-simple:jopt-simple:5.0.4")
+    compileOnly("it.unimi.dsi:fastutil:8.5.15")
+
+    for (lib in getParent().property("vkJavaLibs")) {
+        compileOnly((String) lib)
+    }
 
 }
 

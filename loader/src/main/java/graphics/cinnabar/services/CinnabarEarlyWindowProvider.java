@@ -1,6 +1,7 @@
 package graphics.cinnabar.services;
 
 import com.mojang.logging.LogUtils;
+import graphics.cinnabar.earlywindow.VulkanStartup;
 import joptsimple.OptionParser;
 import net.neoforged.fml.loading.FMLConfig;
 import net.neoforged.neoforgespi.earlywindow.ImmediateWindowProvider;
@@ -19,20 +20,20 @@ import static org.lwjgl.glfw.GLFW.*;
 
 public class CinnabarEarlyWindowProvider implements ImmediateWindowProvider {
     private static final Logger LOGGER = LogUtils.getLogger();
-    
+
     static {
         LOGGER.trace("CinnabarEarlyWindowProvider loaded!");
     }
-    
+
     public static final String EARLY_WINDOW_NAME = "CinnabarEarlyWindow";
-    
+
     private static boolean nameQueried = false;
     private static boolean configInjected = false;
     private int winWidth;
     private int winHeight;
-    
+
     private static Method VK_SUPPORTED;
-    
+
     public static void attemptConfigInit() {
         if (nameQueried || configInjected) {
             return;
@@ -45,7 +46,7 @@ public class CinnabarEarlyWindowProvider implements ImmediateWindowProvider {
             configInjected = true;
         }
     }
-    
+
     @Override
     public String name() {
         if (!nameQueried && configInjected) {
@@ -57,7 +58,7 @@ public class CinnabarEarlyWindowProvider implements ImmediateWindowProvider {
         nameQueried = true;
         return EARLY_WINDOW_NAME;
     }
-    
+
     @Override
     public Runnable initialize(String[] arguments) {
         Configuration.STACK_SIZE.set(256);
@@ -72,62 +73,51 @@ public class CinnabarEarlyWindowProvider implements ImmediateWindowProvider {
         }
         final OptionParser parser = new OptionParser();
         var widthopt = parser.accepts("width")
-                               .withRequiredArg().ofType(Integer.class)
-                               .defaultsTo(FMLConfig.getIntConfigValue(FMLConfig.ConfigValue.EARLY_WINDOW_WIDTH));
+                .withRequiredArg().ofType(Integer.class)
+                .defaultsTo(FMLConfig.getIntConfigValue(FMLConfig.ConfigValue.EARLY_WINDOW_WIDTH));
         var heightopt = parser.accepts("height")
-                                .withRequiredArg().ofType(Integer.class)
-                                .defaultsTo(FMLConfig.getIntConfigValue(FMLConfig.ConfigValue.EARLY_WINDOW_HEIGHT));
+                .withRequiredArg().ofType(Integer.class)
+                .defaultsTo(FMLConfig.getIntConfigValue(FMLConfig.ConfigValue.EARLY_WINDOW_HEIGHT));
         parser.allowsUnrecognizedOptions();
         var parsed = parser.parse(arguments);
         winWidth = parsed.valueOf(widthopt);
         winHeight = parsed.valueOf(heightopt);
         FMLConfig.updateConfig(FMLConfig.ConfigValue.EARLY_WINDOW_WIDTH, winWidth);
         FMLConfig.updateConfig(FMLConfig.ConfigValue.EARLY_WINDOW_HEIGHT, winHeight);
-        
+
         return () -> {
         };
     }
-    
+
     @Override
     public void updateModuleReads(final ModuleLayer layer) {
-        var fm = layer.findModule("cinnabar");
-        if (fm.isPresent()) {
-            getClass().getModule().addReads(fm.get());
-            var clz = fm.map(l -> Class.forName(l, "graphics.cinnabar.core.vk.VulkanStartup")).orElseThrow();
-            var methods = Arrays.stream(clz.getMethods()).filter(m -> Modifier.isStatic(m.getModifiers())).collect(Collectors.toMap(Method::getName, Function.identity()));
-            VK_SUPPORTED = methods.get("isSupported");
-        }
     }
-    
+
     @Override
     public long takeOverGlfwWindow() {
-        try {
-            if (CinnabarLaunchPlugin.initCompleted() && (boolean)VK_SUPPORTED.invoke(null)) {
-                glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-            }
-        } catch (IllegalAccessException | InvocationTargetException e) {
-            throw new RuntimeException(e);
+        if (CinnabarLaunchPlugin.initCompleted() && VulkanStartup.isSupported()) {
+            glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
         }
         return glfwCreateWindow(winWidth, winHeight, "Cinnabar", 0, 0);
     }
-    
+
     @Override
     public void periodicTick() {
-    
+
     }
-    
+
     @Override
     public void updateProgress(String label) {
-    
+
     }
-    
+
     @Override
     public void completeProgress() {
-    
+
     }
-    
+
     @Override
     public void crash(String message) {
-    
+
     }
 }
