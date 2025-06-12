@@ -59,6 +59,30 @@ def lwjglNativePlatforms = [
         "natives-windows-arm64",
 ]
 
+loaderLibsToPack = []
+def nativeLibsToUse = []
+vkJavaLibs = []
+
+for (lib in lwjglJavaLibs) {
+    var baseLibName = "org.lwjgl:lwjgl-$lib:$lwjglVersion"
+    loaderLibsToPack.add(baseLibName)
+    vkJavaLibs.add(baseLibName)
+}
+
+for (lib in lwjglNativeLibs) {
+    var baseLibName = "org.lwjgl:lwjgl-$lib:$lwjglVersion"
+    loaderLibsToPack.add(baseLibName)
+    vkJavaLibs.add(baseLibName)
+    nativeLibsToUse.add(baseLibName + ":$lwjglNatives")
+    for (nativePlatform in lwjglNativePlatforms) {
+        loaderLibsToPack.add(baseLibName + ":$nativePlatform")
+    }
+}
+
+loaderLibsToPack.add("org.lwjgl:lwjgl-vulkan:$lwjglVersion:natives-macos")
+loaderLibsToPack.add("org.lwjgl:lwjgl-vulkan:$lwjglVersion:natives-macos-arm64")
+
+evaluationDependsOn(":loader")
 
 configurations {
     builtModJar {
@@ -187,40 +211,27 @@ neoForge {
             sourceSet(sourceSets.mclib)
             sourceSet(sourceSets.main)
         }
+        "loader" {
+            sourceSet(project(':loader').sourceSets.main)
+        }
     }
 }
 
 sourceSets.main.resources { srcDir 'src/generated/resources' }
 
-loaderLibsToPack = []
-vkJavaLibs = []
-
 dependencies {
 
-    additionalRuntimeClasspath(project(":loader"))
-    implementation(project(":loader"))
+//    additionalRuntimeClasspath(project(":loader"))
+    compileOnly(project(":loader"))
 
-    for (lib in lwjglJavaLibs) {
-        var baseLibName = "org.lwjgl:lwjgl-$lib:$lwjglVersion"
-        implementation(baseLibName)
-        additionalRuntimeClasspath(baseLibName)
-        loaderLibsToPack.add(baseLibName)
-        vkJavaLibs.add(baseLibName)
-    }
-    for (lib in lwjglNativeLibs) {
-        var baseLibName = "org.lwjgl:lwjgl-$lib:$lwjglVersion"
-        implementation(baseLibName)
-        additionalRuntimeClasspath(baseLibName)
-        loaderLibsToPack.add(baseLibName)
-        vkJavaLibs.add(baseLibName)
-        additionalRuntimeClasspath(baseLibName + ":$lwjglNatives")
-        for (nativePlatform in lwjglNativePlatforms) {
-            loaderLibsToPack.add(baseLibName + ":$nativePlatform")
-        }
+    for (lib in vkJavaLibs) {
+        implementation(lib)
+        additionalRuntimeClasspath(lib)
     }
 
-    loaderLibsToPack.add("org.lwjgl:lwjgl-vulkan:$lwjglVersion:natives-macos")
-    loaderLibsToPack.add("org.lwjgl:lwjgl-vulkan:$lwjglVersion:natives-macos-arm64")
+    for (lib in nativeLibsToUse) {
+        additionalRuntimeClasspath(lib)
+    }
 
     for (lib in loaderLibsToPack) {
         jijLib((String) lib)
