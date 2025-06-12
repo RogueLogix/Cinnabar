@@ -24,6 +24,7 @@ configurations {
 
 dependencies {
     compileOnly("net.neoforged.fancymodloader:loader:$fml_version")
+    compileOnly("net.neoforged.fancymodloader:earlydisplay:$fml_version")
     compileOnly("cpw.mods:securejarhandler:3.0.8")
     compileOnly("org.jetbrains:annotations:24.1.0")
     compileOnly("org.lwjgl:lwjgl-glfw:3.3.3")

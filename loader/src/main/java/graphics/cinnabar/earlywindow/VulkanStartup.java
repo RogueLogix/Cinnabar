@@ -8,6 +8,7 @@ import it.unimi.dsi.fastutil.objects.ObjectObjectImmutablePair;
 import it.unimi.dsi.fastutil.objects.ReferenceArrayList;
 import net.neoforged.fml.loading.FMLLoader;
 import org.jetbrains.annotations.Nullable;
+import org.lwjgl.system.Configuration;
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.util.tinyfd.TinyFileDialogs;
 import org.lwjgl.vulkan.*;
@@ -35,7 +36,7 @@ public class VulkanStartup {
     private static final Logger LOGGER = LogUtils.getLogger();
 
     public record Instance(VkInstance instance, long debugCallback, List<String> enabledInsanceExtensions) {
-        void destroy() {
+        public void destroy() {
             if (debugCallback != -1) {
                 vkDestroyDebugUtilsMessengerEXT(instance, debugCallback, null);
             }
@@ -47,7 +48,7 @@ public class VulkanStartup {
     }
 
     public record Device(VkDevice device, List<Queue> queues, List<String> enabledDeviceExtensions) {
-        void destroy() {
+        public void destroy() {
             vkDestroyDevice(device, null);
         }
     }
@@ -69,6 +70,7 @@ public class VulkanStartup {
 
     private static final boolean supported = ((Supplier<Boolean>) () -> {
         LOGGER.info("Querying Vulkan support");
+        Configuration.STACK_SIZE.set(256);
         try {
             final var instanceRecord = createVkInstance(false, false, null);
             try {
@@ -80,6 +82,7 @@ public class VulkanStartup {
                 instanceRecord.destroy();
             }
         } catch (RuntimeException ignored) {
+            ignored.printStackTrace();
         }
         LOGGER.info("No compatible card found, using OpenGL");
         return false;
@@ -89,14 +92,37 @@ public class VulkanStartup {
         return supported;
     }
 
-    public static Instance createVkInstance(boolean validationLayers, boolean enableMesaOverlay, VkDebugUtilsMessengerCreateInfoEXT debugCreateInfo) {
+    public static Instance createVkInstance(boolean validationLayers, boolean enableMesaOverlay, @Nullable VkDebugUtilsMessengerCreateInfoEXT debugCreateInfo) {
         try (var stack = MemoryStack.stackPush()) {
             final var appInfo = VkApplicationInfo.calloc(stack);
             final var appName = stack.UTF8("Minecraft");
             final var engineName = stack.UTF8("Cinnabar");
             // TODO: pull this from FML/MC, so i don't have to update this every MC update
-            final var appVersion = VK_MAKE_VERSION(1, 21, 6);
-            final var engineVersion = VK_MAKE_VERSION(0, 0, 1);
+            final int appVersion;
+            {
+                final var fmlVersionInfo = FMLLoader.versionInfo();
+                if(fmlVersionInfo != null) {
+                    final var mcVersionString = fmlVersionInfo.mcVersion();
+                    final var mcVersionChunks = mcVersionString.split("-")[0].split("\\.");
+                    appVersion = VK_MAKE_VERSION(Integer.parseInt(mcVersionChunks[0]), Integer.parseInt(mcVersionChunks[1]), Integer.parseInt(mcVersionChunks[2]));
+                } else {
+                    appVersion = 0;
+                }
+            }
+            final int engineVersion;
+            final var modLoadingList = FMLLoader.getLoadingModList();
+            if(modLoadingList != null) {
+                @Nullable final var modFile = modLoadingList.getModFileById("cinnabar");
+                if (modFile != null) {
+                    final var modVersionString = modFile.versionString();
+                    final var modVersionChunks = modVersionString.split("-")[0].split("\\.");
+                    engineVersion = VK_MAKE_VERSION(Integer.parseInt(modVersionChunks[0]), Integer.parseInt(modVersionChunks[1]), Integer.parseInt(modVersionChunks[2]));
+                } else {
+                    engineVersion = 0;
+                }
+            } else {
+                engineVersion = 0;
+            }
             appInfo.sType(VK_STRUCTURE_TYPE_APPLICATION_INFO);
             appInfo.pApplicationName(appName);
             appInfo.applicationVersion(appVersion);
