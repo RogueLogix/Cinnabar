@@ -265,6 +265,10 @@ public class CinnabarEarlyWindowProvider implements ImmediateWindowProvider {
         } catch (InterruptedException e) {
             throw new RuntimeException(e);
         }
+        try (final var stack = MemoryStack.stackPush()) {
+            vkFreeCommandBuffers(device.device(), commandPool, stack.pointers(commandBuffer));
+        }
+        vkDestroyCommandPool(device.device(), commandPool, null);
         swapchain.destroy();
         vkDestroySurfaceKHR(instance.instance(), surface, null);
         device.destroy();
