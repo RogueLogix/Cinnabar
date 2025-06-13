@@ -300,11 +300,13 @@ tasks.register('sourcesJar', Jar).configure { Jar jar1 ->
             sourceSets.mclib.output,
             sourceSets.core.output,
             sourceSets.main.output,
+            project(':loader').sourceSets.main.output,
             sourceSets.api.allJava,
             sourceSets.lib.allJava,
             sourceSets.mclib.allJava,
             sourceSets.core.allJava,
             sourceSets.main.allJava,
+            project(':loader').sourceSets.main.allJava,
     ])
 }
 
