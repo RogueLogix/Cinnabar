@@ -1,6 +1,6 @@
 package graphics.cinnabar.core.mixin.mixins;
 
-import graphics.cinnabar.earlywindow.VulkanStartup;
+import graphics.cinnabar.loader.earlywindow.VulkanStartup;
 import net.minecraft.client.renderer.CachedOrthoProjectionMatrixBuffer;
 import org.joml.Matrix4f;
 import org.spongepowered.asm.mixin.Mixin;

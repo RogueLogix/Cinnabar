@@ -1,6 +1,6 @@
-package graphics.cinnabar.earlywindow.vulkan;
+package graphics.cinnabar.loader.earlywindow.vulkan;
 
-import graphics.cinnabar.earlywindow.VulkanStartup;
+import graphics.cinnabar.loader.earlywindow.VulkanStartup;
 import it.unimi.dsi.fastutil.longs.LongArrayList;
 import it.unimi.dsi.fastutil.longs.LongList;
 import it.unimi.dsi.fastutil.longs.LongLists;

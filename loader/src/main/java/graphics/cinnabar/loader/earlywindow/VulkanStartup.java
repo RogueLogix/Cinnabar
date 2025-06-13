@@ -1,4 +1,4 @@
-package graphics.cinnabar.earlywindow;
+package graphics.cinnabar.loader.earlywindow;
 
 import com.mojang.logging.LogUtils;
 import it.unimi.dsi.fastutil.Pair;
@@ -18,7 +18,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.function.Supplier;
 
-import static graphics.cinnabar.earlywindow.GLFWClassloadHelper.glfwExtGetPhysicalDevicePresentationSupport;
+import static graphics.cinnabar.loader.earlywindow.GLFWClassloadHelper.glfwExtGetPhysicalDevicePresentationSupport;
 import static org.lwjgl.glfw.GLFWVulkan.glfwGetRequiredInstanceExtensions;
 import static org.lwjgl.vulkan.EXTDebugMarker.VK_EXT_DEBUG_MARKER_EXTENSION_NAME;
 import static org.lwjgl.vulkan.EXTDebugReport.VK_EXT_DEBUG_REPORT_EXTENSION_NAME;

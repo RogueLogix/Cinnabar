@@ -1,4 +1,4 @@
-package graphics.cinnabar.services;
+package graphics.cinnabar.loader.services;
 
 import com.mojang.logging.LogUtils;
 import net.neoforged.neoforgespi.earlywindow.GraphicsBootstrapper;

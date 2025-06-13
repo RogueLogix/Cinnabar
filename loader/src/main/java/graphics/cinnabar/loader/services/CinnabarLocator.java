@@ -1,15 +1,11 @@
-package graphics.cinnabar.services;
+package graphics.cinnabar.loader.services;
 
 import com.mojang.logging.LogUtils;
 import cpw.mods.jarhandling.JarContents;
-import cpw.mods.jarhandling.SecureJar;
-import net.neoforged.fml.ModLoadingException;
 
 import net.neoforged.fml.loading.FMLEnvironment;
-import net.neoforged.fml.loading.moddiscovery.readers.JarModsDotTomlModFileReader;
 import net.neoforged.neoforgespi.ILaunchContext;
 import net.neoforged.neoforgespi.locating.*;
-import org.lwjgl.system.Platform;
 import org.slf4j.Logger;
 
 import java.nio.file.Path;

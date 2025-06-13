@@ -1,10 +1,10 @@
-package graphics.cinnabar.services;
+package graphics.cinnabar.loader.services;
 
 import com.electronwill.nightconfig.core.CommentedConfig;
 import com.mojang.logging.LogUtils;
-import graphics.cinnabar.earlywindow.GLFWClassloadHelper;
-import graphics.cinnabar.earlywindow.VulkanStartup;
-import graphics.cinnabar.earlywindow.vulkan.BasicSwapchain;
+import graphics.cinnabar.loader.earlywindow.GLFWClassloadHelper;
+import graphics.cinnabar.loader.earlywindow.VulkanStartup;
+import graphics.cinnabar.loader.earlywindow.vulkan.BasicSwapchain;
 import joptsimple.OptionParser;
 import net.neoforged.fml.earlydisplay.ColourScheme;
 import net.neoforged.fml.loading.FMLConfig;

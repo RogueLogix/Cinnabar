@@ -1,4 +1,4 @@
-package graphics.cinnabar.earlywindow;
+package graphics.cinnabar.loader.earlywindow;
 
 import org.lwjgl.glfw.GLFWVulkan;
 import org.lwjgl.system.NativeType;
