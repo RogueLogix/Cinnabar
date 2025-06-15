@@ -97,6 +97,7 @@ public class WorkFuture<T> implements IWorkQueue.Work, Future<T> {
         if (!isDone()) {
             synchronized (this) {
                 if (!isDone()) {
+                    // TODO: this can deadlock if waiting on the only thread able to execute this future
                     wait();
                 }
             }

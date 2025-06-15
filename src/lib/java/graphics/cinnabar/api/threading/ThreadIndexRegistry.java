@@ -25,15 +25,21 @@ public class ThreadIndexRegistry {
     private static int nextVal = 0;
     
     public static ThreadIndex currentThreadIndex() {
-        @Nullable final var threadIndex = threadIndexThreadLocal.get();
-        if(threadIndex == null){
+        @Nullable
+        final var threadIndex = threadIndexThreadLocal.get();
+        if (threadIndex == null) {
             return ThreadIndex.INVALID;
         }
         return threadIndex;
     }
     
     public static synchronized ThreadIndex registerThisThread() {
-        if (nextVal == totalThreads){
+        @Nullable
+        final var existingIndex = threadIndexThreadLocal.get();
+        if(existingIndex != null){
+            return existingIndex;
+        }
+        if (nextVal == totalThreads) {
             throw new IllegalStateException("Too many threads attempted to register a threadIndex");
         }
         final var index = new ThreadIndex(nextVal++);

@@ -26,7 +26,7 @@ public record ThreadIndex(@API(note = "will be in range [0, threadCount)") int i
     @Internal
     static final ThreadIndex INVALID = new ThreadIndex(-1);
     
-    @API(note = "total number of threads with a registered index, this is decided at startup, will always be at least one")
+    @API(note = "total number of threads with a registered index, this is decided at startup, will always be at least three")
     public static int threadCount = Bootstrapper.threadCount;
     
     @Internal
@@ -57,6 +57,11 @@ public record ThreadIndex(@API(note = "will be in range [0, threadCount)") int i
     @ThreadSafety.Many
     public boolean valid() {
         return 0 <= index && index < threadCount;
+    }
+    
+    @Override
+    public boolean equals(Object obj) {
+        return obj instanceof ThreadIndex(int otherIndex) && otherIndex == index;
     }
     
     @Internal

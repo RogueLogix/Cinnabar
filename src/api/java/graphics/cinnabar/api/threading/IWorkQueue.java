@@ -4,6 +4,7 @@ import graphics.cinnabar.api.annotations.API;
 import graphics.cinnabar.api.annotations.Internal;
 import graphics.cinnabar.api.annotations.ThreadSafety;
 
+import java.util.List;
 import java.util.function.Consumer;
 
 @API
@@ -25,9 +26,15 @@ public interface IWorkQueue {
     
     @API(note = """
             Work and callbacks will run from cleanup thread
+            May be run immediately, will be run before AFTER_END_OF_CPU_FRAME
+            """)
+    IWorkQueue BACKGROUND_CLEANUP = Bootstrapper.BACKGROUND_CLEANUP;
+    
+    @API(note = """
+            Work and callbacks will run from cleanup thread
             Anything enqueued this CPU frame will be run after the CPU has finished the current frame
             
-            CPU frame end is defined as main window present, this runs
+            CPU frame end is defined as right after the vkQueuePresent call is made (or skipped, as that can happen)
             """)
     IWorkQueue AFTER_END_OF_CPU_FRAME = Bootstrapper.AFTER_END_OF_CPU_FRAME;
     
@@ -36,7 +43,7 @@ public interface IWorkQueue {
             Anything enqueued this GPU frame will be run after the GPU has finished the current frame
             Any work enqueued for end of the same CPU frame will be executed first
             
-            GPU frame end is defined as after the GPU signals the semaphore for present, and does not include the present itself
+            GPU frame end is defined as after the GPU signals the semaphore for present, but does not include the present itself
             """)
     IWorkQueue AFTER_END_OF_GPU_FRAME = Bootstrapper.AFTER_END_OF_GPU_FRAME;
     
@@ -49,108 +56,20 @@ public interface IWorkQueue {
         void accept(ThreadIndex threadIndex);
     }
     
-    @API
-    @ThreadSafety.Many
-    void beginEnqueueing();
+    void wait(ISemaphore semaphore, long value);
     
-    @API
-    @ThreadSafety.Many
-    void endEnqueueing();
-    
-    @API
-    record EnqueueingScope(IWorkQueue queue) implements AutoCloseable{
-        
-        @API
-        @ThreadSafety.Any
-        public EnqueueingScope(IWorkQueue queue){
-            this.queue = queue;
-            queue.beginEnqueueing();
-        }
-        
-        @API
-        @ThreadSafety.Many
-        public void enqueue(Work work) {
-            queue.enqueue(work);
-        }
-        
-        @API
-        @ThreadSafety.Any
-        @Override
-        public void close() throws Exception {
-            queue.endEnqueueing();
-        }
-    }
-    
-    @API
-    @ThreadSafety.Many
     void enqueue(Work work);
     
-    @API
-    interface ICounter {
-        
-        @API
-        record Item(Work work, ICounter counter) implements Work {
-            @Internal
-            @Override
-            public void accept(ThreadIndex threadIndex) {
-                work.accept(threadIndex);
-                counter.decrement();
-            }
-            
-            @API
-            public void enqueue() {
-                counter.enqueue(this);
-            }
-        }
-        
-        /**
-         * @param callback: callback on work completion, may be used to enqueue more work
-         */
-        @ThreadSafety.Any
-        void setCallback(Work callback);
-        
-        @ThreadSafety.Any
-        void setParent(ICounter counter);
-        
-        @API
-        @ThreadSafety.Any
-        void beginEnqueuing();
-        
-        @API
-        @ThreadSafety.Any
-        void endEnqueuing();
-        
-        @API
-        @ThreadSafety.Many
-        default void enqueue(Work work) {
-            enqueue(new Item(work, this));
-        }
-        
-        @API
-        @ThreadSafety.Many
-        void enqueue(Item item);
-        
-        @API
-        @ThreadSafety.Many
-        boolean isComplete();
-        
-        @API
-        @ThreadSafety.Many
-        void waitComplete();
-        
-        @Internal
-        @ThreadSafety.Many
-        void decrement();
-    }
+    @API(note = "For best performance, use a random access list (ArrayList)")
+    void enqueue(List<Work> work);
     
-    @API
-    @ThreadSafety.Any
-    ICounter createCounter();
+    void signal(ISemaphore semaphore, long value);
     
     @Internal
     @SuppressWarnings("DataFlowIssue")
     class Bootstrapper {
         static IWorkQueue MAIN_THREAD = null;
+        static IWorkQueue BACKGROUND_CLEANUP = null;
         static IWorkQueue BACKGROUND_THREADS = null;
         static IWorkQueue AFTER_END_OF_CPU_FRAME = null;
         static IWorkQueue AFTER_END_OF_GPU_FRAME = null;
