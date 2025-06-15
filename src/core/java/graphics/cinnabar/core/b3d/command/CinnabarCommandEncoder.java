@@ -7,6 +7,7 @@ import com.mojang.blaze3d.platform.NativeImage;
 import com.mojang.blaze3d.textures.GpuTexture;
 import com.mojang.blaze3d.textures.GpuTextureView;
 import graphics.cinnabar.api.cvk.systems.CVKCommandEncoder;
+import graphics.cinnabar.api.memory.GrowingMemoryStack;
 import graphics.cinnabar.api.util.Destroyable;
 import graphics.cinnabar.core.b3d.CinnabarDevice;
 import graphics.cinnabar.core.b3d.buffers.BufferPool;
@@ -41,7 +42,7 @@ public class CinnabarCommandEncoder implements CVKCommandEncoder, Destroyable {
     
     private final CinnabarDevice device;
     
-    private final MemoryStack memoryStack = MemoryStack.create();
+    private final MemoryStack memoryStack = new GrowingMemoryStack();
     
     private final ReferenceArrayList<VulkanTransientCommandBufferPool> commandPools = new ReferenceArrayList<>();
     

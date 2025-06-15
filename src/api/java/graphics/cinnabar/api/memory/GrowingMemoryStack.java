@@ -1,20 +1,24 @@
 package graphics.cinnabar.api.memory;
 
 import graphics.cinnabar.api.annotations.API;
+import graphics.cinnabar.api.exceptions.NotImplemented;
 import graphics.cinnabar.api.util.Destroyable;
+import it.unimi.dsi.fastutil.ints.IntLongMutablePair;
 import it.unimi.dsi.fastutil.objects.ReferenceArrayList;
-import org.lwjgl.vulkan.VkCommandBufferSubmitInfo;
-import org.lwjgl.vulkan.VkSemaphoreSubmitInfo;
+import org.lwjgl.system.MemoryStack;
 
 @API
-public class GrowingMemoryStack implements Destroyable {
+public class GrowingMemoryStack extends MemoryStack implements Destroyable {
     private static final long STACK_BLOCK_SIZE = 64 * MagicMemorySizes.KiB;
     private final ReferenceArrayList<PointerWrapper> stackBlocks = new ReferenceArrayList<>();
-    private int currentStackBlockIndex = 0;
-    private long currentStackBlockAllocated = 0;
+    
+    private IntLongMutablePair currentFrame;
+    private final ReferenceArrayList<IntLongMutablePair> frames = new ReferenceArrayList<>();
     
     public GrowingMemoryStack() {
+        super(null, 1, (int) STACK_BLOCK_SIZE);
         stackBlocks.add(PointerWrapper.alloc(STACK_BLOCK_SIZE));
+        currentFrame = new IntLongMutablePair(0, 0);
     }
     
     @Override
@@ -22,21 +26,56 @@ public class GrowingMemoryStack implements Destroyable {
         stackBlocks.forEach(PointerWrapper::free);
     }
     
-    public PointerWrapper calloc(long size, long alignment) {
+    public void reset() {
+        currentFrame = new IntLongMutablePair(0, 0);
+        frames.clear();
+    }
+    
+    @Override
+    public MemoryStack push() {
+        frames.push(currentFrame);
+        currentFrame = new IntLongMutablePair(currentFrame.leftInt(), currentFrame.rightLong());
+        return this;
+    }
+    
+    @Override
+    public MemoryStack pop() {
+        currentFrame = frames.pop();
+        return this;
+    }
+    
+    public long getAddress() {
+        throw new NotImplemented();
+    }
+    
+    public int getPointer() {
+        throw new NotImplemented();
+    }
+    
+    @Override
+    public void setPointer(int pointer) {
+        super.setPointer(pointer);
+    }
+    
+    @Override
+    public long nmalloc(int alignment, int size) {
         if (size > STACK_BLOCK_SIZE) {
             throw new IllegalArgumentException("Stack alloc size is too large");
         }
+        final var currentStackBlockIndex = currentFrame.leftInt();
+        final var currentStackBlockAllocated = currentFrame.rightLong();
         var stackBlock = stackBlocks.get(currentStackBlockIndex);
         long allocAddress = ((stackBlock.pointer() + currentStackBlockAllocated) + (alignment - 1)) & (-alignment);
         long allocOffset = allocAddress - stackBlock.pointer();
         // wont fit in this block, get the next one
         if ((allocOffset + size) > STACK_BLOCK_SIZE) {
-            currentStackBlockIndex++;
+            currentFrame.left(currentStackBlockIndex + 1);
+            final var stackBlockIndex = currentFrame.leftInt();
             // out of blocks, new one
-            if (currentStackBlockIndex == stackBlocks.size()) {
+            if (stackBlockIndex == stackBlocks.size()) {
                 stackBlocks.add(PointerWrapper.alloc(STACK_BLOCK_SIZE));
             }
-            stackBlock = stackBlocks.get(currentStackBlockIndex);
+            stackBlock = stackBlocks.get(stackBlockIndex);
             allocAddress = (stackBlock.pointer() + (alignment - 1)) & (-alignment);
             allocOffset = allocAddress - stackBlock.pointer();
             if ((allocOffset + size) > STACK_BLOCK_SIZE) {
@@ -46,32 +85,7 @@ public class GrowingMemoryStack implements Destroyable {
                 throw new IllegalArgumentException("Stack alloc size/alignment is too large");
             }
         }
-        currentStackBlockAllocated = allocOffset + size;
-        return stackBlock.slice(allocOffset, size).clear();
-    }
-    
-    public void reset() {
-        currentStackBlockIndex = 0;
-        currentStackBlockAllocated = 0;
-    }
-    
-    public VkCommandBufferSubmitInfo commandBufferSubmitInfo() {
-        final var ptr = calloc(VkCommandBufferSubmitInfo.SIZEOF, VkCommandBufferSubmitInfo.ALIGNOF);
-        return VkCommandBufferSubmitInfo.create(ptr.pointer());
-    }
-    
-    public VkCommandBufferSubmitInfo.Buffer commandBufferSubmitInfo(int count) {
-        final var ptr = calloc(VkCommandBufferSubmitInfo.SIZEOF * (long)count, VkCommandBufferSubmitInfo.ALIGNOF);
-        return VkCommandBufferSubmitInfo.create(ptr.pointer(), count);
-    }
-    
-    public VkSemaphoreSubmitInfo semaphoreSubmitInfo() {
-        final var ptr = calloc(VkSemaphoreSubmitInfo.SIZEOF, VkSemaphoreSubmitInfo.ALIGNOF);
-        return VkSemaphoreSubmitInfo.create(ptr.pointer());
-    }
-    
-    public VkSemaphoreSubmitInfo.Buffer semaphoreSubmitInfo(int count) {
-        final var ptr = calloc(VkSemaphoreSubmitInfo.SIZEOF * (long)count, VkSemaphoreSubmitInfo.ALIGNOF);
-        return VkSemaphoreSubmitInfo.create(ptr.pointer(), count);
+        currentFrame.right(allocOffset + size);
+        return stackBlock.pointer() + allocOffset;
     }
 }
