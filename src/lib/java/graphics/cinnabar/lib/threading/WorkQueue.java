@@ -155,8 +155,7 @@ public abstract class WorkQueue implements IWorkQueue {
         @API
         @ThreadSafety.Any
         public boolean runAllCurrentlyEnqueued() {
-            insertBreakpoint();
-            return runUntilBreakpointNumber(breakpointCounter);
+            return runUntilBreakpointNumber(insertBreakpoint());
         }
         
         @API

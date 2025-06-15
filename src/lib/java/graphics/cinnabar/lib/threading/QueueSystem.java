@@ -51,7 +51,7 @@ public final class QueueSystem {
                 for (int i = 0; i < mainThreadQueues.size(); i++) {
                     final var queue = mainThreadQueues.get(nextMainThreadQueue++);
                     nextMainThreadQueue %= mainThreadQueues.size();
-                    if (queue.runAllCurrentlyEnqueued()) {
+                    if (queue.runUntilStalled()) {
                         return;
                     }
                 }
@@ -69,7 +69,7 @@ public final class QueueSystem {
                 for (int i = 0; i < cleanupThreadQueues.size(); i++) {
                     final var queue = cleanupThreadQueues.get(nextCleanupQueue++);
                     nextCleanupQueue %= cleanupThreadQueues.size();
-                    if (queue.runAllCurrentlyEnqueued()) {
+                    if (queue.runUntilStalled()) {
                         return;
                     }
                 }
@@ -118,7 +118,7 @@ public final class QueueSystem {
                 for (int i = 0; i < cleanupThreadQueues.size(); i++) {
                     final var queue = cleanupThreadQueues.get(nextCleanupQueue++);
                     nextCleanupQueue %= cleanupThreadQueues.size();
-                    if (queue.runAllCurrentlyEnqueued()) {
+                    if (queue.runUntilStalled()) {
                         continue mainLoop;
                     }
                 }
@@ -160,9 +160,7 @@ public final class QueueSystem {
                 
                 synchronized (backgroundQueues) {
                     try {
-                        // only sleep for 100us, or about one time slice
-                        // ensurers that things waiting on VK semaphores will get picked up, without having to explicitly wait on the semaphores
-                        backgroundQueues.wait(0, 100_000);
+                        backgroundQueues.wait();
                     } catch (InterruptedException e) {
                         throw new RuntimeException(e);
                     }
