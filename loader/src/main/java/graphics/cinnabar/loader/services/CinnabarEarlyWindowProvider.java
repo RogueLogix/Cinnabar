@@ -157,7 +157,17 @@ public class CinnabarEarlyWindowProvider implements ImmediateWindowProvider {
 
         var forgeVersion = parsed.valueOf(forgeversionopt);
         StartupNotificationManager.modLoaderConsumer().ifPresent(c -> c.accept("NeoForge loading " + forgeVersion));
-
+        
+        final var mcVersion = parsed.valueOf(mcversionopt);
+        if (mcVersion != null) {
+            // this emulates what we would get without early progress window
+            // as vanilla never sets these, so GLFW uses the first window title
+            // set them explicitly to avoid it using "FML early loading progress" as the class
+            String vanillaWindowTitle = "Minecraft* " + mcVersion;
+            glfwWindowHintString(GLFW_X11_CLASS_NAME, vanillaWindowTitle);
+            glfwWindowHintString(GLFW_X11_INSTANCE_NAME, vanillaWindowTitle);
+        }
+        
         glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
         window = glfwCreateWindow(winWidth, winHeight, "Cinnabar Early Loading", 0, 0);
 
