@@ -95,6 +95,7 @@ public class RingQueue<T> {
         VarHandle.acquireFence();
         final var data = OBJECT_ARRAY_VAR_HANDLE.get(ringObjects, ringIndex);
         VarHandle.releaseFence();
+        OBJECT_ARRAY_VAR_HANDLE.set(ringObjects, ringIndex, null);
         LONG_ARRAY_VAR_HANDLE.set(ringVersions, ringIndex, expectedVersion + 1);
         //noinspection unchecked
         return (T) data;
@@ -127,6 +128,7 @@ public class RingQueue<T> {
             return null;
         }
         VarHandle.releaseFence();
+        OBJECT_ARRAY_VAR_HANDLE.set(ringObjects, ringIndex, null);
         LONG_ARRAY_VAR_HANDLE.set(ringVersions, ringIndex, expectedVersion + 1);
         return new LongReferenceImmutablePair<>(index, data);
     }

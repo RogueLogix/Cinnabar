@@ -22,6 +22,7 @@ import net.minecraft.util.ARGB;
 import net.neoforged.neoforge.client.stencil.StencilTest;
 import org.jetbrains.annotations.Nullable;
 import org.lwjgl.system.MemoryStack;
+import org.lwjgl.system.libc.LibCString;
 import org.lwjgl.vulkan.*;
 
 import java.util.*;
@@ -578,6 +579,9 @@ public class CinnabarRenderPass implements CVKRenderPass {
             // for memory reasons, its assumed there is only a single dynamic uniform in this path, this is currently always the case
             throw new IllegalStateException();
         }
+        if (!(draws instanceof RandomAccess) || !(draws instanceof List<?>)) {
+            throw new IllegalStateException();
+        }
         final var dynamicUniformName = dynamicUniforms.stream().findFirst().get();
         assert !draws.isEmpty();
         assert boundPipeline != null;
@@ -590,7 +594,8 @@ public class CinnabarRenderPass implements CVKRenderPass {
             }
         }
         
-        final var orderedDraws = new ReferenceArrayList<>(draws);
+        final var drawCount = draws.size();
+        final var orderedDraws = (List<Draw<T>>) draws;
         final var orderedDynamicUniformValues = new ReferenceArrayList<GpuBufferSlice>();
         UniformUploader uploader = (name, bufferSlice) -> {
             if (!name.equals(dynamicUniformName)) {
@@ -598,7 +603,7 @@ public class CinnabarRenderPass implements CVKRenderPass {
             }
             orderedDynamicUniformValues.add(bufferSlice);
         };
-        for (int i = 0; i < orderedDraws.size(); i++) {
+        for (int i = 0; i < drawCount; i++) {
             final var draw = orderedDraws.get(i);
             if (draw.uniformUploaderConsumer() != null) {
                 draw.uniformUploaderConsumer().accept(userData, uploader);
@@ -608,121 +613,152 @@ public class CinnabarRenderPass implements CVKRenderPass {
             }
         }
         
-        var canBatchDynamicUniform = true;
-        var canBatchVertexBuffer = true;
-        var canBatchIndexBuffer = true;
-        var canBatchIndexType = true;
-        final var vertexSize = boundPipeline.info.getVertexFormat().getVertexSize();
-        
-        // if all draws don't share the same GPU buffer, i cant compact the descriptor updates
-        // they all also must be at a multiple of the array stride
-        final var expectedDynamicUniformGpuBuffer = orderedDynamicUniformValues.getFirst().buffer();
-        final var firstDraw = orderedDraws.getFirst();
-        final var expectedVertexBuffer = ((CinnabarGpuBuffer) firstDraw.vertexBuffer()).backingSlice().buffer();
-        @Nullable
-        final var expectedIndexB3DBuffer = firstDraw.indexBuffer() == null ? indexBuffer : firstDraw.indexBuffer();
-        @Nullable
-        final var expectedIndexCinnabarBuffer = expectedIndexB3DBuffer == null ? null : ((CinnabarGpuBuffer) expectedIndexB3DBuffer).backingSlice().buffer();
-        @Nullable
-        final var expectedIndexType = firstDraw.indexType() == null ? indexType : firstDraw.indexType();
-        for (int i = 0; i < orderedDynamicUniformValues.size(); i++) {
-            final var orderedDynamicUniformValue = orderedDynamicUniformValues.get(i);
-            final var draw = orderedDraws.get(i);
-            canBatchDynamicUniform = canBatchDynamicUniform && expectedDynamicUniformGpuBuffer == orderedDynamicUniformValue.buffer();
-            canBatchDynamicUniform = canBatchDynamicUniform && orderedDynamicUniformValue.offset() % ssboArrayStride == 0;
-            canBatchDynamicUniform = canBatchDynamicUniform && orderedDynamicUniformValue.length() == ssboArrayStride;
+        try (final var stack = memoryStack.push()) {
+            var canBatchDynamicUniform = true;
+            var canBatchVertexBuffer = true;
+            var canBatchIndexBuffer = true;
+            var canBatchIndexType = true;
+            final var vertexSize = boundPipeline.info.getVertexFormat().getVertexSize();
+            final var drawCommands = VkDrawIndexedIndirectCommand.calloc(drawCount, stack);
             
-            final var vertexBufferBacking = ((CinnabarGpuBuffer) draw.vertexBuffer()).backingSlice();
-            canBatchVertexBuffer = canBatchVertexBuffer && expectedVertexBuffer == vertexBufferBacking.buffer();
-            canBatchVertexBuffer = canBatchVertexBuffer && vertexBufferBacking.range.offset() % vertexSize == 0;
+            // if all draws don't share the same GPU buffer, i cant compact the descriptor updates
+            // they all also must be at a multiple of the array stride
+            final var expectedDynamicUniformGpuBuffer = orderedDynamicUniformValues.getFirst().buffer();
+            final var firstDraw = orderedDraws.getFirst();
+            final var expectedVertexBuffer = ((CinnabarGpuBuffer) firstDraw.vertexBuffer()).backingSlice().buffer();
             @Nullable
-            final var indexB3DBuffer = draw.indexBuffer() == null ? indexBuffer : draw.indexBuffer();
+            final var expectedIndexB3DBuffer = firstDraw.indexBuffer() == null ? indexBuffer : firstDraw.indexBuffer();
             @Nullable
-            final var indexCinnabarBuffer = indexB3DBuffer == null ? null : ((CinnabarGpuBuffer) indexB3DBuffer).backingSlice().buffer();
-            canBatchIndexBuffer = canBatchIndexBuffer && expectedIndexCinnabarBuffer == indexCinnabarBuffer;
-            canBatchIndexType = canBatchIndexType && expectedIndexType == (draw.indexType() == null ? indexType : draw.indexType());
-        }
-        
-        if (canBatchDynamicUniform) {
-            setUniform(dynamicUniformName, expectedDynamicUniformGpuBuffer.slice());
-            updateUniforms();
-            if (canBatchVertexBuffer && canBatchIndexBuffer && canBatchIndexType) {
-                // everything is batchable, MULTIDRAW TIME!
+            final var expectedIndexCinnabarBuffer = expectedIndexB3DBuffer == null ? null : ((CinnabarGpuBuffer) expectedIndexB3DBuffer).backingSlice().buffer();
+            @Nullable
+            final var expectedIndexType = firstDraw.indexType() == null ? indexType : firstDraw.indexType();
+            for (int i = 0; i < drawCount; i++) {
+                drawCommands.position(i);
+                final var orderedDynamicUniformValue = orderedDynamicUniformValues.get(i);
+                canBatchDynamicUniform = canBatchDynamicUniform && expectedDynamicUniformGpuBuffer == orderedDynamicUniformValue.buffer();
+                final var firstInstance = orderedDynamicUniformValue.offset() / ssboArrayStride;
+                final var firstInstanceRemainder = orderedDynamicUniformValue.offset() % ssboArrayStride;
+                canBatchDynamicUniform = canBatchDynamicUniform && firstInstanceRemainder == 0;
+                canBatchDynamicUniform = canBatchDynamicUniform && orderedDynamicUniformValue.length() == ssboArrayStride;
+                drawCommands.firstInstance(firstInstance);
+//            }
+//            for (int i = 0; i < drawCount; i++) {
+                drawCommands.position(i);
+                final var draw = orderedDraws.get(i);
                 
-                vkCmdBindVertexBuffers(commandBuffer, 0, new long[]{expectedVertexBuffer.handle}, new long[]{0});
-                assert expectedIndexCinnabarBuffer != null;
-                assert indexType != null;
-                vkCmdBindIndexBuffer(commandBuffer, expectedIndexCinnabarBuffer.handle, 0, switch (expectedIndexType) {
-                    case SHORT -> VK_INDEX_TYPE_UINT16;
-                    case INT -> VK_INDEX_TYPE_UINT32;
-                });
-                
-                final var drawsCPUBuffer = new VkBuffer(device, (long) orderedDraws.size() * VkDrawIndexedIndirectCommand.SIZEOF, VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT, device.hostMemoryType);
-                device.destroyEndOfFrame(drawsCPUBuffer);
-                final var drawCommands = VkDrawIndexedIndirectCommand.create(drawsCPUBuffer.allocationInfo.pMappedData(), orderedDraws.size());
-                for (int i = 0; i < orderedDraws.size(); i++) {
-                    final var draw = orderedDraws.get(i);
-                    drawCommands.position(i);
-                    drawCommands.indexCount(draw.indexCount());
-                    drawCommands.instanceCount(1);
-                    @Nullable
-                    final var indexB3DBuffer = draw.indexBuffer() == null ? indexBuffer : draw.indexBuffer();
-                    assert indexB3DBuffer != null;
-                    drawCommands.firstIndex((int) (((CinnabarGpuBuffer) indexB3DBuffer).backingSlice().range.offset() / expectedIndexType.bytes) + draw.firstIndex());
-                    drawCommands.vertexOffset((int) (((CinnabarGpuBuffer) draw.vertexBuffer()).backingSlice().range.offset() / vertexSize));
-                    drawCommands.firstInstance(orderedDynamicUniformValues.get(i).offset() / ssboArrayStride);
-                }
-                
-                vkCmdDrawIndexedIndirect(commandBuffer, drawsCPUBuffer.handle, 0, orderedDraws.size(), VkDrawIndexedIndirectCommand.SIZEOF);
-            } else if (canBatchVertexBuffer) {
-                vkCmdBindVertexBuffers(commandBuffer, 0, new long[]{expectedVertexBuffer.handle}, new long[]{0});
-                
+                final var vertexBufferBacking = ((CinnabarGpuBuffer) draw.vertexBuffer()).backingSlice();
+                canBatchVertexBuffer = canBatchVertexBuffer && expectedVertexBuffer == vertexBufferBacking.buffer();
+                final var vertexOffset = vertexBufferBacking.range.offset() / vertexSize;
+                final var vertexOffsetRemainder = vertexBufferBacking.range.offset() % vertexSize;
+                canBatchVertexBuffer = canBatchVertexBuffer && vertexOffsetRemainder == 0;
                 @Nullable
-                GpuBuffer lastIndexBuffer = null;
+                final var indexB3DBuffer = draw.indexBuffer() == null ? indexBuffer : draw.indexBuffer();
                 @Nullable
-                VertexFormat.IndexType lastIndexType = null;
-                for (int i = 0; i < orderedDraws.size(); i++) {
-                    final var draw = orderedDraws.get(i);
+                final var indexBufferSlice = indexB3DBuffer == null ? null : ((CinnabarGpuBuffer) indexB3DBuffer).backingSlice();
+                @Nullable
+                final var indexCinnabarBuffer = indexBufferSlice == null ? null : indexBufferSlice.buffer();
+                canBatchIndexBuffer = canBatchIndexBuffer && expectedIndexCinnabarBuffer == indexCinnabarBuffer;
+                canBatchIndexType = canBatchIndexType && expectedIndexType == (draw.indexType() == null ? indexType : draw.indexType());
+                
+                drawCommands.indexCount(draw.indexCount());
+                drawCommands.instanceCount(1);
+                assert expectedIndexType != null;
+                assert indexBufferSlice != null;
+                drawCommands.firstIndex((int) (indexBufferSlice.range.offset() / expectedIndexType.bytes) + draw.firstIndex());
+                drawCommands.vertexOffset((int) vertexOffset);
+            }
+            
+            if (canBatchDynamicUniform) {
+                setUniform(dynamicUniformName, expectedDynamicUniformGpuBuffer.slice());
+                updateUniforms();
+                if (canBatchVertexBuffer && canBatchIndexBuffer && canBatchIndexType) {
+                    // everything is batchable, MULTIDRAW TIME!
+                    
+                    vkCmdBindVertexBuffers(commandBuffer, 0, new long[]{expectedVertexBuffer.handle}, new long[]{0});
+                    assert expectedIndexCinnabarBuffer != null;
+                    assert indexType != null;
+                    vkCmdBindIndexBuffer(commandBuffer, expectedIndexCinnabarBuffer.handle, 0, switch (expectedIndexType) {
+                        case SHORT -> VK_INDEX_TYPE_UINT16;
+                        case INT -> VK_INDEX_TYPE_UINT32;
+                    });
+                    
+                    final var drawsCPUBuffer = new VkBuffer(device, (long) drawCount * VkDrawIndexedIndirectCommand.SIZEOF, VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT, device.hostMemoryType);
+                    device.destroyEndOfFrame(drawsCPUBuffer);
+                    LibCString.nmemcpy(drawsCPUBuffer.allocationInfo.pMappedData(), drawCommands.address(0), (long)drawCount * VkDrawIndexedIndirectCommand.SIZEOF);
+                    vkCmdDrawIndexedIndirect(commandBuffer, drawsCPUBuffer.handle, 0, drawCount, VkDrawIndexedIndirectCommand.SIZEOF);
+                } else if (canBatchVertexBuffer) {
+                    vkCmdBindVertexBuffers(commandBuffer, 0, new long[]{expectedVertexBuffer.handle}, new long[]{0});
+                    
                     @Nullable
-                    final var indexTypeToUse = draw.indexType() == null ? indexType : draw.indexType();
+                    GpuBuffer lastIndexBuffer = null;
                     @Nullable
-                    final var indexBufferToUse = draw.indexBuffer() == null ? indexBuffer : draw.indexBuffer();
-                    assert indexTypeToUse != null;
-                    assert indexBufferToUse != null;
-                    if (indexBufferToUse != lastIndexBuffer || indexTypeToUse != lastIndexType) {
-                        lastIndexBuffer = indexBufferToUse;
-                        lastIndexType = indexTypeToUse;
-                        setIndexBuffer(indexBufferToUse, indexTypeToUse);
+                    VertexFormat.IndexType lastIndexType = null;
+                    for (int i = 0; i < drawCount; i++) {
+                        final var draw = orderedDraws.get(i);
+                        @Nullable
+                        final var indexTypeToUse = draw.indexType() == null ? indexType : draw.indexType();
+                        @Nullable
+                        final var indexBufferToUse = draw.indexBuffer() == null ? indexBuffer : draw.indexBuffer();
+                        assert indexTypeToUse != null;
+                        assert indexBufferToUse != null;
+                        if (indexBufferToUse != lastIndexBuffer || indexTypeToUse != lastIndexType) {
+                            lastIndexBuffer = indexBufferToUse;
+                            lastIndexType = indexTypeToUse;
+                            setIndexBuffer(indexBufferToUse, indexTypeToUse);
+                        }
+                        final var arrayIndex = orderedDynamicUniformValues.get(i).offset() / ssboArrayStride;
+                        final var vertexOffset = (int) (((CinnabarGpuBuffer) draw.vertexBuffer()).backingSlice().range.offset() / vertexSize);
+                        vkCmdDrawIndexed(commandBuffer, draw.indexCount(), 1, draw.firstIndex(), vertexOffset, arrayIndex);
                     }
-                    final var arrayIndex = orderedDynamicUniformValues.get(i).offset() / ssboArrayStride;
-                    final var vertexOffset = (int) (((CinnabarGpuBuffer) draw.vertexBuffer()).backingSlice().range.offset() / vertexSize);
-                    vkCmdDrawIndexed(commandBuffer, draw.indexCount(), 1, draw.firstIndex(), vertexOffset, arrayIndex);
-                }
-            } else if (canBatchIndexBuffer && canBatchIndexType) {
-                assert expectedIndexCinnabarBuffer != null;
-                assert indexType != null;
-                vkCmdBindIndexBuffer(commandBuffer, expectedIndexCinnabarBuffer.handle, 0, switch (expectedIndexType) {
-                    case SHORT -> VK_INDEX_TYPE_UINT16;
-                    case INT -> VK_INDEX_TYPE_UINT32;
-                });
-                
-                for (int i = 0; i < orderedDraws.size(); i++) {
-                    final var draw = orderedDraws.get(i);
-                    setVertexBuffer(draw.slot(), draw.vertexBuffer());
-                    final var arrayIndex = orderedDynamicUniformValues.get(i).offset() / ssboArrayStride;
+                } else if (canBatchIndexBuffer && canBatchIndexType) {
+                    assert expectedIndexCinnabarBuffer != null;
+                    assert indexType != null;
+                    vkCmdBindIndexBuffer(commandBuffer, expectedIndexCinnabarBuffer.handle, 0, switch (expectedIndexType) {
+                        case SHORT -> VK_INDEX_TYPE_UINT16;
+                        case INT -> VK_INDEX_TYPE_UINT32;
+                    });
+                    
+                    for (int i = 0; i < drawCount; i++) {
+                        final var draw = orderedDraws.get(i);
+                        setVertexBuffer(draw.slot(), draw.vertexBuffer());
+                        final var arrayIndex = orderedDynamicUniformValues.get(i).offset() / ssboArrayStride;
+                        @Nullable
+                        final var indexB3DBuffer = draw.indexBuffer() == null ? indexBuffer : draw.indexBuffer();
+                        assert indexB3DBuffer != null;
+                        final var firstIndex = (int) (((CinnabarGpuBuffer) indexB3DBuffer).backingSlice().range.offset() / expectedIndexType.bytes);
+                        vkCmdDrawIndexed(commandBuffer, draw.indexCount(), 1, firstIndex + draw.firstIndex(), 0, arrayIndex);
+                    }
+                } else {
                     @Nullable
-                    final var indexB3DBuffer = draw.indexBuffer() == null ? indexBuffer : draw.indexBuffer();
-                    assert indexB3DBuffer != null;
-                    final var firstIndex = (int) (((CinnabarGpuBuffer) indexB3DBuffer).backingSlice().range.offset() / expectedIndexType.bytes);
-                    vkCmdDrawIndexed(commandBuffer, draw.indexCount(), 1, firstIndex + draw.firstIndex(), 0, arrayIndex);
+                    GpuBuffer lastIndexBuffer = null;
+                    @Nullable
+                    VertexFormat.IndexType lastIndexType = null;
+                    for (int i = 0; i < drawCount; i++) {
+                        final var draw = orderedDraws.get(i);
+                        @Nullable
+                        final var indexTypeToUse = draw.indexType() == null ? indexType : draw.indexType();
+                        @Nullable
+                        final var indexBufferToUse = draw.indexBuffer() == null ? indexBuffer : draw.indexBuffer();
+                        assert indexTypeToUse != null;
+                        assert indexBufferToUse != null;
+                        if (indexBufferToUse != lastIndexBuffer || indexTypeToUse != lastIndexType) {
+                            lastIndexBuffer = indexBufferToUse;
+                            lastIndexType = indexTypeToUse;
+                            setIndexBuffer(indexBufferToUse, indexTypeToUse);
+                        }
+                        setVertexBuffer(draw.slot(), draw.vertexBuffer());
+                        final var arrayIndex = orderedDynamicUniformValues.get(i).offset() / ssboArrayStride;
+                        vkCmdDrawIndexed(commandBuffer, draw.indexCount(), 1, draw.firstIndex(), 0, arrayIndex);
+                    }
                 }
             } else {
                 @Nullable
                 GpuBuffer lastIndexBuffer = null;
                 @Nullable
                 VertexFormat.IndexType lastIndexType = null;
-                for (int i = 0; i < orderedDraws.size(); i++) {
+                for (int i = 0; i < drawCount; i++) {
                     final var draw = orderedDraws.get(i);
+                    final var uniformValue = orderedDynamicUniformValues.get(i);
                     @Nullable
                     final var indexTypeToUse = draw.indexType() == null ? indexType : draw.indexType();
                     @Nullable
@@ -735,33 +771,10 @@ public class CinnabarRenderPass implements CVKRenderPass {
                         setIndexBuffer(indexBufferToUse, indexTypeToUse);
                     }
                     setVertexBuffer(draw.slot(), draw.vertexBuffer());
-                    final var arrayIndex = orderedDynamicUniformValues.get(i).offset() / ssboArrayStride;
-                    vkCmdDrawIndexed(commandBuffer, draw.indexCount(), 1, draw.firstIndex(), 0, arrayIndex);
+                    setUniform(dynamicUniformName, uniformValue);
+                    updateUniforms();
+                    vkCmdDrawIndexed(commandBuffer, draw.indexCount(), 1, draw.firstIndex(), 0, 0);
                 }
-            }
-        } else {
-            @Nullable
-            GpuBuffer lastIndexBuffer = null;
-            @Nullable
-            VertexFormat.IndexType lastIndexType = null;
-            for (int i = 0; i < orderedDraws.size(); i++) {
-                final var draw = orderedDraws.get(i);
-                final var uniformValue = orderedDynamicUniformValues.get(i);
-                @Nullable
-                final var indexTypeToUse = draw.indexType() == null ? indexType : draw.indexType();
-                @Nullable
-                final var indexBufferToUse = draw.indexBuffer() == null ? indexBuffer : draw.indexBuffer();
-                assert indexTypeToUse != null;
-                assert indexBufferToUse != null;
-                if (indexBufferToUse != lastIndexBuffer || indexTypeToUse != lastIndexType) {
-                    lastIndexBuffer = indexBufferToUse;
-                    lastIndexType = indexTypeToUse;
-                    setIndexBuffer(indexBufferToUse, indexTypeToUse);
-                }
-                setVertexBuffer(draw.slot(), draw.vertexBuffer());
-                setUniform(dynamicUniformName, uniformValue);
-                updateUniforms();
-                vkCmdDrawIndexed(commandBuffer, draw.indexCount(), 1, draw.firstIndex(), 0, 0);
             }
         }
     }

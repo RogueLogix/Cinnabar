@@ -1,8 +1,10 @@
 package graphics.cinnabar.api.util;
 
 import graphics.cinnabar.api.annotations.ThreadSafety;
+import graphics.cinnabar.api.threading.IWorkQueue;
+import graphics.cinnabar.api.threading.ThreadIndex;
 
-public interface Destroyable {
+public interface Destroyable extends IWorkQueue.Work {
     
     /*
      * It is only valid to call destroy on an object once
@@ -15,4 +17,9 @@ public interface Destroyable {
      */
     @ThreadSafety.Any
     void destroy();
+    
+    @Override
+    default void accept(ThreadIndex threadIndex) {
+        destroy();
+    }
 }

@@ -55,8 +55,8 @@ public class CinnabarGpuTextureView extends CVKGpuTextureView implements VulkanO
            return; 
         }
         closed = true;
-        texture.removeView();
         device.destroyEndOfFrame(this);
+        texture.removeView();
     }
     
     @Override

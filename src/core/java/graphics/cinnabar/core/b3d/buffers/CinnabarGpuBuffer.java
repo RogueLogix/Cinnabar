@@ -14,6 +14,8 @@ public sealed abstract class CinnabarGpuBuffer extends CVKGpuBuffer implements D
     private boolean isClosed = false;
     
     private long lastAccessFrame = -1;
+    @Nullable
+    protected VkBuffer.Slice backingSlice;
     
     public CinnabarGpuBuffer(CinnabarDevice device, int usage, int size, @Nullable String name) {
         super(usage, size);
@@ -38,7 +40,12 @@ public sealed abstract class CinnabarGpuBuffer extends CVKGpuBuffer implements D
         lastAccessFrame = device.currentFrame();
     }
     
-    protected abstract VkBuffer.Slice internalBackingSlice();
+    private VkBuffer.Slice internalBackingSlice() {
+        if (backingSlice == null) {
+            throw new NullPointerException();
+        }
+        return backingSlice;
+    }
     
     public VkBuffer.Slice backingSliceDirectAccess() {
         if (!canAccessDirectly()) {

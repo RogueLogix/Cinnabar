@@ -46,6 +46,11 @@ public abstract class WorkQueue implements IWorkQueue {
     @ThreadSafety.Many
     public void wait(ISemaphore semaphore, long value) {
         workRing.forceEnqueue(new SemaphoreOp(semaphore, value, false));
+        if (semaphore.value() < value && semaphore instanceof VulkanSemaphore vkSemaphore) {
+            // this semaphore isn't signaled yet, so this is a submit before signal
+            // wake all the threads when it signals 
+            QueueSystem.wakeThreadsOnSinal(vkSemaphore, value);
+        }
     }
     
     @API
@@ -74,6 +79,8 @@ public abstract class WorkQueue implements IWorkQueue {
     @ThreadSafety.Many
     public void signal(ISemaphore semaphore, long value) {
         workRing.forceEnqueue(new SemaphoreOp(semaphore, value, true));
+        QueueSystem.wakeWorkers(1);
+        QueueSystem.wakeCleanupThread(1);
     }
     
     public static class SingleThread extends WorkQueue {
@@ -177,7 +184,7 @@ public abstract class WorkQueue implements IWorkQueue {
         
         private static boolean waitConditionCheck(@Nullable Object item) {
             // a signal doesn't need to wait on anything for being dequeued, only waits do
-            return !(item instanceof SemaphoreOp semaphoreOp) || !semaphoreOp.signal || semaphoreOp.isSignaled();
+            return !(item instanceof SemaphoreOp semaphoreOp) || semaphoreOp.signal || semaphoreOp.isSignaled();
         }
         
         private boolean signalConditionCheck(@Nullable LongReferencePair<SemaphoreOp> entry) {

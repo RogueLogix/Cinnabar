@@ -1,9 +1,13 @@
 package graphics.cinnabar.lib.threading;
 
-import com.mojang.authlib.minecraft.client.MinecraftClient;
 import graphics.cinnabar.api.threading.ThreadIndex;
 import graphics.cinnabar.api.threading.ThreadIndexRegistry;
 import it.unimi.dsi.fastutil.objects.ReferenceArrayList;
+import it.unimi.dsi.fastutil.objects.ReferenceLongImmutablePair;
+import org.lwjgl.system.MemoryStack;
+import org.lwjgl.vulkan.VkSemaphoreWaitInfo;
+
+import static org.lwjgl.vulkan.VK12.*;
 
 public final class QueueSystem {
     private static int nextMainThreadQueue = 0;
@@ -12,6 +16,7 @@ public final class QueueSystem {
     private static final ReferenceArrayList<WorkQueue.SingleThread> cleanupThreadQueues = new ReferenceArrayList<>();
     private static int nextBackgroundQueue = 0;
     private static final ReferenceArrayList<WorkQueue.MultiThreaded> backgroundQueues = new ReferenceArrayList<>();
+    private static final ReferenceArrayList<ReferenceLongImmutablePair<VulkanSemaphore>> vkSemaphores = new ReferenceArrayList<>();
     
     public static WorkQueue createMainThreadQueue() {
         synchronized (mainThreadQueues) {
@@ -90,6 +95,11 @@ public final class QueueSystem {
     public static void startThreads() {
         ThreadIndexRegistry.registerThisThread();
         
+        final var waitThread = new Thread(QueueSystem::vkSemaphoreWaitThread);
+        waitThread.setDaemon(true);
+        waitThread.setName("CinnabarSemaphoreWait");
+        waitThread.start();
+        
         final var cleanupThread = new Thread(QueueSystem::cleanupThreadFunc);
         cleanupThread.setDaemon(true);
         cleanupThread.setName("CinnabarCleanup");
@@ -126,8 +136,7 @@ public final class QueueSystem {
                 synchronized (cleanupThreadQueues) {
                     try {
                         cleanupThreadQueues.wait(1);
-                    } catch (InterruptedException e) {
-                        throw new RuntimeException(e);
+                    } catch (InterruptedException ignored) {
                     }
                 }
             }
@@ -137,7 +146,7 @@ public final class QueueSystem {
         }
     }
     
-    private static void wakeCleanupThread(int ignored) {
+    public static void wakeCleanupThread(int ignored) {
         synchronized (cleanupThreadQueues) {
             cleanupThreadQueues.notify();
         }
@@ -161,8 +170,7 @@ public final class QueueSystem {
                 synchronized (backgroundQueues) {
                     try {
                         backgroundQueues.wait();
-                    } catch (InterruptedException e) {
-                        throw new RuntimeException(e);
+                    } catch (InterruptedException ignored) {
                     }
                 }
             }
@@ -182,4 +190,69 @@ public final class QueueSystem {
         }
     }
     
+    public static void wakeThreadsOnSinal(VulkanSemaphore semaphore, long value) {
+        synchronized (vkSemaphores) {
+            vkSemaphores.add(new ReferenceLongImmutablePair<>(semaphore, value));
+            vkSemaphores.notify();
+        }
+    }
+    
+    public static void vkSemaphoreWaitThread() {
+        try {
+            
+            while (true) {
+                tryVulkanWait:
+                try (final var stack = MemoryStack.stackPush()) {
+                    final var count = vkSemaphores.size();
+                    if (count == 0) {
+                        break tryVulkanWait;
+                    }
+                    final var vkDevice = vkSemaphores.getFirst().first().device();
+                    
+                    final var handles = stack.callocLong(count);
+                    final var values = stack.callocLong(count);
+                    for (int i = 0; i < count; i++) {
+                        final var semaphore = vkSemaphores.get(i);
+                        if (vkDevice != semaphore.left().device()) {
+                            System.exit(-1);
+                        }
+                        handles.put(i, semaphore.key().handle());
+                        values.put(i, semaphore.valueLong());
+                    }
+                    
+                    final var waitInfo = VkSemaphoreWaitInfo.calloc(stack).sType$Default();
+                    waitInfo.flags(VK_SEMAPHORE_WAIT_ANY_BIT);
+                    waitInfo.semaphoreCount(count);
+                    waitInfo.pSemaphores(handles);
+                    waitInfo.pValues(values);
+                    vkWaitSemaphores(vkDevice, waitInfo, -1);
+                    
+                    wakeWorkers(-1);
+                    wakeCleanupThread(-1);
+                    
+                    synchronized (vkSemaphores) {
+                        final var valuePtr = stack.longs(0);
+                        for (int i = 0; i < vkSemaphores.size(); i++) {
+                            final var pair = vkSemaphores.get(i);
+                            vkGetSemaphoreCounterValue(vkDevice, pair.key().handle(), valuePtr);
+                            if (pair.valueLong() <= valuePtr.get(0)) {
+                                // this semaphore signaled, remove it from the list
+                                vkSemaphores.remove(i);
+                                i--;
+                            }
+                        }
+                    }
+                }
+                synchronized (vkSemaphores) {
+                    try {
+                        vkSemaphores.wait();
+                    } catch (InterruptedException ignored) {
+                    }
+                }
+            }
+        } catch (Throwable e) {
+            e.printStackTrace();
+            System.exit(1);
+        }
+    }
 }

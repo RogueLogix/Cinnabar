@@ -8,6 +8,7 @@ import com.mojang.blaze3d.textures.GpuTexture;
 import com.mojang.blaze3d.textures.GpuTextureView;
 import graphics.cinnabar.api.cvk.systems.CVKCommandEncoder;
 import graphics.cinnabar.api.memory.GrowingMemoryStack;
+import graphics.cinnabar.api.threading.IWorkQueue;
 import graphics.cinnabar.api.util.Destroyable;
 import graphics.cinnabar.core.b3d.CinnabarDevice;
 import graphics.cinnabar.core.b3d.buffers.BufferPool;
@@ -18,6 +19,9 @@ import graphics.cinnabar.core.b3d.texture.CinnabarGpuTextureView;
 import graphics.cinnabar.core.b3d.window.CinnabarWindow;
 import graphics.cinnabar.core.util.MagicNumbers;
 import graphics.cinnabar.core.vk.memory.VkBuffer;
+import graphics.cinnabar.lib.threading.QueueSystem;
+import graphics.cinnabar.lib.threading.VulkanSemaphore;
+import graphics.cinnabar.lib.threading.WorkQueue;
 import it.unimi.dsi.fastutil.objects.ReferenceArrayList;
 import net.minecraft.client.Minecraft;
 import net.minecraft.util.ARGB;
@@ -27,6 +31,7 @@ import org.lwjgl.system.MemoryUtil;
 import org.lwjgl.system.libc.LibCString;
 import org.lwjgl.vulkan.*;
 
+import java.lang.invoke.VarHandle;
 import java.nio.ByteBuffer;
 import java.nio.IntBuffer;
 import java.util.List;
@@ -56,8 +61,7 @@ public class CinnabarCommandEncoder implements CVKCommandEncoder, Destroyable {
     private final ReferenceArrayList<@Nullable VkCommandBuffer> commandBuffers = new ReferenceArrayList<>();
     private final VkCommandBufferBeginInfo commandBufferBeginInfo = VkCommandBufferBeginInfo.calloc(memoryStack).sType$Default();
     
-    private final long interFrameSemaphore;
-    private long currentFrameNumber = MagicNumbers.MaximumFramesInFlight;
+    private final VulkanSemaphore interFrameSemaphore;
     
     public CinnabarCommandEncoder(CinnabarDevice device) {
         this.device = device;
@@ -73,14 +77,22 @@ public class CinnabarCommandEncoder implements CVKCommandEncoder, Destroyable {
             final var createInfo = VkSemaphoreCreateInfo.calloc(stack).sType$Default().pNext(typeCreateInfo);
             final var semaphoreVal = stack.longs(0);
             checkVkCode(vkCreateSemaphore(device.vkDevice, createInfo, null, semaphoreVal));
-            interFrameSemaphore = semaphoreVal.get(0);
+            interFrameSemaphore = new VulkanSemaphore(device.vkDevice);
+            WorkQueue.AFTER_END_OF_GPU_FRAME.wait(interFrameSemaphore, device.currentFrame());
         }
     }
     
     @Override
     public void destroy() {
         commandPools.forEach(VulkanTransientCommandBufferPool::destroy);
-        vkDestroySemaphore(device.vkDevice, interFrameSemaphore, null);
+        // wait for pending GPU work
+        interFrameSemaphore.wait(device.currentFrame() - 1, -1L);
+        // fake the GPU being done with work
+        interFrameSemaphore.signal(device.currentFrame());
+        // wait for the cleanup thread to process the release of the semaphore
+        WorkQueue.AFTER_END_OF_GPU_FRAME.signal(interFrameSemaphore, device.currentFrame() + 1);
+        interFrameSemaphore.wait(device.currentFrame() + 1, -1L);
+        interFrameSemaphore.destroy();
     }
     
     public VulkanTransientCommandBufferPool currentCommandPool() {
@@ -283,7 +295,6 @@ public class CinnabarCommandEncoder implements CVKCommandEncoder, Destroyable {
                 final var commandBuffer = uploadBeginningOfFrame ? beginFrameTransferCommandBuffer : getMainDrawCommandBuffer();
                 
                 final var stagingBuffer = device.uploadPools.get(device.currentFrameIndex()).alloc(0, data.remaining(), null);
-                device.destroyEndOfFrame(stagingBuffer);
                 final var stagingSlice = stagingBuffer.backingSlice();
                 LibCString.nmemcpy(stagingSlice.buffer().allocationInfo.pMappedData() + stagingSlice.range.offset(), MemoryUtil.memAddress(data), data.remaining());
                 
@@ -602,32 +613,35 @@ public class CinnabarCommandEncoder implements CVKCommandEncoder, Destroyable {
                 submitInfo.pCommandBuffers(stack.pointers(blitCommandBuffer));
                 blitCommandBuffer = null;
                 timelineSubmitInfo.pSignalSemaphoreValues(stack.longs(device.currentFrame(), 0));
-                submitInfo.pSignalSemaphores(stack.longs(interFrameSemaphore, swapchain.semaphore()));
+                submitInfo.pSignalSemaphores(stack.longs(interFrameSemaphore.handle(), swapchain.semaphore()));
             } else {
                 timelineSubmitInfo.pSignalSemaphoreValues(stack.longs(device.currentFrame()));
-                submitInfo.pSignalSemaphores(stack.longs(interFrameSemaphore));
+                submitInfo.pSignalSemaphores(stack.longs(interFrameSemaphore.handle()));
             }
             
             submitInfo.position(0);
-            vkQueueSubmit(device.graphicsQueue, submitInfo, VK_NULL_HANDLE);
+            synchronized (device.graphicsQueue) {
+                vkQueueSubmit(device.graphicsQueue, submitInfo, VK_NULL_HANDLE);
+            }
         }
         
         // frame done
         device.newFrame();
+        
+        WorkQueue.AFTER_END_OF_GPU_FRAME.wait(interFrameSemaphore, device.currentFrame());
         
         // wait for the last time this frame index was submitted
         // the semaphore starts at MaximumFramesInFlight, so this returns immediately for the first few frames
         try (final var stack = memoryStack.push()) {
             final var waitInfo = VkSemaphoreWaitInfo.calloc(stack).sType$Default();
             waitInfo.semaphoreCount(1);
-            waitInfo.pSemaphores(stack.longs(interFrameSemaphore));
+            waitInfo.pSemaphores(stack.longs(interFrameSemaphore.handle()));
             waitInfo.pValues(stack.longs(device.currentFrame() - MagicNumbers.MaximumFramesInFlight));
             if (checkVkCode(vkWaitSemaphores(device.vkDevice, waitInfo, -1)) != VK_SUCCESS) {
                 throw new IllegalStateException();
             }
         }
         
-        currentFrameNumber++;
         beginCommandBuffers();
         
         assert beginFrameTransferCommandBuffer != null;
@@ -658,7 +672,7 @@ public class CinnabarCommandEncoder implements CVKCommandEncoder, Destroyable {
                 try (final var stack = memoryStack.push()) {
                     final var waitInfo = VkSemaphoreWaitInfo.calloc(stack).sType$Default();
                     waitInfo.semaphoreCount(1);
-                    waitInfo.pSemaphores(stack.longs(interFrameSemaphore));
+                    waitInfo.pSemaphores(stack.longs(interFrameSemaphore.handle()));
                     waitInfo.pValues(stack.longs(waitValue));
                     final var returnCode = checkVkCode(vkWaitSemaphores(device.vkDevice, waitInfo, -1));
                     return returnCode == VK_SUCCESS;

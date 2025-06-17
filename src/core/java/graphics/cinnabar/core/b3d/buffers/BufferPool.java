@@ -1,5 +1,6 @@
 package graphics.cinnabar.core.b3d.buffers;
 
+import graphics.cinnabar.api.annotations.ThreadSafety;
 import graphics.cinnabar.api.memory.MemoryRange;
 import graphics.cinnabar.api.util.Destroyable;
 import graphics.cinnabar.core.CinnabarCore;
@@ -105,6 +106,7 @@ public class BufferPool implements Destroyable {
         return (this.usage | usage) <= this.usage;
     }
     
+    @ThreadSafety.MainGraphics
     public CinnabarGpuBuffer alloc(int usage, int size, @Nullable String name) {
         if (!canAllocate(usage)) {
             // usage isn't a subset, allocate a regular one
@@ -116,20 +118,27 @@ public class BufferPool implements Destroyable {
         if (vmaAlloc == null) {
             pooledBuffer.createOverflowBuffer();
             overflowSinceLastRealloc += size;
-            buffersInOverflow.add(pooledBuffer);
+            synchronized (this) {
+                buffersInOverflow.add(pooledBuffer);
+            }
         } else {
             pooledBuffer.offset = vmaAlloc.firstLong();
             pooledBuffer.vmaAllocation = vmaAlloc.secondLong();
-            buffers.add(pooledBuffer);
+            synchronized (this) {
+                buffers.add(pooledBuffer);
+            }
+            pooledBuffer.updateBackingSlice();
         }
         return pooledBuffer;
     }
     
+    @ThreadSafety.MainGraphics
     public void processRealloc() {
-        if (uploadPool) {
-            if (!buffersInOverflow.isEmpty() || !buffers.isEmpty()) {
-                throw new IllegalStateException();
+        if (uploadPool) synchronized (this) {
+            for (int i = buffersInOverflow.size() - 1; i >= 0; i--) {
+                buffersInOverflow.get(i).destroy();
             }
+            buffers.clear();
             vmaClearVirtualBlock(vmaVirtualBlock);
         }
         
@@ -138,6 +147,10 @@ public class BufferPool implements Destroyable {
             return;
         }
         
+        doRealloc();
+    }
+    
+    private synchronized void doRealloc() {
         assert mainBuffer != null;
         final var newSize = MathUtil.roundUpPo2(mainBuffer.size + overflowSinceLastRealloc);
         overflowSinceLastRealloc = 0;
@@ -174,7 +187,7 @@ public class BufferPool implements Destroyable {
         destroyMainBuffer();
         createMainBuffer(newSize);
         
-        if(oldDataBuffer != null || !buffersInOverflow.isEmpty()) {
+        if (oldDataBuffer != null || !buffersInOverflow.isEmpty()) {
             device.idleAndClear();
             try (final var stack = MemoryStack.stackPush()) {
                 final var copyUpCommandBuffer = commandPool.alloc("Pooled GpuBuffer realloc copy up");
@@ -193,6 +206,7 @@ public class BufferPool implements Destroyable {
                         
                         buffer.offset = vmaAlloc.firstLong();
                         buffer.vmaAllocation = vmaAlloc.secondLong();
+                        buffer.updateBackingSlice();
                         
                         mainCopyUps.srcOffset(previousOffset);
                         mainCopyUps.dstOffset(buffer.offset);
@@ -216,6 +230,7 @@ public class BufferPool implements Destroyable {
                         
                         overflowBuffer.offset = vmaAlloc.firstLong();
                         overflowBuffer.vmaAllocation = vmaAlloc.secondLong();
+                        overflowBuffer.updateBackingSlice();
                         
                         overflowCopyUp.srcOffset(0);
                         overflowCopyUp.dstOffset(overflowBuffer.offset);
@@ -252,27 +267,27 @@ public class BufferPool implements Destroyable {
         }
         
         @Override
-        protected VkBuffer.Slice internalBackingSlice() {
-            if (overflowBuffer != null) {
-                return overflowBuffer.whole();
+        public void destroy() {
+            // this is probably going to be slow
+            synchronized (BufferPool.this) {
+                destroyOverflowBuffer();
+                assert vmaVirtualBlock != 0;
+                if (vmaAllocation != 0) {
+                    vmaVirtualFree(vmaVirtualBlock, vmaAllocation);
+                }
+                buffers.remove(this);
+                buffersInOverflow.remove(this);
             }
-            assert mainBuffer != null;
-            return mainBuffer.slice(new MemoryRange(offset, size));
         }
         
-        @Override
-        public void destroy() {
-            destroyOverflowBuffer();
-            assert vmaVirtualBlock != 0;
-            if (vmaAllocation != 0) {
-                vmaVirtualFree(vmaVirtualBlock, vmaAllocation);
-            }
-            buffers.remove(this);
-            buffersInOverflow.remove(this);
+        private void updateBackingSlice() {
+            assert mainBuffer != null;
+            this.backingSlice = mainBuffer.slice(new MemoryRange(offset, size));
         }
         
         private void createOverflowBuffer() {
             overflowBuffer = new VkBuffer(device, size, vkUsageBits(usage(), clientStorage(usage())) | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT, memoryType);
+            this.backingSlice = overflowBuffer.whole();
         }
         
         private void destroyOverflowBuffer() {

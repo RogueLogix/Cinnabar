@@ -12,6 +12,7 @@ import graphics.cinnabar.api.cvk.pipeline.CVKCompiledRenderPipeline;
 import graphics.cinnabar.api.cvk.systems.CVKGpuDevice;
 import graphics.cinnabar.api.cvk.textures.CVKGpuTexture;
 import graphics.cinnabar.api.cvk.textures.CVKGpuTextureView;
+import graphics.cinnabar.api.threading.IWorkQueue;
 import graphics.cinnabar.api.util.Destroyable;
 import graphics.cinnabar.core.CinnabarCore;
 import graphics.cinnabar.core.DriverWorkarounds;
@@ -24,9 +25,9 @@ import graphics.cinnabar.core.b3d.texture.CinnabarGpuTextureView;
 import graphics.cinnabar.core.b3d.window.CinnabarWindow;
 import graphics.cinnabar.core.util.MagicNumbers;
 import graphics.cinnabar.core.vk.VulkanSampler;
-import graphics.cinnabar.loader.earlywindow.VulkanStartup;
 import graphics.cinnabar.lib.util.MathUtil;
 import graphics.cinnabar.lib.vulkan.VulkanDebug;
+import graphics.cinnabar.loader.earlywindow.VulkanStartup;
 import it.unimi.dsi.fastutil.ints.IntIntImmutablePair;
 import it.unimi.dsi.fastutil.objects.ReferenceArrayList;
 import net.minecraft.client.Minecraft;
@@ -283,7 +284,7 @@ public class CinnabarDevice implements CVKGpuDevice {
     }
 
     public <T extends Destroyable> T destroyEndOfFrame(T destroyable) {
-        toDestroy.get(currentFrameIndex()).add(destroyable);
+        IWorkQueue.AFTER_END_OF_GPU_FRAME.enqueue(destroyable);
         return destroyable;
     }
 

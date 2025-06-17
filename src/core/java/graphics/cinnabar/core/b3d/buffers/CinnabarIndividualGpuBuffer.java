@@ -7,7 +7,6 @@ import org.jetbrains.annotations.Nullable;
 public final class CinnabarIndividualGpuBuffer extends CinnabarGpuBuffer {
     
     private final VkBuffer backingBuffer;
-    private final VkBuffer.Slice backingSlice;
     
     public CinnabarIndividualGpuBuffer(CinnabarDevice device, int usage, int size, @Nullable String name) {
         super(device, usage, size, name);
@@ -20,10 +19,5 @@ public final class CinnabarIndividualGpuBuffer extends CinnabarGpuBuffer {
     @Override
     public void destroy() {
         backingBuffer.destroy();
-    }
-    
-    @Override
-    protected VkBuffer.Slice internalBackingSlice() {
-        return backingSlice;
     }
 }

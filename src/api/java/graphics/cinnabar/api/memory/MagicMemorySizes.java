@@ -12,6 +12,8 @@ public class MagicMemorySizes {
     public static final int SHORT_BYTE_SIZE = 2;
     public static final int INT_BYTE_SIZE = 4;
     public static final int LONG_BYTE_SIZE = 8;
+    public static final int VEC2_BYTE_SIZE = FLOAT_BYTE_SIZE * 2;
+    public static final int IVEC2_BYTE_SIZE = INT_BYTE_SIZE * 2;
     public static final int VEC3_BYTE_SIZE = FLOAT_BYTE_SIZE * 3;
     public static final int IVEC3_BYTE_SIZE = INT_BYTE_SIZE * 3;
     public static final int VEC4_BYTE_SIZE = FLOAT_BYTE_SIZE * 4;
