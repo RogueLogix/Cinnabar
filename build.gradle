@@ -372,7 +372,7 @@ if (curseforgeToken != null && this.project == this.rootProject) {
         apiToken = curseforgeToken
         def projectId = "552238"
 
-        def mainFile = upload(projectId, project(":loader").jar)
+        def mainFile = upload(projectId, fatJar)
         mainFile.changelog = changelog
         mainFile.changelogType = 'markdown'
         mainFile.releaseType = release_type
