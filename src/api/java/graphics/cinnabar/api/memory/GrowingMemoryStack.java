@@ -4,63 +4,81 @@ import graphics.cinnabar.api.annotations.API;
 import graphics.cinnabar.api.exceptions.NotImplemented;
 import graphics.cinnabar.api.util.Destroyable;
 import it.unimi.dsi.fastutil.ints.IntLongMutablePair;
+import it.unimi.dsi.fastutil.longs.LongArrayList;
 import it.unimi.dsi.fastutil.objects.ReferenceArrayList;
 import org.lwjgl.system.MemoryStack;
+import org.lwjgl.system.MemoryUtil;
 
 @API
 public class GrowingMemoryStack extends MemoryStack implements Destroyable {
-    private static final long STACK_BLOCK_SIZE = 64 * MagicMemorySizes.KiB;
+    private static final long STACK_BLOCK_SIZE = 256 * MagicMemorySizes.KiB;
     private final ReferenceArrayList<PointerWrapper> stackBlocks = new ReferenceArrayList<>();
-    
+
     private IntLongMutablePair currentFrame;
     private final ReferenceArrayList<IntLongMutablePair> frames = new ReferenceArrayList<>();
-    
+    private final ReferenceArrayList<LongArrayList> frameOverflowAllocs = new ReferenceArrayList<>();
+
     public GrowingMemoryStack() {
         super(null, 1, (int) STACK_BLOCK_SIZE);
         stackBlocks.add(PointerWrapper.alloc(STACK_BLOCK_SIZE));
         currentFrame = new IntLongMutablePair(0, 0);
     }
-    
+
     @Override
     public void destroy() {
         stackBlocks.forEach(PointerWrapper::free);
     }
-    
+
     public void reset() {
         currentFrame = new IntLongMutablePair(0, 0);
         frames.clear();
     }
-    
+
     @Override
     public MemoryStack push() {
         frames.push(currentFrame);
         currentFrame = new IntLongMutablePair(currentFrame.leftInt(), currentFrame.rightLong());
         return this;
     }
-    
+
     @Override
     public MemoryStack pop() {
         currentFrame = frames.pop();
+        if (frameOverflowAllocs.size() > frames.size()) {
+            final var overflowAllocs = frameOverflowAllocs.get(frames.size());
+            if (overflowAllocs != null) {
+                overflowAllocs.forEach(MemoryUtil::nmemFree);
+                overflowAllocs.clear();
+            }
+        }
         return this;
     }
-    
+
     public long getAddress() {
         throw new NotImplemented();
     }
-    
+
     public int getPointer() {
         throw new NotImplemented();
     }
-    
+
     @Override
     public void setPointer(int pointer) {
         super.setPointer(pointer);
     }
-    
+
     @Override
     public long nmalloc(int alignment, int size) {
         if (size > STACK_BLOCK_SIZE) {
-            throw new IllegalArgumentException("Stack alloc size is too large");
+            if (frameOverflowAllocs.size() < frames.size()) {
+                frameOverflowAllocs.size(frames.size());
+            }
+            if (frameOverflowAllocs.get(frames.size() - 1) == null) {
+                frameOverflowAllocs.set(frames.size() - 1, new LongArrayList());
+            }
+            final var overflowAlloc = MemoryUtil.nmemAlloc(size);
+            frameOverflowAllocs.get(frames.size() - 1).add(overflowAlloc);
+            return overflowAlloc;
         }
         final var currentStackBlockIndex = currentFrame.leftInt();
         final var currentStackBlockAllocated = currentFrame.rightLong();
