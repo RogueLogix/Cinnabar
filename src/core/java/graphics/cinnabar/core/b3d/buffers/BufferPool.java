@@ -91,7 +91,7 @@ public class BufferPool implements Destroyable {
     }
     
     @Nullable
-    private LongLongImmutablePair tryVmaAlloc(long size) {
+    private synchronized LongLongImmutablePair tryVmaAlloc(long size) {
         allocationCreateInfo.size(size);
         allocationReturn.put(0, 0);
         offsetReturn.put(0, 0);
