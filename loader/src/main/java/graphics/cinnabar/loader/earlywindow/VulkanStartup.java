@@ -8,7 +8,6 @@ import it.unimi.dsi.fastutil.objects.ObjectObjectImmutablePair;
 import it.unimi.dsi.fastutil.objects.ReferenceArrayList;
 import net.neoforged.fml.loading.FMLLoader;
 import org.jetbrains.annotations.Nullable;
-import org.lwjgl.system.Configuration;
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.util.tinyfd.TinyFileDialogs;
 import org.lwjgl.vulkan.*;
@@ -70,7 +69,6 @@ public class VulkanStartup {
 
     private static final boolean supported = ((Supplier<Boolean>) () -> {
         LOGGER.info("Querying Vulkan support");
-        Configuration.STACK_SIZE.set(256);
         try {
             final var instanceRecord = createVkInstance(false, false, null);
             try {

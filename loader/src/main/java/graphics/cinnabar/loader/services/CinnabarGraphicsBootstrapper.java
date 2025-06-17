@@ -3,6 +3,7 @@ package graphics.cinnabar.loader.services;
 import com.mojang.logging.LogUtils;
 import net.neoforged.neoforgespi.earlywindow.GraphicsBootstrapper;
 import org.apache.maven.artifact.versioning.ComparableVersion;
+import org.lwjgl.system.Configuration;
 import org.slf4j.Logger;
 
 import java.io.IOException;
@@ -24,6 +25,7 @@ public class CinnabarGraphicsBootstrapper implements GraphicsBootstrapper {
     
     @Override
     public void bootstrap(String[] arguments) {
+        Configuration.STACK_SIZE.set(256);
         for (int i = 0; i < arguments.length - 1; i++) {
             if ("--fml.neoForgeVersion".equals(arguments[i])) {
                 if (!neoVersionSupported(arguments[i + 1])) {
