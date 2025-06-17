@@ -2,7 +2,7 @@ package graphics.cinnabar.core.b3d.window;
 
 import graphics.cinnabar.core.b3d.CinnabarDevice;
 import graphics.cinnabar.core.util.MagicNumbers;
-import graphics.cinnabar.core.vk.VulkanObject;
+import graphics.cinnabar.api.vk.VulkanObject;
 import it.unimi.dsi.fastutil.longs.LongArrayList;
 import it.unimi.dsi.fastutil.longs.LongList;
 import it.unimi.dsi.fastutil.longs.LongLists;

@@ -1,7 +1,7 @@
 package graphics.cinnabar.core.vk.descriptors;
 
 import graphics.cinnabar.core.b3d.CinnabarDevice;
-import graphics.cinnabar.core.vk.VulkanObject;
+import graphics.cinnabar.api.vk.VulkanObject;
 import it.unimi.dsi.fastutil.objects.ReferenceImmutableList;
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.vulkan.VkDescriptorSetLayoutBinding;

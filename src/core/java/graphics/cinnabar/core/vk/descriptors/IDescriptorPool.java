@@ -2,7 +2,7 @@ package graphics.cinnabar.core.vk.descriptors;
 
 import graphics.cinnabar.api.annotations.ThreadSafety;
 import graphics.cinnabar.api.exceptions.RedirectImplemented;
-import graphics.cinnabar.core.vk.VulkanObject;
+import graphics.cinnabar.api.vk.VulkanObject;
 
 public interface IDescriptorPool extends VulkanObject {
     

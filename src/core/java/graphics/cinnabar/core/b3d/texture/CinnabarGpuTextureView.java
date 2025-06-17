@@ -4,7 +4,7 @@ import com.mojang.blaze3d.textures.TextureFormat;
 import graphics.cinnabar.api.b3dext.textures.ExtGpuTexture;
 import graphics.cinnabar.api.cvk.textures.CVKGpuTextureView;
 import graphics.cinnabar.core.b3d.CinnabarDevice;
-import graphics.cinnabar.core.vk.VulkanObject;
+import graphics.cinnabar.api.vk.VulkanObject;
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.vulkan.VkImageViewCreateInfo;
 

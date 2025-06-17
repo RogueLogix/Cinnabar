@@ -1,10 +1,10 @@
-package graphics.cinnabar.core.vk;
+package graphics.cinnabar.api.vk;
 
 import graphics.cinnabar.api.CinnabarAPI;
 import graphics.cinnabar.api.annotations.Constant;
 import graphics.cinnabar.api.annotations.ThreadSafety;
+import graphics.cinnabar.api.cvk.systems.CVKGpuDevice;
 import graphics.cinnabar.api.util.Destroyable;
-import graphics.cinnabar.core.CinnabarCore;
 import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.Nullable;
 import org.lwjgl.system.MemoryStack;
@@ -36,7 +36,7 @@ public interface VulkanObject extends Destroyable, VulkanNameable {
             nameInfo.objectType(objectType());
             nameInfo.object(handle());
             nameInfo.pObjectName(stack.UTF8(name));
-            vkDebugMarkerSetObjectNameEXT(CinnabarCore.device().vkDevice(), nameInfo);
+            vkDebugMarkerSetObjectNameEXT(CVKGpuDevice.get().vkDevice(), nameInfo);
         }
     }
 }

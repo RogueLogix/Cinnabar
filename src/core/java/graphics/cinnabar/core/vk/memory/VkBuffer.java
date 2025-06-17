@@ -4,7 +4,7 @@ import com.mojang.blaze3d.buffers.GpuBufferSlice;
 import graphics.cinnabar.api.CinnabarAPI;
 import graphics.cinnabar.api.memory.MemoryRange;
 import graphics.cinnabar.core.b3d.CinnabarDevice;
-import graphics.cinnabar.core.vk.VulkanObject;
+import graphics.cinnabar.api.vk.VulkanObject;
 import it.unimi.dsi.fastutil.ints.IntIntImmutablePair;
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.util.vma.VmaAllocationCreateInfo;
