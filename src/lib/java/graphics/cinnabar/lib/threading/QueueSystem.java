@@ -97,11 +97,13 @@ public final class QueueSystem {
         
         final var waitThread = new Thread(QueueSystem::vkSemaphoreWaitThread);
         waitThread.setDaemon(true);
+        waitThread.setPriority(Thread.MAX_PRIORITY);
         waitThread.setName("CinnabarSemaphoreWait");
         waitThread.start();
         
         final var cleanupThread = new Thread(QueueSystem::cleanupThreadFunc);
         cleanupThread.setDaemon(true);
+        cleanupThread.setPriority(7);
         cleanupThread.setName("CinnabarCleanup");
         cleanupThread.start();
         
