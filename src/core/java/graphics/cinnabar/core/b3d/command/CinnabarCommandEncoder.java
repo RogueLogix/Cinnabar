@@ -298,21 +298,12 @@ public class CinnabarCommandEncoder implements CVKCommandEncoder, Destroyable {
                 final var stagingSlice = stagingBuffer.backingSlice();
                 LibCString.nmemcpy(stagingSlice.buffer().allocationInfo.pMappedData() + stagingSlice.range.offset(), MemoryUtil.memAddress(data), data.remaining());
                 
-                copyBufferToBufferExternallySynced(stagingBuffer.slice(), gpuBufferSlice, List.of());
-                
-                final var copyRegion = VkBufferCopy.calloc(1, stack);
-                copyRegion.srcOffset(stagingSlice.range.offset());
-                // yes, a sliced slice...
-                copyRegion.dstOffset(backingSlice.range.offset() + gpuBufferSlice.offset());
-                copyRegion.size(data.remaining());
-                copyRegion.limit(1);
-                
                 // must barrier before the write, because the buffer may still be in use by the ending renderpass, or a previous copy (write-write is valid behavior, though not recommended)
                 if (!uploadBeginningOfFrame) {
                     fullBarrier(commandBuffer);
                 }
                 
-                vkCmdCopyBuffer(commandBuffer, stagingSlice.buffer().handle, backingSlice.buffer().handle, copyRegion);
+                copyBufferToBufferExternallySynced(stagingBuffer.slice(), gpuBufferSlice, List.of());
                 
                 // because of limitations/guarantees from B3D, I can barrier only at renderpass start (or command buffer end for the begin frame transfer)
                 // there is no buffer to buffer copy (yet), nor buffer to texture copy
