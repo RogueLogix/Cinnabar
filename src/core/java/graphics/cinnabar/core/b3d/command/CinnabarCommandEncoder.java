@@ -47,7 +47,7 @@ public class CinnabarCommandEncoder implements CVKCommandEncoder, Destroyable {
     
     private final CinnabarDevice device;
     
-    private final MemoryStack memoryStack = new GrowingMemoryStack();
+    private final GrowingMemoryStack memoryStack = new GrowingMemoryStack();
     
     private final ReferenceArrayList<VulkanTransientCommandBufferPool> commandPools = new ReferenceArrayList<>();
     
@@ -93,6 +93,7 @@ public class CinnabarCommandEncoder implements CVKCommandEncoder, Destroyable {
         WorkQueue.AFTER_END_OF_GPU_FRAME.signal(interFrameSemaphore, device.currentFrame() + 1);
         interFrameSemaphore.wait(device.currentFrame() + 1, -1L);
         interFrameSemaphore.destroy();
+        memoryStack.destroy();
     }
     
     public VulkanTransientCommandBufferPool currentCommandPool() {
@@ -100,7 +101,7 @@ public class CinnabarCommandEncoder implements CVKCommandEncoder, Destroyable {
     }
     
     private void beginCommandBuffers() {
-        currentCommandPool().reset(true, true);
+        currentCommandPool().reset(false, false);
         beginFrameTransferCommandBuffer = currentCommandPool().alloc("beginFrameTransfer");
         vkBeginCommandBuffer(beginFrameTransferCommandBuffer, commandBufferBeginInfo);
         commandBuffers.add(beginFrameTransferCommandBuffer);
@@ -205,6 +206,7 @@ public class CinnabarCommandEncoder implements CVKCommandEncoder, Destroyable {
     
     @Override
     public void clearColorTexture(GpuTexture texture, int clearRGBA) {
+        fullBarrier(getMainDrawCommandBuffer());
         assert texture instanceof CinnabarGpuTexture;
         try (final var stack = this.memoryStack.push()) {
             final var vkClearColor = VkClearColorValue.calloc(stack);
@@ -246,6 +248,7 @@ public class CinnabarCommandEncoder implements CVKCommandEncoder, Destroyable {
     
     @Override
     public void clearDepthTexture(GpuTexture texture, double clearDepth) {
+        fullBarrier(getMainDrawCommandBuffer());
         assert texture instanceof CinnabarGpuTexture;
         try (final var stack = this.memoryStack.push()) {
             final var clearValue = VkClearDepthStencilValue.calloc(stack);
@@ -264,6 +267,7 @@ public class CinnabarCommandEncoder implements CVKCommandEncoder, Destroyable {
     
     @Override
     public void clearStencilTexture(GpuTexture texture, int clearStencil) {
+        fullBarrier(getMainDrawCommandBuffer());
         assert texture instanceof CinnabarGpuTexture;
         try (final var stack = this.memoryStack.push()) {
             final var clearValue = VkClearDepthStencilValue.calloc(stack);
@@ -507,7 +511,7 @@ public class CinnabarCommandEncoder implements CVKCommandEncoder, Destroyable {
             imageBarrier.dstAccessMask(VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT);
             imageBarrier.dstQueueFamilyIndex(VK_QUEUE_FAMILY_IGNORED);
             imageBarrier.srcQueueFamilyIndex(VK_QUEUE_FAMILY_IGNORED);
-            final var imageSubresourceRange = VkImageSubresourceRange.calloc();
+            final var imageSubresourceRange = VkImageSubresourceRange.calloc(stack);
             imageSubresourceRange.aspectMask(VK_IMAGE_ASPECT_COLOR_BIT);
             imageSubresourceRange.baseMipLevel(0);
             imageSubresourceRange.levelCount(1);
@@ -536,7 +540,7 @@ public class CinnabarCommandEncoder implements CVKCommandEncoder, Destroyable {
             dstOffsets.x(swapchain.width).y(0).z(1);
             dstOffsets.position(0);
             
-            final var imageSubresource = VkImageSubresourceLayers.calloc();
+            final var imageSubresource = VkImageSubresourceLayers.calloc(stack);
             imageSubresource.aspectMask(VK_IMAGE_ASPECT_COLOR_BIT);
             assert imageView.baseMipLevel() == 0;
             assert imageView.mipLevels() == 1;

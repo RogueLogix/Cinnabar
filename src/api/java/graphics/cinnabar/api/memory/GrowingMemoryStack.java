@@ -23,10 +23,11 @@ public class GrowingMemoryStack extends MemoryStack implements Destroyable {
         stackBlocks.add(PointerWrapper.alloc(STACK_BLOCK_SIZE));
         currentFrame = new IntLongMutablePair(0, 0);
     }
-
+    
     @Override
     public void destroy() {
         stackBlocks.forEach(PointerWrapper::free);
+        frameOverflowAllocs.forEach(overflow -> overflow.forEach(MemoryUtil::nmemFree));
     }
 
     public void reset() {

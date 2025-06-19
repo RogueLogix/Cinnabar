@@ -451,7 +451,7 @@ public class CinnabarRenderPipeline implements CVKCompiledRenderPipeline, Destro
             bufferBindings.position(0);
             attribBindings.flip();
             
-            final var vertexInputState = VkPipelineVertexInputStateCreateInfo.calloc().sType$Default();
+            final var vertexInputState = VkPipelineVertexInputStateCreateInfo.calloc(stack).sType$Default();
             vertexInputState.pVertexBindingDescriptions(bufferBindings);
             vertexInputState.pVertexAttributeDescriptions(attribBindings);
             

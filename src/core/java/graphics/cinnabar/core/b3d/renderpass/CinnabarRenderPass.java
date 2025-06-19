@@ -456,7 +456,7 @@ public class CinnabarRenderPass implements CVKRenderPass {
                     cinnabarBuffer.accessed();
                     
                     try (final var stack = memoryStack.push()) {
-                        final var bufferViewCreateInfo = VkBufferViewCreateInfo.calloc().sType$Default();
+                        final var bufferViewCreateInfo = VkBufferViewCreateInfo.calloc(stack).sType$Default();
                         final var backingSlice = cinnabarBuffer.backingSlice();
                         bufferViewCreateInfo.buffer(backingSlice.buffer().handle);
                         bufferViewCreateInfo.format(format);

@@ -195,9 +195,13 @@ public class CinnabarDevice implements CVKGpuDevice {
         
         vertexBufferPool = new BufferPool(this, deviceMemoryType, GpuBuffer.USAGE_VERTEX | GpuBuffer.USAGE_COPY_DST, MathUtil.MBToB(64), "vertex", false);
         indexBufferPool = new BufferPool(this, deviceMemoryType, GpuBuffer.USAGE_INDEX | GpuBuffer.USAGE_COPY_DST, MathUtil.MBToB(16), "index", false);
+        destroyOnShutdown(vertexBufferPool);
+        destroyOnShutdown(indexBufferPool);
         final var uploadPools = new ReferenceArrayList<BufferPool>();
         for (int i = 0; i < MagicNumbers.MaximumFramesInFlight; i++) {
-            uploadPools.add(new BufferPool(this, hostMemoryType, GpuBuffer.USAGE_COPY_SRC, MathUtil.MBToB(16), "upload", true));
+            final var uploadPool = new BufferPool(this, hostMemoryType, GpuBuffer.USAGE_COPY_SRC, MathUtil.MBToB(16), "upload", true);
+            destroyOnShutdown(uploadPool);
+            uploadPools.add(uploadPool);
         }
         this.uploadPools = Collections.unmodifiableList(uploadPools);
         
@@ -221,10 +225,10 @@ public class CinnabarDevice implements CVKGpuDevice {
         toDestroy.forEach(list -> list.forEach(Destroyable::destroy));
         toDestroy.clear();
         
-        vmaDestroyAllocator(vmaAllocator);
-        
         shutdownDestroy.forEach(Destroyable::destroy);
         shutdownDestroy.clear();
+        
+        vmaDestroyAllocator(vmaAllocator);
         vkDestroyDevice(vkDevice, null);
         if (debugCallback != -1) {
             vkDestroyDebugUtilsMessengerEXT(vkInstance, debugCallback, null);

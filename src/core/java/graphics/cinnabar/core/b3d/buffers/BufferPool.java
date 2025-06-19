@@ -57,7 +57,23 @@ public class BufferPool implements Destroyable {
     
     @Override
     public void destroy() {
+        if (uploadPool) {
+            for (int i = buffersInOverflow.size() - 1; i >= 0; i--) {
+                buffersInOverflow.get(i).destroy();
+            }
+            for (Buffer buffer : buffers) {
+                if (buffer.vmaAllocation != 0) {
+                    vmaVirtualFree(vmaVirtualBlock, buffer.vmaAllocation);
+                    buffer.vmaAllocation = 0;
+                }
+            }
+            buffers.clear();
+            vmaClearVirtualBlock(vmaVirtualBlock);
+        }
         destroyMainBuffer();
+        allocationReturn.free();
+        allocationCreateInfo.free();
+        MemoryUtil.memFree(offsetReturn);
     }
     
     private void createMainBuffer(long size) {
@@ -134,12 +150,18 @@ public class BufferPool implements Destroyable {
     
     @ThreadSafety.MainGraphics
     public void processRealloc() {
-        if (uploadPool) synchronized (this) {
-            for (int i = buffersInOverflow.size() - 1; i >= 0; i--) {
-                buffersInOverflow.get(i).destroy();
+        if (uploadPool) {
+            synchronized (this) {
+                for (int i = buffersInOverflow.size() - 1; i >= 0; i--) {
+                    buffersInOverflow.get(i).destroy();
+                }
+                for (Buffer buffer : buffers) {
+                    vmaVirtualFree(vmaVirtualBlock, buffer.vmaAllocation);
+                    buffer.vmaAllocation = 0;
+                }
+                buffers.clear();
+                vmaClearVirtualBlock(vmaVirtualBlock);
             }
-            buffers.clear();
-            vmaClearVirtualBlock(vmaVirtualBlock);
         }
         
         if (overflowSinceLastRealloc == 0) {
@@ -274,6 +296,7 @@ public class BufferPool implements Destroyable {
                 assert vmaVirtualBlock != 0;
                 if (vmaAllocation != 0) {
                     vmaVirtualFree(vmaVirtualBlock, vmaAllocation);
+                    vmaAllocation = 0;
                 }
                 buffers.remove(this);
                 buffersInOverflow.remove(this);
