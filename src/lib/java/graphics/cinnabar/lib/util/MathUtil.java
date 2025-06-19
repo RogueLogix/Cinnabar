@@ -36,4 +36,29 @@ public class MathUtil {
     public static long MBToB(long megabytes) {
         return KBToB(megabytes * 1024);
     }
+    
+    private static final String[] suffixes = new String[]{
+            "B",
+            "KiB",
+            "MiB",
+            "GiB",
+            "TiB",
+            "PiB",
+            "EiB",
+            "ZiB",
+            "YiB",
+    };
+    
+    public static String byteString(long bytes) {
+        if (bytes < 1024) {
+            return String.format("%dB", bytes);
+        }
+        double fpBytes = bytes;
+        int suffixIndex = 0;
+        while (fpBytes > 1024) {
+            fpBytes /= 1024d;
+            suffixIndex++;
+        }
+        return String.format("%.1f%s", fpBytes, suffixes[suffixIndex]);
+    }
 }
