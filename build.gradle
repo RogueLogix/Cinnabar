@@ -196,6 +196,12 @@ neoForge {
             systemProperty 'neoforge.enabledGameTestNamespaces', project.mod_id
             programArguments.addAll "--CinnabarLaunchedFromIDE"
         }
+        clientRenderDoc {
+            client()
+            systemProperty 'neoforge.enabledGameTestNamespaces', project.mod_id
+            programArguments.addAll "--CinnabarLaunchedFromIDE"
+            environment.put("ENABLE_VULKAN_RENDERDOC_CAPTURE", "1");
+        }
 
         configureEach {
             systemProperty 'forge.logging.markers', 'REGISTRIES'
