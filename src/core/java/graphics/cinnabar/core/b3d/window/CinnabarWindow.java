@@ -99,13 +99,16 @@ public class CinnabarWindow extends Window {
         }
         
         if (shouldRecreateSwapchain) {
+            refreshFramebufferSize();
             recreateSwapchain();
+            this.eventHandler.resizeDisplay();
         }
         
         while (!swapchain.acquire()) {
             // if the swapchain failed to acquire here, 
             refreshFramebufferSize();
             recreateSwapchain();
+            this.eventHandler.resizeDisplay();
         }
         
         RenderSystem.getDynamicUniforms().reset();
