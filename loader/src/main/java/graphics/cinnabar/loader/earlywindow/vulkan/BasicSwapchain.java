@@ -94,6 +94,7 @@ public class BasicSwapchain {
             currentImageIndex = frameIndexPtr.get(0);
             if(currentImageIndex != -1) {
                 vkWaitForFences(device.device(), new long[]{fence}, true, -1);
+                vkResetFences(device.device(), fence);
             }
             return code == VK_SUCCESS;
         }
