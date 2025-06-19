@@ -188,7 +188,7 @@ public class CinnabarEarlyWindowProvider implements ImmediateWindowProvider {
 
         try (final var stack = MemoryStack.stackPush()) {
             final var createInfo = VkCommandPoolCreateInfo.calloc(stack).sType$Default();
-            createInfo.flags(VK_COMMAND_POOL_CREATE_TRANSIENT_BIT);
+            createInfo.flags(VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
             createInfo.queueFamilyIndex(device.queues().getFirst().queueFamily());
             final var ptr = stack.mallocLong(1);
             vkCreateCommandPool(device.device(), createInfo, null, ptr);
