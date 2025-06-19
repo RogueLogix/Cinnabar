@@ -1,3 +1,9 @@
+# 1.21.6-0.0.3-alpha
+ - fix fence reset and command pool flags in early loading screen
+ - add VMA stats to F3 screen
+ - fix VK sync issues (#2, #3, #5)
+ - fix memory leaks
+
 # 1.21.6-0.0.2-alpha
  - increase MemoryStack size to 256kb (fixes stack overflow crash with nvidia GPUs)
  - allow GrowableMemoryStack to overrun a single block for a single allocation (fixes stack overflow crash from too many render chunks)
