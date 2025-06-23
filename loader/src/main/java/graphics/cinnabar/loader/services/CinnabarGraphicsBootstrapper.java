@@ -49,9 +49,14 @@ public class CinnabarGraphicsBootstrapper implements GraphicsBootstrapper {
         } catch (IOException | URISyntaxException e) {
             throw new RuntimeException(e);
         }
-        final var lowerBound = new ComparableVersion(versionBounds[0]);
-        final var upperBound = new ComparableVersion(versionBounds[1]);
         final var currentVersion = new ComparableVersion(neoVersion);
-        return lowerBound.compareTo(currentVersion) <= 0 && currentVersion.compareTo(upperBound) < 0;
+        if (versionBounds.length > 1) {
+            final var upperBound = new ComparableVersion(versionBounds[1]);
+            if (currentVersion.compareTo(upperBound) >= 0) {
+                return false;
+            }
+        }
+        final var lowerBound = new ComparableVersion(versionBounds[0]);
+        return lowerBound.compareTo(currentVersion) <= 0;
     }
 }

@@ -6,9 +6,7 @@ import graphics.cinnabar.loader.earlywindow.GLFWClassloadHelper;
 import graphics.cinnabar.loader.earlywindow.VulkanStartup;
 import graphics.cinnabar.loader.earlywindow.vulkan.BasicSwapchain;
 import joptsimple.OptionParser;
-import net.neoforged.fml.earlydisplay.ColourScheme;
 import net.neoforged.fml.loading.FMLConfig;
-import net.neoforged.fml.loading.FMLPaths;
 import net.neoforged.fml.loading.progress.StartupNotificationManager;
 import net.neoforged.neoforgespi.earlywindow.ImmediateWindowProvider;
 import org.lwjgl.system.MemoryStack;
@@ -16,17 +14,13 @@ import org.lwjgl.util.tinyfd.TinyFileDialogs;
 import org.lwjgl.vulkan.*;
 import org.slf4j.Logger;
 
-import java.io.IOException;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
-import java.nio.file.Files;
-import java.nio.file.Paths;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
-import java.util.stream.Collectors;
 
 import static org.lwjgl.glfw.GLFW.*;
 import static org.lwjgl.vulkan.KHRSurface.vkDestroySurfaceKHR;
@@ -88,7 +82,6 @@ public class CinnabarEarlyWindowProvider implements ImmediateWindowProvider {
         }
     }
 
-    private ColourScheme colourScheme;
     private int winWidth;
     private int winHeight;
     private boolean maximized;
@@ -140,19 +133,6 @@ public class CinnabarEarlyWindowProvider implements ImmediateWindowProvider {
         winHeight = parsed.valueOf(heightopt);
         FMLConfig.updateConfig(FMLConfig.ConfigValue.EARLY_WINDOW_WIDTH, winWidth);
         FMLConfig.updateConfig(FMLConfig.ConfigValue.EARLY_WINDOW_HEIGHT, winHeight);
-        if (System.getenv("FML_EARLY_WINDOW_DARK") != null) {
-            this.colourScheme = ColourScheme.BLACK;
-        } else {
-            try {
-                var optionLines = Files.readAllLines(FMLPaths.GAMEDIR.get().resolve(Paths.get("options.txt")));
-                var options = optionLines.stream().map(l -> l.split(":")).filter(a -> a.length == 2).collect(Collectors.toMap(a -> a[0], a -> a[1]));
-                var colourScheme = Boolean.parseBoolean(options.getOrDefault("darkMojangStudiosBackground", "false"));
-                this.colourScheme = colourScheme ? ColourScheme.BLACK : ColourScheme.RED;
-            } catch (IOException ioe) {
-                // No options
-                this.colourScheme = ColourScheme.RED; // default to red colourscheme
-            }
-        }
         this.maximized = parsed.has(maximizedopt) || FMLConfig.getBoolConfigValue(FMLConfig.ConfigValue.EARLY_WINDOW_MAXIMIZED);
 
         var forgeVersion = parsed.valueOf(forgeversionopt);
@@ -247,7 +227,7 @@ public class CinnabarEarlyWindowProvider implements ImmediateWindowProvider {
         try (final var stack = MemoryStack.stackPush()) {
             vkBeginCommandBuffer(commandBuffer, VkCommandBufferBeginInfo.calloc(stack).sType$Default());
             textureLayoutTransition(commandBuffer, swapchain.acquiredImage(), VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-            final var clearColor = VkClearColorValue.calloc(stack).float32(0, colourScheme.background().redf()).float32(1, colourScheme.background().greenf()).float32(2, colourScheme.background().bluef()).float32(3, 1);
+            final var clearColor = VkClearColorValue.calloc(stack).float32(0, ((float) 0xA4) / 0xFF).float32(1, ((float) 0x1E) / 0xFF).float32(2, ((float) 0x22) / 0xFF).float32(3, 1);
             final var subresourceRange = VkImageSubresourceRange.calloc(stack).aspectMask(VK_IMAGE_ASPECT_COLOR_BIT).baseMipLevel(0).levelCount(1).baseArrayLayer(0).layerCount(1);
             vkCmdClearColorImage(commandBuffer, swapchain.acquiredImage(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, clearColor, subresourceRange);
             textureLayoutTransition(commandBuffer, swapchain.acquiredImage(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
@@ -260,10 +240,6 @@ public class CinnabarEarlyWindowProvider implements ImmediateWindowProvider {
         while (!swapchain.present()) {
             recreateSwapchain();
         }
-    }
-
-    @Override
-    public void updateModuleReads(final ModuleLayer layer) {
     }
 
     @Override
