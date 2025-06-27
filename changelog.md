@@ -1,3 +1,8 @@
+# 1.21.6-0.0.4-alpha
+ - fix neo version range
+ - update neo
+ - make sure the framebuffer will get resized when the swapchain does
+
 # 1.21.6-0.0.3-alpha
  - fix fence reset and command pool flags in early loading screen
  - add VMA stats to F3 screen
