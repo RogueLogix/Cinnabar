@@ -29,8 +29,10 @@ import java.util.*;
 import java.util.function.BiConsumer;
 import java.util.function.Supplier;
 
+import static org.lwjgl.vulkan.KHRDynamicRendering.vkCmdBeginRenderingKHR;
+import static org.lwjgl.vulkan.KHRDynamicRendering.vkCmdEndRenderingKHR;
 import static org.lwjgl.vulkan.KHRPushDescriptor.vkCmdPushDescriptorSetKHR;
-import static org.lwjgl.vulkan.VK13.*;
+import static org.lwjgl.vulkan.VK12.*;
 
 public class CinnabarRenderPass implements CVKRenderPass {
     
@@ -132,7 +134,7 @@ public class CinnabarRenderPass implements CVKRenderPass {
                 }
             }
             
-            vkCmdBeginRendering(commandBuffer, renderingInfo);
+            vkCmdBeginRenderingKHR(commandBuffer, renderingInfo);
             
             final var viewport = VkViewport.calloc(1, stack);
             viewport.x(0);
@@ -154,7 +156,7 @@ public class CinnabarRenderPass implements CVKRenderPass {
         popDebugGroup();
         unsetPipeline();
         memoryStack.pop();
-        vkCmdEndRendering(commandBuffer);
+        vkCmdEndRenderingKHR(commandBuffer);
         vkEndCommandBuffer(commandBuffer);
     }
     

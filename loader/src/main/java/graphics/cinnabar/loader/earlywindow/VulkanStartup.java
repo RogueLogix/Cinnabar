@@ -25,13 +25,15 @@ import static org.lwjgl.glfw.GLFWVulkan.glfwGetRequiredInstanceExtensions;
 import static org.lwjgl.vulkan.EXTDebugMarker.VK_EXT_DEBUG_MARKER_EXTENSION_NAME;
 import static org.lwjgl.vulkan.EXTDebugReport.VK_EXT_DEBUG_REPORT_EXTENSION_NAME;
 import static org.lwjgl.vulkan.EXTDebugUtils.*;
+import static org.lwjgl.vulkan.KHRDynamicRendering.*;
 import static org.lwjgl.vulkan.KHRPushDescriptor.VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME;
 import static org.lwjgl.vulkan.KHRSwapchain.VK_KHR_SWAPCHAIN_EXTENSION_NAME;
+import static org.lwjgl.vulkan.KHRSynchronization2.*;
 import static org.lwjgl.vulkan.VK10.*;
 import static org.lwjgl.vulkan.VK11.*;
-import static org.lwjgl.vulkan.VK13.VK_SUCCESS;
-import static org.lwjgl.vulkan.VK13.vkDestroyDevice;
-import static org.lwjgl.vulkan.VK13.*;
+import static org.lwjgl.vulkan.VK12.VK_SUCCESS;
+import static org.lwjgl.vulkan.VK12.vkDestroyDevice;
+import static org.lwjgl.vulkan.VK12.*;
 
 public class VulkanStartup {
     
@@ -60,11 +62,13 @@ public class VulkanStartup {
     );
     
     private static final List<String> requiredDeviceExtensions = List.of(
-            VK_KHR_SWAPCHAIN_EXTENSION_NAME,
             // TODO: drop use of push descriptors in favor of dynamic descriptor sets (or get Mojang to mirror descriptor sets),
             //       also, should probably query the number supported, but i also never use that many
-            VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME
-    );
+            VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME,
+            VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME,
+            VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME,
+            VK_KHR_SWAPCHAIN_EXTENSION_NAME
+            );
     
     private static final List<Pair<String, List<String>>> optionalDeviceExtensions = List.of(
             new ObjectObjectImmutablePair<>(VK_EXT_DEBUG_MARKER_EXTENSION_NAME, List.of(VK_EXT_DEBUG_REPORT_EXTENSION_NAME))
@@ -161,7 +165,7 @@ public class VulkanStartup {
             appInfo.applicationVersion(appVersion);
             appInfo.pEngineName(engineName);
             appInfo.engineVersion(engineVersion);
-            appInfo.apiVersion(VK_API_VERSION_1_3);
+            appInfo.apiVersion(VK_API_VERSION_1_2);
             
             final var enabledInstanceExtensions = new ReferenceArrayList<String>();
             final var enabledLayerNames = new ReferenceArrayList<String>();
@@ -323,10 +327,12 @@ public class VulkanStartup {
             final var physicalDeviceFeatures10 = physicalDeviceFeatures.features();
             final var physicalDeviceFeatures11 = VkPhysicalDeviceVulkan11Features.calloc(stack).sType$Default();
             final var physicalDeviceFeatures12 = VkPhysicalDeviceVulkan12Features.calloc(stack).sType$Default();
-            final var physicalDeviceFeatures13 = VkPhysicalDeviceVulkan13Features.calloc(stack).sType$Default();
+            final var physicalDeviceFeaturesDynamicRendering = VkPhysicalDeviceDynamicRenderingFeatures.calloc(stack).sType$Default();
+            final var physicalDeviceFeaturesSync2 = VkPhysicalDeviceSynchronization2Features.calloc(stack).sType$Default();
             physicalDeviceFeatures.pNext(physicalDeviceFeatures11);
             physicalDeviceFeatures.pNext(physicalDeviceFeatures12);
-            physicalDeviceFeatures.pNext(physicalDeviceFeatures13);
+            physicalDeviceFeatures.pNext(physicalDeviceFeaturesDynamicRendering);
+            physicalDeviceFeatures.pNext(physicalDeviceFeaturesSync2);
             
             @Nullable
             VkPhysicalDevice selectedPhysicalDevice = null;
@@ -342,7 +348,7 @@ public class VulkanStartup {
                 
                 LOGGER.info("Considering device {}", deviceProperties.deviceNameString());
                 
-                if (deviceProperties.apiVersion() < VK_API_VERSION_1_3) {
+                if (deviceProperties.apiVersion() < VK_API_VERSION_1_2) {
                     LOGGER.info("Skipping device, version too low");
                     continue;
                 }
@@ -394,7 +400,7 @@ public class VulkanStartup {
                 }
                 
                 vkGetPhysicalDeviceFeatures2(physicalDevice, physicalDeviceFeatures);
-                if (!hasAllRequiredFeatures(physicalDeviceFeatures10, physicalDeviceFeatures11, physicalDeviceFeatures12, physicalDeviceFeatures13)) {
+                if (!hasAllRequiredFeatures(physicalDeviceFeatures10, physicalDeviceFeatures11, physicalDeviceFeatures12, physicalDeviceFeaturesDynamicRendering, physicalDeviceFeaturesSync2)) {
                     LOGGER.info("Skipping device, missing required features");
                     continue;
                 }
@@ -502,7 +508,8 @@ public class VulkanStartup {
             VkPhysicalDeviceFeatures physicalDeviceFeatures10,
             VkPhysicalDeviceVulkan11Features physicalDeviceFeatures11,
             VkPhysicalDeviceVulkan12Features physicalDeviceFeatures12,
-            VkPhysicalDeviceVulkan13Features physicalDeviceFeatures13
+            VkPhysicalDeviceDynamicRenderingFeatures physicalDeviceFeaturesDynamicRendering,
+            VkPhysicalDeviceSynchronization2Features physicalDeviceFeaturesSync2
     ) {
         boolean hasAllFeatures = true;
         
@@ -523,113 +530,13 @@ public class VulkanStartup {
             hasAllFeatures = false;
         }
         
-        if (!physicalDeviceFeatures11.storageBuffer16BitAccess()) {
-            logMissingFeature("storageBuffer16BitAccess");
-            hasAllFeatures = false;
-        }
         if (!physicalDeviceFeatures11.shaderDrawParameters()) {
             logMissingFeature("shaderDrawParameters");
             hasAllFeatures = false;
         }
         
-        if (!physicalDeviceFeatures12.drawIndirectCount()) {
-            logMissingFeature("drawIndirectCount");
-            hasAllFeatures = false;
-        }
-        if (!physicalDeviceFeatures12.descriptorIndexing()) {
-            logMissingFeature("descriptorIndexing");
-            hasAllFeatures = false;
-        }
-        if (!physicalDeviceFeatures12.descriptorBindingUniformBufferUpdateAfterBind()) {
-            logMissingFeature("descriptorBindingUniformBufferUpdateAfterBind");
-            hasAllFeatures = false;
-        }
-        if (!physicalDeviceFeatures12.descriptorBindingSampledImageUpdateAfterBind()) {
-            logMissingFeature("descriptorBindingSampledImageUpdateAfterBind");
-            hasAllFeatures = false;
-        }
-        if (!physicalDeviceFeatures12.descriptorBindingStorageImageUpdateAfterBind()) {
-            logMissingFeature("descriptorBindingStorageImageUpdateAfterBind");
-            hasAllFeatures = false;
-        }
-        if (!physicalDeviceFeatures12.descriptorBindingStorageBufferUpdateAfterBind()) {
-            logMissingFeature("descriptorBindingStorageBufferUpdateAfterBind");
-            hasAllFeatures = false;
-        }
-        if (!physicalDeviceFeatures12.descriptorBindingUniformTexelBufferUpdateAfterBind()) {
-            logMissingFeature("descriptorBindingUniformTexelBufferUpdateAfterBind");
-            hasAllFeatures = false;
-        }
-        if (!physicalDeviceFeatures12.descriptorBindingStorageTexelBufferUpdateAfterBind()) {
-            logMissingFeature("descriptorBindingStorageTexelBufferUpdateAfterBind");
-            hasAllFeatures = false;
-        }
-        if (!physicalDeviceFeatures12.descriptorBindingUpdateUnusedWhilePending()) {
-            logMissingFeature("descriptorBindingUpdateUnusedWhilePending");
-            hasAllFeatures = false;
-        }
-        if (!physicalDeviceFeatures12.descriptorBindingPartiallyBound()) {
-            logMissingFeature("descriptorBindingPartiallyBound");
-            hasAllFeatures = false;
-        }
-        if (!physicalDeviceFeatures12.descriptorBindingVariableDescriptorCount()) {
-            logMissingFeature("descriptorBindingVariableDescriptorCount");
-            hasAllFeatures = false;
-        }
-        if (!physicalDeviceFeatures12.runtimeDescriptorArray()) {
-            logMissingFeature("runtimeDescriptorArray");
-            hasAllFeatures = false;
-        }
-        if (!physicalDeviceFeatures12.scalarBlockLayout()) {
-            logMissingFeature("scalarBlockLayout");
-            hasAllFeatures = false;
-        }
-        if (!physicalDeviceFeatures12.shaderFloat16()) {
-            logMissingFeature("shaderFloat16");
-            hasAllFeatures = false;
-        }
-        if (!physicalDeviceFeatures12.shaderInt8()) {
-            logMissingFeature("shaderInt8");
-            hasAllFeatures = false;
-        }
-        if (!physicalDeviceFeatures12.shaderStorageBufferArrayNonUniformIndexing()) {
-            logMissingFeature("shaderStorageBufferArrayNonUniformIndexing");
-            hasAllFeatures = false;
-        }
-        if (!physicalDeviceFeatures12.shaderStorageImageArrayNonUniformIndexing()) {
-            logMissingFeature("shaderStorageImageArrayNonUniformIndexing");
-            hasAllFeatures = false;
-        }
-        if (!physicalDeviceFeatures12.shaderStorageTexelBufferArrayDynamicIndexing()) {
-            logMissingFeature("shaderStorageTexelBufferArrayDynamicIndexing");
-            hasAllFeatures = false;
-        }
-        if (!physicalDeviceFeatures12.shaderStorageTexelBufferArrayNonUniformIndexing()) {
-            logMissingFeature("shaderStorageTexelBufferArrayNonUniformIndexing");
-            hasAllFeatures = false;
-        }
-        if (!physicalDeviceFeatures12.shaderUniformBufferArrayNonUniformIndexing()) {
-            logMissingFeature("shaderUniformBufferArrayNonUniformIndexing");
-            hasAllFeatures = false;
-        }
-        if (!physicalDeviceFeatures12.shaderUniformTexelBufferArrayDynamicIndexing()) {
-            logMissingFeature("shaderUniformTexelBufferArrayDynamicIndexing");
-            hasAllFeatures = false;
-        }
-        if (!physicalDeviceFeatures12.shaderUniformTexelBufferArrayNonUniformIndexing()) {
-            logMissingFeature("shaderUniformTexelBufferArrayNonUniformIndexing");
-            hasAllFeatures = false;
-        }
-        if (!physicalDeviceFeatures12.storageBuffer8BitAccess()) {
-            logMissingFeature("storageBuffer8BitAccess");
-            hasAllFeatures = false;
-        }
         if (!physicalDeviceFeatures12.timelineSemaphore()) {
             logMissingFeature("timelineSemaphore");
-            hasAllFeatures = false;
-        }
-        if (!physicalDeviceFeatures12.uniformBufferStandardLayout()) {
-            logMissingFeature("uniformBufferStandardLayout");
             hasAllFeatures = false;
         }
         if (!physicalDeviceFeatures12.vulkanMemoryModel()) {
@@ -637,39 +544,11 @@ public class VulkanStartup {
             hasAllFeatures = false;
         }
         
-        if (!physicalDeviceFeatures13.computeFullSubgroups()) {
-            logMissingFeature("computeFullSubgroups");
-            hasAllFeatures = false;
-        }
-        if (!physicalDeviceFeatures13.descriptorBindingInlineUniformBlockUpdateAfterBind()) {
-            logMissingFeature("descriptorBindingInlineUniformBlockUpdateAfterBind");
-            hasAllFeatures = false;
-        }
-        if (!physicalDeviceFeatures13.dynamicRendering()) {
+        if (!physicalDeviceFeaturesDynamicRendering.dynamicRendering()) {
             logMissingFeature("dynamicRendering");
             hasAllFeatures = false;
         }
-        if (!physicalDeviceFeatures13.inlineUniformBlock()) {
-            logMissingFeature("inlineUniformBlock");
-            hasAllFeatures = false;
-        }
-        if (!physicalDeviceFeatures13.maintenance4()) {
-            logMissingFeature("maintenance4");
-            hasAllFeatures = false;
-        }
-        if (!physicalDeviceFeatures13.privateData()) {
-            logMissingFeature("privateData");
-            hasAllFeatures = false;
-        }
-        if (!physicalDeviceFeatures13.shaderTerminateInvocation()) {
-            logMissingFeature("shaderTerminateInvocation");
-            hasAllFeatures = false;
-        }
-        if (!physicalDeviceFeatures13.subgroupSizeControl()) {
-            logMissingFeature("subgroupSizeControl");
-            hasAllFeatures = false;
-        }
-        if (!physicalDeviceFeatures13.synchronization2()) {
+        if (!physicalDeviceFeaturesSync2.synchronization2()) {
             logMissingFeature("synchronization2");
             hasAllFeatures = false;
         }
@@ -795,52 +674,21 @@ public class VulkanStartup {
             final var physicalDeviceFeatures10 = VkPhysicalDeviceFeatures.calloc(stack);
             final var physicalDeviceFeatures11 = VkPhysicalDeviceVulkan11Features.calloc(stack).sType$Default();
             final var physicalDeviceFeatures12 = VkPhysicalDeviceVulkan12Features.calloc(stack).sType$Default();
-            final var physicalDeviceFeatures13 = VkPhysicalDeviceVulkan13Features.calloc(stack).sType$Default();
+            final var physicalDeviceFeaturesDynamicRendering = VkPhysicalDeviceDynamicRenderingFeatures.calloc(stack).sType$Default();
+            final var physicalDeviceFeaturesSync2 = VkPhysicalDeviceSynchronization2Features.calloc(stack).sType$Default();
             
             physicalDeviceFeatures10.drawIndirectFirstInstance(true);
             physicalDeviceFeatures10.fillModeNonSolid(true);
             physicalDeviceFeatures10.logicOp(true);
             physicalDeviceFeatures10.multiDrawIndirect(true);
             
-            physicalDeviceFeatures11.storageBuffer16BitAccess(true);
             physicalDeviceFeatures11.shaderDrawParameters(true);
             
-            physicalDeviceFeatures12.drawIndirectCount(true);
-            physicalDeviceFeatures12.descriptorIndexing(true);
-            physicalDeviceFeatures12.descriptorBindingUniformBufferUpdateAfterBind(true);
-            physicalDeviceFeatures12.descriptorBindingSampledImageUpdateAfterBind(true);
-            physicalDeviceFeatures12.descriptorBindingStorageImageUpdateAfterBind(true);
-            physicalDeviceFeatures12.descriptorBindingStorageBufferUpdateAfterBind(true);
-            physicalDeviceFeatures12.descriptorBindingUniformTexelBufferUpdateAfterBind(true);
-            physicalDeviceFeatures12.descriptorBindingStorageTexelBufferUpdateAfterBind(true);
-            physicalDeviceFeatures12.descriptorBindingUpdateUnusedWhilePending(true);
-            physicalDeviceFeatures12.descriptorBindingPartiallyBound(true);
-            physicalDeviceFeatures12.descriptorBindingVariableDescriptorCount(true);
-            physicalDeviceFeatures12.runtimeDescriptorArray(true);
-            physicalDeviceFeatures12.scalarBlockLayout(true);
-            physicalDeviceFeatures12.shaderFloat16(true); // low support, 75%
-            physicalDeviceFeatures12.shaderInt8(true); // low support, 92%
-            physicalDeviceFeatures12.shaderStorageBufferArrayNonUniformIndexing(true);
-            physicalDeviceFeatures12.shaderStorageImageArrayNonUniformIndexing(true);
-            physicalDeviceFeatures12.shaderStorageTexelBufferArrayDynamicIndexing(true);
-            physicalDeviceFeatures12.shaderStorageTexelBufferArrayNonUniformIndexing(true);
-            physicalDeviceFeatures12.shaderUniformBufferArrayNonUniformIndexing(true);
-            physicalDeviceFeatures12.shaderUniformTexelBufferArrayDynamicIndexing(true);
-            physicalDeviceFeatures12.shaderUniformTexelBufferArrayNonUniformIndexing(true);
-            physicalDeviceFeatures12.storageBuffer8BitAccess(true);
             physicalDeviceFeatures12.timelineSemaphore(true);
-            physicalDeviceFeatures12.uniformBufferStandardLayout(true); // low support, 80%
             physicalDeviceFeatures12.vulkanMemoryModel(true);
             
-            physicalDeviceFeatures13.computeFullSubgroups(true);
-            physicalDeviceFeatures13.descriptorBindingInlineUniformBlockUpdateAfterBind(true);
-            physicalDeviceFeatures13.dynamicRendering(true);
-            physicalDeviceFeatures13.inlineUniformBlock(true);
-            physicalDeviceFeatures13.maintenance4(true);
-            physicalDeviceFeatures13.privateData(true);
-            physicalDeviceFeatures13.shaderTerminateInvocation(true);
-            physicalDeviceFeatures13.subgroupSizeControl(true);
-            physicalDeviceFeatures13.synchronization2(true);
+            physicalDeviceFeaturesDynamicRendering.dynamicRendering(true);
+            physicalDeviceFeaturesSync2.synchronization2(true);
             
             final var deviceCreateInfo = VkDeviceCreateInfo.calloc(stack).sType$Default();
             deviceCreateInfo.pQueueCreateInfos(queueCreateInfos);
@@ -848,7 +696,8 @@ public class VulkanStartup {
             deviceCreateInfo.pEnabledFeatures(physicalDeviceFeatures10);
             deviceCreateInfo.pNext(physicalDeviceFeatures11);
             deviceCreateInfo.pNext(physicalDeviceFeatures12);
-            deviceCreateInfo.pNext(physicalDeviceFeatures13);
+            deviceCreateInfo.pNext(physicalDeviceFeaturesDynamicRendering);
+            deviceCreateInfo.pNext(physicalDeviceFeaturesSync2);
             
             final var extensionCountPtr = stack.callocInt(1);
             int totalExtensionProperties = 0;

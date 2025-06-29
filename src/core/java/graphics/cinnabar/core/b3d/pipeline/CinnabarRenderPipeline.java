@@ -140,8 +140,8 @@ public class CinnabarRenderPipeline implements CVKCompiledRenderPipeline, Destro
                 #define CINNABAR_VK
                 #define CINNABAR_UBO_ALIGNMENT %s
                 """.formatted(alignment);
-        final var versionRemovedVertexSource = glVertexGLSL.replace("#version", cinnabarStandardDefines + "\n#define CINNABAR_VERTEX_SHADER //").replace("gl_VertexID", "gl_VertexIndex").replace("gl_InstanceID", "gl_InstanceIndex");
-        final var versionRemovedFragmentSource = glFragmentGLSL.replace("#version", cinnabarStandardDefines + "\n#define CINNABAR_FRAGMENT_SHADER //");
+        final var versionRemovedVertexSource = glVertexGLSL.replace("#version", cinnabarStandardDefines + "\n#define CINNABAR_VERTEX_SHADER //").replace("gl_VertexID", "gl_VertexIndex").replace("gl_InstanceID", "gl_InstanceIndex").replace("samplerBuffer", "textureBuffer");
+        final var versionRemovedFragmentSource = glFragmentGLSL.replace("#version", cinnabarStandardDefines + "\n#define CINNABAR_FRAGMENT_SHADER //").replace("samplerBuffer", "textureBuffer");
         
         final var pipelineName = pipeline.getLocation().toString();
         final var vertexShaderName = pipeline.getVertexShader().toString();

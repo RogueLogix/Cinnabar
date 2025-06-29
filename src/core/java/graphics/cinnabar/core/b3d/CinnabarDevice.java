@@ -56,7 +56,7 @@ import static graphics.cinnabar.core.CinnabarCore.CINNABAR_CORE_LOG;
 import static org.lwjgl.util.vma.Vma.*;
 import static org.lwjgl.vulkan.EXTDebugMarker.VK_EXT_DEBUG_MARKER_EXTENSION_NAME;
 import static org.lwjgl.vulkan.EXTDebugUtils.vkDestroyDebugUtilsMessengerEXT;
-import static org.lwjgl.vulkan.VK13.*;
+import static org.lwjgl.vulkan.VK12.*;
 
 public class CinnabarDevice implements CVKGpuDevice {
     
@@ -176,7 +176,7 @@ public class CinnabarDevice implements CVKGpuDevice {
             
             final var allocatorCreateInfo = VmaAllocatorCreateInfo.calloc(stack);
             allocatorCreateInfo.flags(0);
-            allocatorCreateInfo.vulkanApiVersion(VK_API_VERSION_1_3);
+            allocatorCreateInfo.vulkanApiVersion(VK_API_VERSION_1_2);
             allocatorCreateInfo.physicalDevice(vkPhysicalDevice);
             allocatorCreateInfo.device(vkDevice);
             allocatorCreateInfo.instance(vkInstance);

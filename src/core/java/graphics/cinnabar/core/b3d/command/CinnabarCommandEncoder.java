@@ -41,7 +41,7 @@ import java.util.function.Supplier;
 
 import static graphics.cinnabar.api.exceptions.VkException.checkVkCode;
 import static org.lwjgl.vulkan.KHRSwapchain.VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-import static org.lwjgl.vulkan.VK13.*;
+import static org.lwjgl.vulkan.VK12.*;
 
 public class CinnabarCommandEncoder implements CVKCommandEncoder, Destroyable {
     

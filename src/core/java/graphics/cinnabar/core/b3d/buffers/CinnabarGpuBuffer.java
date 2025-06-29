@@ -7,7 +7,7 @@ import graphics.cinnabar.core.util.MagicNumbers;
 import graphics.cinnabar.core.vk.memory.VkBuffer;
 import org.jetbrains.annotations.Nullable;
 
-import static org.lwjgl.vulkan.VK13.*;
+import static org.lwjgl.vulkan.VK12.*;
 
 public sealed abstract class CinnabarGpuBuffer extends CVKGpuBuffer implements Destroyable permits BufferPool.Buffer, CinnabarIndividualGpuBuffer {
     protected final CinnabarDevice device;

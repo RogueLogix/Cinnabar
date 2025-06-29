@@ -1,6 +1,6 @@
 package graphics.cinnabar.core.vk.descriptors;
 
-import static org.lwjgl.vulkan.VK13.VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+import static org.lwjgl.vulkan.VK12.VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
 
 public record UBOBinding(String name, int binding, int size) implements DescriptorSetBinding {
     
