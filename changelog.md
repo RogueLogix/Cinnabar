@@ -1,3 +1,8 @@
+# 1.21.6-0.0.5-alpha
+ - update Neo to 21.6.20-beta
+ - Drop VK requirement to 1.2, additionally drop sync2 and logicop requirement (logic op vaguely simulated when unavailable)
+ - Enable VK_KHR_portability_subset if available (MacOS)
+
 # 1.21.6-0.0.4-alpha
  - fix neo version range
  - update neo
