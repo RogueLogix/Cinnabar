@@ -21,14 +21,13 @@ import java.util.List;
 import java.util.function.Supplier;
 
 import static graphics.cinnabar.loader.earlywindow.GLFWClassloadHelper.glfwExtGetPhysicalDevicePresentationSupport;
-import static org.lwjgl.glfw.GLFWVulkan.glfwGetRequiredInstanceExtensions;
 import static org.lwjgl.vulkan.EXTDebugMarker.VK_EXT_DEBUG_MARKER_EXTENSION_NAME;
 import static org.lwjgl.vulkan.EXTDebugReport.VK_EXT_DEBUG_REPORT_EXTENSION_NAME;
 import static org.lwjgl.vulkan.EXTDebugUtils.*;
 import static org.lwjgl.vulkan.KHRDynamicRendering.*;
+import static org.lwjgl.vulkan.KHRPortabilitySubset.VK_KHR_PORTABILITY_SUBSET_EXTENSION_NAME;
 import static org.lwjgl.vulkan.KHRPushDescriptor.VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME;
 import static org.lwjgl.vulkan.KHRSwapchain.VK_KHR_SWAPCHAIN_EXTENSION_NAME;
-import static org.lwjgl.vulkan.KHRSynchronization2.*;
 import static org.lwjgl.vulkan.VK10.*;
 import static org.lwjgl.vulkan.VK11.*;
 import static org.lwjgl.vulkan.VK12.VK_SUCCESS;
@@ -66,12 +65,12 @@ public class VulkanStartup {
             //       also, should probably query the number supported, but i also never use that many
             VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME,
             VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME,
-            VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME,
             VK_KHR_SWAPCHAIN_EXTENSION_NAME
             );
     
     private static final List<Pair<String, List<String>>> optionalDeviceExtensions = List.of(
-            new ObjectObjectImmutablePair<>(VK_EXT_DEBUG_MARKER_EXTENSION_NAME, List.of(VK_EXT_DEBUG_REPORT_EXTENSION_NAME))
+            new ObjectObjectImmutablePair<>(VK_EXT_DEBUG_MARKER_EXTENSION_NAME, List.of(VK_EXT_DEBUG_REPORT_EXTENSION_NAME)),
+            new ObjectObjectImmutablePair<>(VK_KHR_PORTABILITY_SUBSET_EXTENSION_NAME, List.of())
     );
     
     private static final boolean supported = ((Supplier<Boolean>) () -> {
@@ -267,7 +266,7 @@ public class VulkanStartup {
             
             
             @Nullable
-            final var glfwExtensions = glfwGetRequiredInstanceExtensions();
+            final var glfwExtensions = GLFWClassloadHelper.glfwGetRequiredInstanceExtensions();
             if (glfwExtensions == null) {
                 throw new IllegalStateException("GLFW unable to present VK image");
             }
@@ -328,11 +327,9 @@ public class VulkanStartup {
             final var physicalDeviceFeatures11 = VkPhysicalDeviceVulkan11Features.calloc(stack).sType$Default();
             final var physicalDeviceFeatures12 = VkPhysicalDeviceVulkan12Features.calloc(stack).sType$Default();
             final var physicalDeviceFeaturesDynamicRendering = VkPhysicalDeviceDynamicRenderingFeatures.calloc(stack).sType$Default();
-            final var physicalDeviceFeaturesSync2 = VkPhysicalDeviceSynchronization2Features.calloc(stack).sType$Default();
             physicalDeviceFeatures.pNext(physicalDeviceFeatures11);
             physicalDeviceFeatures.pNext(physicalDeviceFeatures12);
             physicalDeviceFeatures.pNext(physicalDeviceFeaturesDynamicRendering);
-            physicalDeviceFeatures.pNext(physicalDeviceFeaturesSync2);
             
             @Nullable
             VkPhysicalDevice selectedPhysicalDevice = null;
@@ -400,7 +397,7 @@ public class VulkanStartup {
                 }
                 
                 vkGetPhysicalDeviceFeatures2(physicalDevice, physicalDeviceFeatures);
-                if (!hasAllRequiredFeatures(physicalDeviceFeatures10, physicalDeviceFeatures11, physicalDeviceFeatures12, physicalDeviceFeaturesDynamicRendering, physicalDeviceFeaturesSync2)) {
+                if (!hasAllRequiredFeatures(physicalDeviceFeatures10, physicalDeviceFeatures11, physicalDeviceFeatures12, physicalDeviceFeaturesDynamicRendering)) {
                     LOGGER.info("Skipping device, missing required features");
                     continue;
                 }
@@ -508,8 +505,7 @@ public class VulkanStartup {
             VkPhysicalDeviceFeatures physicalDeviceFeatures10,
             VkPhysicalDeviceVulkan11Features physicalDeviceFeatures11,
             VkPhysicalDeviceVulkan12Features physicalDeviceFeatures12,
-            VkPhysicalDeviceDynamicRenderingFeatures physicalDeviceFeaturesDynamicRendering,
-            VkPhysicalDeviceSynchronization2Features physicalDeviceFeaturesSync2
+            VkPhysicalDeviceDynamicRenderingFeatures physicalDeviceFeaturesDynamicRendering
     ) {
         boolean hasAllFeatures = true;
         
@@ -519,10 +515,6 @@ public class VulkanStartup {
         }
         if (!physicalDeviceFeatures10.fillModeNonSolid()) {
             logMissingFeature("fillModeNonSolid");
-            hasAllFeatures = false;
-        }
-        if (!physicalDeviceFeatures10.logicOp()) {
-            logMissingFeature("logicOp");
             hasAllFeatures = false;
         }
         if (!physicalDeviceFeatures10.multiDrawIndirect()) {
@@ -539,17 +531,9 @@ public class VulkanStartup {
             logMissingFeature("timelineSemaphore");
             hasAllFeatures = false;
         }
-        if (!physicalDeviceFeatures12.vulkanMemoryModel()) {
-            logMissingFeature("vulkanMemoryModel");
-            hasAllFeatures = false;
-        }
         
         if (!physicalDeviceFeaturesDynamicRendering.dynamicRendering()) {
             logMissingFeature("dynamicRendering");
-            hasAllFeatures = false;
-        }
-        if (!physicalDeviceFeaturesSync2.synchronization2()) {
-            logMissingFeature("synchronization2");
             hasAllFeatures = false;
         }
         
@@ -559,7 +543,7 @@ public class VulkanStartup {
     public static Device createLogicalDeviceAndQueues(VkInstance vkInstance, VkPhysicalDevice vkPhysicalDevice, List<String> enabledLayersAndInstanceExtensions) {
         try (var stack = MemoryStack.stackPush()) {
             
-            int graphicsQueueFamily = 0;
+            int graphicsQueueFamily = -1;
             int graphicsQueueIndex = 0;
             int computeQueueFamily = -1;
             int computeQueueFamilyBits = -1;
@@ -602,7 +586,7 @@ public class VulkanStartup {
                     // both graphics and compute queues are implicit transfer queues
                     // graphics queue must also support present (all do in reality)
                     final var graphicsQueueBits = VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT;
-                    if ((queueFamilyProperties.queueFlags() & graphicsQueueBits) == graphicsQueueBits && glfwExtGetPhysicalDevicePresentationSupport(vkInstance, vkPhysicalDevice, j)) {
+                    if (graphicsQueueFamily == -1 && (queueFamilyProperties.queueFlags() & graphicsQueueBits) == graphicsQueueBits && glfwExtGetPhysicalDevicePresentationSupport(vkInstance, vkPhysicalDevice, j)) {
                         graphicsQueueFamily = j;
                         familyUsedQueues++;
                     }
@@ -638,7 +622,7 @@ public class VulkanStartup {
                     final var queueIndex = queueCounts.getInt(queueCreateIndex);
                     computeQueueIndex = queueIndex;
                     queueCounts.set(queueCreateIndex, queueIndex + 1);
-                } else {
+                } else if (computeQueueFamily != -1) {
                     queueFamilies.add(computeQueueFamily);
                     queueCounts.add(1);
                 }
@@ -647,7 +631,7 @@ public class VulkanStartup {
                     final var queueIndex = queueCounts.getInt(queueCreateIndex);
                     transferQueueIndex = queueIndex;
                     queueCounts.set(queueCreateIndex, queueIndex + 1);
-                } else {
+                } else  if (transferQueueFamily != -1) {
                     queueFamilies.add(transferQueueFamily);
                     queueCounts.add(1);
                 }
@@ -671,24 +655,35 @@ public class VulkanStartup {
             }
             queueCreateInfos.position(0);
             
+            final boolean hasLogicOp;
+            {
+                final var physicalDeviceFeatures = VkPhysicalDeviceFeatures2.calloc(stack).sType$Default();
+                final var physicalDeviceFeatures10 = physicalDeviceFeatures.features();
+                final var physicalDeviceFeatures11 = VkPhysicalDeviceVulkan11Features.calloc(stack).sType$Default();
+                final var physicalDeviceFeatures12 = VkPhysicalDeviceVulkan12Features.calloc(stack).sType$Default();
+                final var physicalDeviceFeaturesDynamicRendering = VkPhysicalDeviceDynamicRenderingFeatures.calloc(stack).sType$Default();
+                physicalDeviceFeatures.pNext(physicalDeviceFeatures11);
+                physicalDeviceFeatures.pNext(physicalDeviceFeatures12);
+                physicalDeviceFeatures.pNext(physicalDeviceFeaturesDynamicRendering);
+                vkGetPhysicalDeviceFeatures2(vkPhysicalDevice, physicalDeviceFeatures);
+                hasLogicOp = physicalDeviceFeatures10.logicOp();
+            }
+            
             final var physicalDeviceFeatures10 = VkPhysicalDeviceFeatures.calloc(stack);
             final var physicalDeviceFeatures11 = VkPhysicalDeviceVulkan11Features.calloc(stack).sType$Default();
             final var physicalDeviceFeatures12 = VkPhysicalDeviceVulkan12Features.calloc(stack).sType$Default();
             final var physicalDeviceFeaturesDynamicRendering = VkPhysicalDeviceDynamicRenderingFeatures.calloc(stack).sType$Default();
-            final var physicalDeviceFeaturesSync2 = VkPhysicalDeviceSynchronization2Features.calloc(stack).sType$Default();
             
             physicalDeviceFeatures10.drawIndirectFirstInstance(true);
             physicalDeviceFeatures10.fillModeNonSolid(true);
-            physicalDeviceFeatures10.logicOp(true);
+            physicalDeviceFeatures10.logicOp(hasLogicOp);
             physicalDeviceFeatures10.multiDrawIndirect(true);
             
             physicalDeviceFeatures11.shaderDrawParameters(true);
             
             physicalDeviceFeatures12.timelineSemaphore(true);
-            physicalDeviceFeatures12.vulkanMemoryModel(true);
             
             physicalDeviceFeaturesDynamicRendering.dynamicRendering(true);
-            physicalDeviceFeaturesSync2.synchronization2(true);
             
             final var deviceCreateInfo = VkDeviceCreateInfo.calloc(stack).sType$Default();
             deviceCreateInfo.pQueueCreateInfos(queueCreateInfos);
@@ -697,7 +692,6 @@ public class VulkanStartup {
             deviceCreateInfo.pNext(physicalDeviceFeatures11);
             deviceCreateInfo.pNext(physicalDeviceFeatures12);
             deviceCreateInfo.pNext(physicalDeviceFeaturesDynamicRendering);
-            deviceCreateInfo.pNext(physicalDeviceFeaturesSync2);
             
             final var extensionCountPtr = stack.callocInt(1);
             int totalExtensionProperties = 0;
@@ -799,7 +793,7 @@ public class VulkanStartup {
                 queues.add(new Queue(computeQueueFamily, new VkQueue(pointerPointer.get(0), logicalDevice)));
             } else {
                 // no compute queue? alias graphics queue
-                queues.add(queues.get(0));
+                queues.add(queues.getFirst());
             }
             if (transferQueueFamily != -1) {
                 vkGetDeviceQueue(logicalDevice, transferQueueFamily, transferQueueIndex, pointerPointer);

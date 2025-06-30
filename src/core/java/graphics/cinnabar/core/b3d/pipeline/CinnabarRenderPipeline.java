@@ -510,12 +510,21 @@ public class CinnabarRenderPipeline implements CVKCompiledRenderPipeline, Destro
             blendAttachment.colorWriteMask((pipeline.isWriteColor() ? (VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT) : 0) | (pipeline.isWriteAlpha() ? VK_COLOR_COMPONENT_A_BIT : 0));
             
             final var blendState = VkPipelineColorBlendStateCreateInfo.calloc(stack).sType$Default();
-            blendState.logicOpEnable(pipeline.getColorLogic() != LogicOp.NONE);
-            blendState.logicOp(switch (pipeline.getColorLogic()) {
-                // TODO: finish out this enum (color logic ops)
-                case NONE -> VK_LOGIC_OP_COPY;
-                case OR_REVERSE -> VK_LOGIC_OP_OR_REVERSE;
-            });
+            if (pipeline.getColorLogic() == LogicOp.OR_REVERSE) {
+                if (device.workarounds.hasLogicOp) {
+                    blendState.logicOpEnable(true);
+                    blendState.logicOp(VK_LOGIC_OP_OR_REVERSE);
+                } else {
+                    // LogicOp isn't available on MacOS, and in 21.7 Mojang switched text rendering to this, so, use this instead
+                    blendAttachment.blendEnable(true);
+                    blendAttachment.srcColorBlendFactor(VK_BLEND_FACTOR_ONE_MINUS_DST_COLOR);
+                    blendAttachment.dstColorBlendFactor(VK_BLEND_FACTOR_ONE_MINUS_SRC_COLOR);
+                    blendAttachment.colorBlendOp(VK_BLEND_OP_ADD);
+                    blendAttachment.srcAlphaBlendFactor(VK_BLEND_FACTOR_ONE);
+                    blendAttachment.dstAlphaBlendFactor(VK_BLEND_FACTOR_ZERO);
+                    blendAttachment.alphaBlendOp(VK_BLEND_OP_ADD);
+                }
+            }
             blendState.pAttachments(blendAttachment);
             
             final var createInfo = VkGraphicsPipelineCreateInfo.calloc(1, stack);
