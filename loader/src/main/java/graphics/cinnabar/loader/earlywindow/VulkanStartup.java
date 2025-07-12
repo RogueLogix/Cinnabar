@@ -24,7 +24,6 @@ import static graphics.cinnabar.loader.earlywindow.GLFWClassloadHelper.glfwExtGe
 import static org.lwjgl.vulkan.EXTDebugMarker.VK_EXT_DEBUG_MARKER_EXTENSION_NAME;
 import static org.lwjgl.vulkan.EXTDebugReport.VK_EXT_DEBUG_REPORT_EXTENSION_NAME;
 import static org.lwjgl.vulkan.EXTDebugUtils.*;
-import static org.lwjgl.vulkan.KHRDynamicRendering.*;
 import static org.lwjgl.vulkan.KHRPortabilitySubset.VK_KHR_PORTABILITY_SUBSET_EXTENSION_NAME;
 import static org.lwjgl.vulkan.KHRPushDescriptor.VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME;
 import static org.lwjgl.vulkan.KHRSwapchain.VK_KHR_SWAPCHAIN_EXTENSION_NAME;
@@ -64,9 +63,8 @@ public class VulkanStartup {
             // TODO: drop use of push descriptors in favor of dynamic descriptor sets (or get Mojang to mirror descriptor sets),
             //       also, should probably query the number supported, but i also never use that many
             VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME,
-            VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME,
             VK_KHR_SWAPCHAIN_EXTENSION_NAME
-            );
+    );
     
     private static final List<Pair<String, List<String>>> optionalDeviceExtensions = List.of(
             new ObjectObjectImmutablePair<>(VK_EXT_DEBUG_MARKER_EXTENSION_NAME, List.of(VK_EXT_DEBUG_REPORT_EXTENSION_NAME)),
@@ -78,7 +76,7 @@ public class VulkanStartup {
         try {
             final var instanceRecord = createVkInstance(false, false, null);
             try {
-                selectPhysicalDevice(instanceRecord.instance, false, -1);
+                selectPhysicalDevice(instanceRecord.instance, false, -1, instanceRecord.enabledInsanceExtensions());
                 // if we made it here, there is a supported device, so it will be used
                 LOGGER.info("Compatible card found, using Vulkan");
                 return true;
@@ -309,7 +307,7 @@ public class VulkanStartup {
         }
     }
     
-    public static VkPhysicalDevice selectPhysicalDevice(VkInstance vkInstance, boolean manualDeviceSelection, int forcedDeviceIndex) {
+    public static VkPhysicalDevice selectPhysicalDevice(VkInstance vkInstance, boolean manualDeviceSelection, int forcedDeviceIndex, List<String> enabledLayersAndInstanceExtensions) {
         try (var stack = MemoryStack.stackPush()) {
             final var physicalDeviceCountPtr = stack.callocInt(1);
             vkEnumeratePhysicalDevices(vkInstance, physicalDeviceCountPtr, null);
@@ -326,10 +324,8 @@ public class VulkanStartup {
             final var physicalDeviceFeatures10 = physicalDeviceFeatures.features();
             final var physicalDeviceFeatures11 = VkPhysicalDeviceVulkan11Features.calloc(stack).sType$Default();
             final var physicalDeviceFeatures12 = VkPhysicalDeviceVulkan12Features.calloc(stack).sType$Default();
-            final var physicalDeviceFeaturesDynamicRendering = VkPhysicalDeviceDynamicRenderingFeatures.calloc(stack).sType$Default();
             physicalDeviceFeatures.pNext(physicalDeviceFeatures11);
             physicalDeviceFeatures.pNext(physicalDeviceFeatures12);
-            physicalDeviceFeatures.pNext(physicalDeviceFeaturesDynamicRendering);
             
             @Nullable
             VkPhysicalDevice selectedPhysicalDevice = null;
@@ -347,6 +343,49 @@ public class VulkanStartup {
                 
                 if (deviceProperties.apiVersion() < VK_API_VERSION_1_2) {
                     LOGGER.info("Skipping device, version too low");
+                    continue;
+                }
+                
+                final var extensionCountPtr = stack.callocInt(1);
+                int totalExtensionProperties = 0;
+                vkEnumerateDeviceExtensionProperties(physicalDevice, (String) null, extensionCountPtr, null);
+                totalExtensionProperties += extensionCountPtr.get(0);
+                for (int j = 0; j < enabledLayersAndInstanceExtensions.size(); j++) {
+                    vkEnumerateDeviceExtensionProperties(physicalDevice, enabledLayersAndInstanceExtensions.get(j), extensionCountPtr, null);
+                    totalExtensionProperties += extensionCountPtr.get(0);
+                }
+                final var extensionProperties = VkExtensionProperties.calloc(totalExtensionProperties, stack);
+                vkEnumerateDeviceExtensionProperties(physicalDevice, (String) null, extensionCountPtr, null);
+                extensionProperties.limit(extensionProperties.position() + extensionCountPtr.get(0));
+                vkEnumerateDeviceExtensionProperties(physicalDevice, (String) null, extensionCountPtr, extensionProperties);
+                extensionProperties.position(extensionProperties.position() + extensionCountPtr.get(0));
+                for (int j = 0; j < enabledLayersAndInstanceExtensions.size(); j++) {
+                    vkEnumerateDeviceExtensionProperties(physicalDevice, enabledLayersAndInstanceExtensions.get(j), extensionCountPtr, null);
+                    extensionProperties.limit(extensionProperties.position() + extensionCountPtr.get(0));
+                    vkEnumerateDeviceExtensionProperties(physicalDevice, enabledLayersAndInstanceExtensions.get(j), extensionCountPtr, extensionProperties);
+                    extensionProperties.position(extensionProperties.position() + extensionCountPtr.get(0));
+                }
+                extensionProperties.position(0);
+                
+                boolean hasAllRequiredExtensions = true;
+                for (int j = 0; j < requiredDeviceExtensions.size(); j++) {
+                    final var extensionName = requiredDeviceExtensions.get(j);
+                    boolean hasExtension = false;
+                    for (int k = 0; k < totalExtensionProperties; k++) {
+                        extensionProperties.position(k);
+                        final var currentExtension = extensionProperties.extensionNameString();
+                        if (currentExtension.equals(extensionName)) {
+                            hasExtension = true;
+                            break;
+                        }
+                    }
+                    if (!hasExtension) {
+                        LOGGER.info("Missing required extension ({})", extensionName);
+                        hasAllRequiredExtensions = false;
+                    }
+                }
+                if (!hasAllRequiredExtensions) {
+                    LOGGER.info("Skipping device, missing required extension");
                     continue;
                 }
                 
@@ -397,7 +436,7 @@ public class VulkanStartup {
                 }
                 
                 vkGetPhysicalDeviceFeatures2(physicalDevice, physicalDeviceFeatures);
-                if (!hasAllRequiredFeatures(physicalDeviceFeatures10, physicalDeviceFeatures11, physicalDeviceFeatures12, physicalDeviceFeaturesDynamicRendering)) {
+                if (!hasAllRequiredFeatures(physicalDeviceFeatures10, physicalDeviceFeatures11, physicalDeviceFeatures12)) {
                     LOGGER.info("Skipping device, missing required features");
                     continue;
                 }
@@ -504,8 +543,7 @@ public class VulkanStartup {
     private static boolean hasAllRequiredFeatures(
             VkPhysicalDeviceFeatures physicalDeviceFeatures10,
             VkPhysicalDeviceVulkan11Features physicalDeviceFeatures11,
-            VkPhysicalDeviceVulkan12Features physicalDeviceFeatures12,
-            VkPhysicalDeviceDynamicRenderingFeatures physicalDeviceFeaturesDynamicRendering
+            VkPhysicalDeviceVulkan12Features physicalDeviceFeatures12
     ) {
         boolean hasAllFeatures = true;
         
@@ -529,11 +567,6 @@ public class VulkanStartup {
         
         if (!physicalDeviceFeatures12.timelineSemaphore()) {
             logMissingFeature("timelineSemaphore");
-            hasAllFeatures = false;
-        }
-        
-        if (!physicalDeviceFeaturesDynamicRendering.dynamicRendering()) {
-            logMissingFeature("dynamicRendering");
             hasAllFeatures = false;
         }
         
@@ -631,7 +664,7 @@ public class VulkanStartup {
                     final var queueIndex = queueCounts.getInt(queueCreateIndex);
                     transferQueueIndex = queueIndex;
                     queueCounts.set(queueCreateIndex, queueIndex + 1);
-                } else  if (transferQueueFamily != -1) {
+                } else if (transferQueueFamily != -1) {
                     queueFamilies.add(transferQueueFamily);
                     queueCounts.add(1);
                 }
@@ -661,10 +694,8 @@ public class VulkanStartup {
                 final var physicalDeviceFeatures10 = physicalDeviceFeatures.features();
                 final var physicalDeviceFeatures11 = VkPhysicalDeviceVulkan11Features.calloc(stack).sType$Default();
                 final var physicalDeviceFeatures12 = VkPhysicalDeviceVulkan12Features.calloc(stack).sType$Default();
-                final var physicalDeviceFeaturesDynamicRendering = VkPhysicalDeviceDynamicRenderingFeatures.calloc(stack).sType$Default();
                 physicalDeviceFeatures.pNext(physicalDeviceFeatures11);
                 physicalDeviceFeatures.pNext(physicalDeviceFeatures12);
-                physicalDeviceFeatures.pNext(physicalDeviceFeaturesDynamicRendering);
                 vkGetPhysicalDeviceFeatures2(vkPhysicalDevice, physicalDeviceFeatures);
                 hasLogicOp = physicalDeviceFeatures10.logicOp();
             }
@@ -672,7 +703,6 @@ public class VulkanStartup {
             final var physicalDeviceFeatures10 = VkPhysicalDeviceFeatures.calloc(stack);
             final var physicalDeviceFeatures11 = VkPhysicalDeviceVulkan11Features.calloc(stack).sType$Default();
             final var physicalDeviceFeatures12 = VkPhysicalDeviceVulkan12Features.calloc(stack).sType$Default();
-            final var physicalDeviceFeaturesDynamicRendering = VkPhysicalDeviceDynamicRenderingFeatures.calloc(stack).sType$Default();
             
             physicalDeviceFeatures10.drawIndirectFirstInstance(true);
             physicalDeviceFeatures10.fillModeNonSolid(true);
@@ -683,15 +713,11 @@ public class VulkanStartup {
             
             physicalDeviceFeatures12.timelineSemaphore(true);
             
-            physicalDeviceFeaturesDynamicRendering.dynamicRendering(true);
-            
             final var deviceCreateInfo = VkDeviceCreateInfo.calloc(stack).sType$Default();
             deviceCreateInfo.pQueueCreateInfos(queueCreateInfos);
-            
             deviceCreateInfo.pEnabledFeatures(physicalDeviceFeatures10);
             deviceCreateInfo.pNext(physicalDeviceFeatures11);
             deviceCreateInfo.pNext(physicalDeviceFeatures12);
-            deviceCreateInfo.pNext(physicalDeviceFeaturesDynamicRendering);
             
             final var extensionCountPtr = stack.callocInt(1);
             int totalExtensionProperties = 0;

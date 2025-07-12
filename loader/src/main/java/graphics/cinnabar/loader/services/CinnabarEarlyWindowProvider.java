@@ -156,7 +156,7 @@ public class CinnabarEarlyWindowProvider implements ImmediateWindowProvider {
         }
 
         instance = VulkanStartup.createVkInstance(false, false, null);
-        device = VulkanStartup.createLogicalDeviceAndQueues(instance.instance(), VulkanStartup.selectPhysicalDevice(instance.instance(), false, -1), instance.enabledInsanceExtensions());
+        device = VulkanStartup.createLogicalDeviceAndQueues(instance.instance(), VulkanStartup.selectPhysicalDevice(instance.instance(), false, -1, instance.enabledInsanceExtensions()), instance.enabledInsanceExtensions());
 
         try (final var stack = MemoryStack.stackPush()) {
             final var surfacePtr = stack.longs(0);

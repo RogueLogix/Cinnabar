@@ -45,7 +45,7 @@ public class CinnabarGpuTexture extends CVKGpuTexture implements VulkanObject {
             imageCreateInfo.flags(cubemap ? VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT : 0);
             
             final var allocCreateInfo = VmaAllocationCreateInfo.calloc(stack);
-            allocCreateInfo.memoryTypeBits(1 << device.deviceMemoryType.leftInt());
+            allocCreateInfo.requiredFlags(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
             final var imagePtr = stack.callocLong(1);
             final var allocationPtr = stack.callocPointer(1);
             checkVkCode(vmaCreateImage(device.vmaAllocator, imageCreateInfo, allocCreateInfo, imagePtr, allocationPtr, null));

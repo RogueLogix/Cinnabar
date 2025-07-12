@@ -28,6 +28,8 @@ import graphics.cinnabar.core.vk.VulkanSampler;
 import graphics.cinnabar.lib.util.MathUtil;
 import graphics.cinnabar.lib.vulkan.VulkanDebug;
 import graphics.cinnabar.loader.earlywindow.VulkanStartup;
+import it.unimi.dsi.fastutil.ints.Int2LongMap;
+import it.unimi.dsi.fastutil.ints.Int2LongOpenHashMap;
 import it.unimi.dsi.fastutil.ints.IntIntImmutablePair;
 import it.unimi.dsi.fastutil.objects.ReferenceArrayList;
 import net.minecraft.client.Minecraft;
@@ -51,6 +53,7 @@ import java.util.Map;
 import java.util.function.BiFunction;
 import java.util.function.Supplier;
 
+import static graphics.cinnabar.api.exceptions.VkException.checkVkCode;
 import static graphics.cinnabar.core.CinnabarConfig.CONFIG;
 import static graphics.cinnabar.core.CinnabarCore.CINNABAR_CORE_LOG;
 import static org.lwjgl.util.vma.Vma.*;
@@ -112,14 +115,14 @@ public class CinnabarDevice implements CVKGpuDevice {
         CINNABAR_CORE_LOG.info("Initializing CinnabarDevice");
         try (final var stack = MemoryStack.stackPush()) {
             final var debugCreateInfo = VulkanDebug.getCreateInfo(stack, new VulkanDebug.MessageSeverity[]{VulkanDebug.MessageSeverity.ERROR, VulkanDebug.MessageSeverity.WARNING, VulkanDebug.MessageSeverity.INFO}, new VulkanDebug.MessageType[]{VulkanDebug.MessageType.GENERAL, VulkanDebug.MessageType.VALIDATION});
-            final var instanceAndDebugCallback = VulkanStartup.createVkInstance(false, CONFIG.EnableMesaOverlay, debugCreateInfo);
+            final var instanceAndDebugCallback = VulkanStartup.createVkInstance(true, CONFIG.EnableMesaOverlay, debugCreateInfo);
             vkInstance = instanceAndDebugCallback.instance();
             debugCallback = instanceAndDebugCallback.debugCallback();
             enabledLayersAndInstanceExtensions = instanceAndDebugCallback.enabledInsanceExtensions();
         }
         
         try {
-            vkPhysicalDevice = VulkanStartup.selectPhysicalDevice(vkInstance, CONFIG.ManualDeviceSelection, CONFIG.ForcedVulkanDeviceIndex);
+            vkPhysicalDevice = VulkanStartup.selectPhysicalDevice(vkInstance, CONFIG.ManualDeviceSelection, CONFIG.ForcedVulkanDeviceIndex, enabledLayersAndInstanceExtensions);
         } catch (Exception e) {
             if (debugCallback != -1) {
                 vkDestroyDebugUtilsMessengerEXT(vkInstance, debugCallback, null);
@@ -357,6 +360,65 @@ public class CinnabarDevice implements CVKGpuDevice {
         }
         list.add(String.format("Pending destroys: %05d", toDestroy.stream().mapToInt(ReferenceArrayList::size).sum() + submitDestroy.size()));
         list.addAll(commandEncoder.debugStrings());
+    }
+    
+    private final Int2LongMap renderPasses = new Int2LongOpenHashMap();
+    
+    public long getRenderPass(TextureFormat colorFormat, @Nullable TextureFormat depthFormat) {
+        final int formatsId = colorFormat.ordinal() << 16 | (depthFormat != null ? depthFormat.ordinal() : 0);
+        final var renderpass = renderPasses.get(formatsId);
+        if (renderpass != 0) {
+            return renderpass;
+        }
+        try (final var stack = MemoryStack.stackPush()) {
+            
+            final var attachmentDescriptions = VkAttachmentDescription2.calloc(2, stack).sType$Default();
+            attachmentDescriptions.format(CinnabarGpuTexture.toVk(colorFormat));
+            attachmentDescriptions.samples(VK_SAMPLE_COUNT_1_BIT);
+            attachmentDescriptions.loadOp(VK_ATTACHMENT_LOAD_OP_LOAD);
+            attachmentDescriptions.loadOp(VK_ATTACHMENT_STORE_OP_STORE);
+            attachmentDescriptions.initialLayout(VK_IMAGE_LAYOUT_GENERAL);
+            attachmentDescriptions.finalLayout(VK_IMAGE_LAYOUT_GENERAL);
+            attachmentDescriptions.limit(1);
+            if (depthFormat != null) {
+                attachmentDescriptions.limit(2);
+                attachmentDescriptions.position(1).sType$Default();
+                attachmentDescriptions.format(CinnabarGpuTexture.toVk(depthFormat));
+                attachmentDescriptions.samples(VK_SAMPLE_COUNT_1_BIT);
+                attachmentDescriptions.loadOp(VK_ATTACHMENT_LOAD_OP_LOAD);
+                attachmentDescriptions.loadOp(VK_ATTACHMENT_STORE_OP_STORE);
+                attachmentDescriptions.stencilLoadOp(VK_ATTACHMENT_LOAD_OP_LOAD);
+                attachmentDescriptions.stencilLoadOp(VK_ATTACHMENT_STORE_OP_STORE);
+                attachmentDescriptions.initialLayout(VK_IMAGE_LAYOUT_GENERAL);
+                attachmentDescriptions.finalLayout(VK_IMAGE_LAYOUT_GENERAL);
+                attachmentDescriptions.position(0);
+            }
+            
+            final var subpassDescription = VkSubpassDescription2.calloc(1, stack).sType$Default();
+            subpassDescription.pipelineBindPoint(VK_PIPELINE_BIND_POINT_GRAPHICS);
+            final var colorReference = VkAttachmentReference2.calloc(1, stack).sType$Default();
+            colorReference.attachment(0);
+            colorReference.layout(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+            colorReference.aspectMask(CinnabarGpuTexture.aspects(colorFormat));
+            subpassDescription.pColorAttachments(colorReference);
+            subpassDescription.colorAttachmentCount(1);
+            if (depthFormat != null) {
+                final var depthReference = VkAttachmentReference2.calloc(stack).sType$Default();
+                depthReference.attachment(1);
+                depthReference.layout(VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
+                depthReference.aspectMask(CinnabarGpuTexture.aspects(colorFormat));
+                subpassDescription.pDepthStencilAttachment(depthReference);
+            }
+            
+            final var passCreateInfo = VkRenderPassCreateInfo2.calloc(stack).sType$Default();
+            passCreateInfo.pAttachments(attachmentDescriptions);
+            passCreateInfo.pSubpasses(subpassDescription);
+            
+            final var renderPassPtr = stack.longs(0);
+            checkVkCode(vkCreateRenderPass2(vkDevice, passCreateInfo, null, renderPassPtr));
+            renderPasses.put(formatsId, renderPassPtr.get(0));
+            return renderPassPtr.get(0);
+        }
     }
     
     // --------- CVKGpuDevice ---------

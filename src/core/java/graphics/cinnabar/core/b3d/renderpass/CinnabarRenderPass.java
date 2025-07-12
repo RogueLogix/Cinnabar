@@ -29,8 +29,6 @@ import java.util.*;
 import java.util.function.BiConsumer;
 import java.util.function.Supplier;
 
-import static org.lwjgl.vulkan.KHRDynamicRendering.vkCmdBeginRenderingKHR;
-import static org.lwjgl.vulkan.KHRDynamicRendering.vkCmdEndRenderingKHR;
 import static org.lwjgl.vulkan.KHRPushDescriptor.vkCmdPushDescriptorSetKHR;
 import static org.lwjgl.vulkan.VK12.*;
 
@@ -40,6 +38,7 @@ public class CinnabarRenderPass implements CVKRenderPass {
     private final VkCommandBuffer commandBuffer;
     private final MemoryStack memoryStack;
     
+    private final long renderPass;
     private final int renderWidth;
     private final int renderHeight;
     
@@ -69,72 +68,32 @@ public class CinnabarRenderPass implements CVKRenderPass {
         pushDebugGroup(debugGroup);
         
         try (final var stack = memoryStack.push()) {
-            final var renderingInfo = VkRenderingInfo.calloc(stack).sType$Default();
             
+            // because all renderpasses use a LOAD_OP_LOAD
+            if (colorClear.isPresent()) {
+                device.createCommandEncoder().clearColorTexture(colorAttachment.texture(), colorClear.getAsInt());
+            }
+            if (depthAttachment != null && depthClear.isPresent()) {
+                device.createCommandEncoder().clearDepthTexture(depthAttachment.texture(), depthClear.getAsDouble());
+            }
             
-            final var renderArea = renderingInfo.renderArea();
+            renderPass = device.getRenderPass(colorAttachment.format(), depthAttachment != null ? depthAttachment.format() : null);
+            
+            final var passBeginInfo = VkRenderPassBeginInfo.calloc(stack).sType$Default();
+            passBeginInfo.renderPass(renderPass);
+            passBeginInfo.framebuffer(colorAttachment.getFramebuffer(renderPass, depthAttachment));
+            final var renderArea = passBeginInfo.renderArea();
             final var renderOffset = renderArea.offset();
             final var renderExtent = renderArea.extent();
             renderOffset.set(0, 0);
             renderWidth = colorAttachment.getWidth(0);
             renderHeight = colorAttachment.getHeight(0);
             renderExtent.set(renderWidth, renderHeight);
-            renderingInfo.layerCount(1);
-            renderingInfo.viewMask(0);
             
+            final var subpassBeginInfo = VkSubpassBeginInfo.calloc(stack).sType$Default();
+            subpassBeginInfo.contents(VK_SUBPASS_CONTENTS_INLINE);
             
-            {
-                final var colorAttachmentInfo = VkRenderingAttachmentInfo.calloc(1, stack).sType$Default();
-                renderingInfo.pColorAttachments(colorAttachmentInfo);
-                colorAttachmentInfo.imageView(colorAttachment.imageViewHandle);
-                // TODO: transition to color attachment optimal and then back again
-                //       invalid to use as a source while in a renderpass drawing to the same texture
-                colorAttachmentInfo.imageLayout(VK_IMAGE_LAYOUT_GENERAL);
-                colorAttachmentInfo.resolveMode(VK_RESOLVE_MODE_NONE);
-                if (colorClear.isPresent()) {
-                    colorAttachmentInfo.loadOp(VK_ATTACHMENT_LOAD_OP_CLEAR);
-                    int clearRGBA = colorClear.getAsInt();
-                    final var vkClearColor = VkClearColorValue.calloc(stack);
-                    vkClearColor.float32(0, ARGB.redFloat(clearRGBA));
-                    vkClearColor.float32(1, ARGB.greenFloat(clearRGBA));
-                    vkClearColor.float32(2, ARGB.blueFloat(clearRGBA));
-                    vkClearColor.float32(3, ARGB.alphaFloat(clearRGBA));
-                    colorAttachmentInfo.clearValue().color(vkClearColor);
-                } else {
-                    colorAttachmentInfo.loadOp(VK_ATTACHMENT_LOAD_OP_LOAD);
-                }
-            }
-            
-            if (depthAttachment != null) {
-                // TODO: transition to depth stencil attachment optimal and then back again
-                //       invalid to use as a source while in a renderpass drawing to the same texture
-                
-                final var depthAttachmentInfo = VkRenderingAttachmentInfo.calloc(stack).sType$Default();
-                renderingInfo.pDepthAttachment(depthAttachmentInfo);
-                depthAttachmentInfo.imageView(depthAttachment.imageViewHandle);
-                depthAttachmentInfo.imageLayout(VK_IMAGE_LAYOUT_GENERAL);
-                depthAttachmentInfo.resolveMode(VK_RESOLVE_MODE_NONE);
-                if (depthClear.isPresent()) {
-                    depthAttachmentInfo.loadOp(VK_ATTACHMENT_LOAD_OP_CLEAR);
-                    final var vkDepthClear = VkClearDepthStencilValue.calloc(stack);
-                    vkDepthClear.depth((float) depthClear.getAsDouble());
-                    depthAttachmentInfo.clearValue().depthStencil(vkDepthClear);
-                } else {
-                    depthAttachmentInfo.loadOp(VK_ATTACHMENT_LOAD_OP_LOAD);
-                }
-                
-                if (depthAttachment.texture().getFormat().hasStencilAspect()) {
-                    final var stencilAttachmentInfo = VkRenderingAttachmentInfo.calloc(stack).sType$Default();
-                    renderingInfo.pStencilAttachment(stencilAttachmentInfo);
-                    stencilAttachmentInfo.imageView(depthAttachment.imageViewHandle);
-                    stencilAttachmentInfo.imageLayout(VK_IMAGE_LAYOUT_GENERAL);
-                    stencilAttachmentInfo.resolveMode(VK_RESOLVE_MODE_NONE);
-                    // TODO: extend createRenderPass to add a stencil clear value
-                    stencilAttachmentInfo.loadOp(VK_ATTACHMENT_LOAD_OP_LOAD);
-                }
-            }
-            
-            vkCmdBeginRenderingKHR(commandBuffer, renderingInfo);
+            vkCmdBeginRenderPass2(commandBuffer, passBeginInfo, subpassBeginInfo);
             
             final var viewport = VkViewport.calloc(1, stack);
             viewport.x(0);
@@ -155,9 +114,9 @@ public class CinnabarRenderPass implements CVKRenderPass {
     public void close() {
         popDebugGroup();
         unsetPipeline();
-        memoryStack.pop();
-        vkCmdEndRenderingKHR(commandBuffer);
+        vkCmdEndRenderPass2(commandBuffer, VkSubpassEndInfo.calloc(memoryStack).sType$Default());
         vkEndCommandBuffer(commandBuffer);
+        memoryStack.pop();
     }
     
     // ---------- ExtRenderPass ----------
@@ -307,7 +266,7 @@ public class CinnabarRenderPass implements CVKRenderPass {
         if (!boundPipeline.isValid()) {
             throw new IllegalStateException("Attempt to bind invalid pipeline");
         }
-        vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, boundPipeline.pipelineHandle());
+        vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, boundPipeline.pipelineHandle(renderPass));
         
     }
     

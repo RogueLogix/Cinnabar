@@ -1,7 +1,6 @@
 package graphics.cinnabar.core.b3d.pipeline;
 
 import com.mojang.blaze3d.pipeline.RenderPipeline;
-import com.mojang.blaze3d.platform.DepthTestFunction;
 import com.mojang.blaze3d.platform.DestFactor;
 import com.mojang.blaze3d.platform.LogicOp;
 import com.mojang.blaze3d.platform.SourceFactor;
@@ -17,7 +16,6 @@ import graphics.cinnabar.api.threading.WorkFuture;
 import graphics.cinnabar.api.util.Destroyable;
 import graphics.cinnabar.core.b3d.CinnabarDevice;
 import graphics.cinnabar.core.b3d.texture.CinnabarGpuTexture;
-import graphics.cinnabar.core.util.MagicNumbers;
 import graphics.cinnabar.core.vk.descriptors.*;
 import graphics.cinnabar.core.vk.shaders.ShaderModule;
 import graphics.cinnabar.core.vk.shaders.ThreadGlobals;
@@ -25,6 +23,8 @@ import graphics.cinnabar.lib.threading.WorkQueue;
 import it.unimi.dsi.fastutil.ints.Int2ReferenceArrayMap;
 import it.unimi.dsi.fastutil.ints.IntIntImmutablePair;
 import it.unimi.dsi.fastutil.ints.IntReferenceImmutablePair;
+import it.unimi.dsi.fastutil.longs.Long2ReferenceMap;
+import it.unimi.dsi.fastutil.longs.Long2ReferenceOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongObjectImmutablePair;
 import it.unimi.dsi.fastutil.longs.LongReferenceImmutablePair;
 import it.unimi.dsi.fastutil.objects.*;
@@ -44,21 +44,22 @@ import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import static com.mojang.blaze3d.platform.DepthTestFunction.NO_DEPTH_TEST;
 import static graphics.cinnabar.api.exceptions.VkException.checkVkCode;
 import static graphics.cinnabar.core.CinnabarCore.CINNABAR_CORE_LOG;
 import static graphics.cinnabar.core.CinnabarCore.device;
 import static org.lwjgl.util.shaderc.Shaderc.*;
 import static org.lwjgl.util.spvc.Spvc.*;
-import static org.lwjgl.vulkan.VK10.*;
+import static org.lwjgl.vulkan.VK12.*;
 
 public class CinnabarRenderPipeline implements CVKCompiledRenderPipeline, Destroyable {
     
     public final RenderPipeline info;
     
-    private record BuiltPipeline(CinnabarDevice device, ShaderModule vertexShader, ShaderModule fragmentShader, DescriptorSetLayout descriptorSetLayout, long pipelineLayout, long pipelineHandle) implements Destroyable {
+    private record PipelineBase(CinnabarDevice device, ShaderModule vertexShader, ShaderModule fragmentShader, DescriptorSetLayout descriptorSetLayout, long pipelineLayout, VkGraphicsPipelineCreateInfo.Buffer createInfo, MemoryStack stack) implements Destroyable {
+        
         @Override
         public void destroy() {
-            vkDestroyPipeline(device.vkDevice, pipelineHandle, null);
             vkDestroyPipelineLayout(device.vkDevice, pipelineLayout, null);
             descriptorSetLayout.destroy();
             fragmentShader.destroy();
@@ -66,7 +67,17 @@ public class CinnabarRenderPipeline implements CVKCompiledRenderPipeline, Destro
         }
     }
     
-    private final Future<BuiltPipeline> builtPipeline;
+    
+    private record BuiltPipeline(PipelineBase base, long pipelineHandle, long renderPass) implements Destroyable {
+        @Override
+        public void destroy() {
+            vkDestroyPipeline(base.device.vkDevice, pipelineHandle, null);
+        }
+    }
+    
+    private final Future<PipelineBase> pipelineBase;
+    
+    private final Long2ReferenceMap<BuiltPipeline> builtPipelines = new Long2ReferenceOpenHashMap<>();
     
     record ShaderSourceCacheKey(ResourceLocation location, ShaderType type) {
     }
@@ -82,10 +93,10 @@ public class CinnabarRenderPipeline implements CVKCompiledRenderPipeline, Destro
         
         final var vertexSource = shaderSourceCache.computeIfAbsent(new ShaderSourceCacheKey(pipeline.getVertexShader(), ShaderType.VERTEX), key -> shaderSourceProvider.apply(key.location, key.type));
         final var fragmentSource = shaderSourceCache.computeIfAbsent(new ShaderSourceCacheKey(pipeline.getFragmentShader(), ShaderType.FRAGMENT), key -> shaderSourceProvider.apply(key.location, key.type));
-        builtPipeline = new WorkFuture<>(index -> {
-            CINNABAR_CORE_LOG.debug("Building pipeline: {}", pipeline.getLocation());
-            final var result = buildPipeline(device, pipeline, vertexSource, fragmentSource);
-            CINNABAR_CORE_LOG.debug("Built pipeline: {}", pipeline.getLocation());
+        pipelineBase = new WorkFuture<>(index -> {
+            CINNABAR_CORE_LOG.debug("Building pipeline base: {}", pipeline.getLocation());
+            final var result = buildPipelineBase(device, pipeline, vertexSource, fragmentSource);
+            CINNABAR_CORE_LOG.debug("Built pipeline base: {}", pipeline.getLocation());
             return result;
         }).enqueue(WorkQueue.BACKGROUND_THREADS);
     }
@@ -93,35 +104,41 @@ public class CinnabarRenderPipeline implements CVKCompiledRenderPipeline, Destro
     @Override
     public void destroy() {
         if (isValid()) {
-            builtPipeline.resultNow().destroy();
+            pipelineBase.resultNow().destroy();
         }
     }
     
     @Override
     public boolean isValid() {
-        if(builtPipeline.state() == Future.State.RUNNING) {
+        if (pipelineBase.state() == Future.State.RUNNING) {
             try {
-                builtPipeline.get();
+                pipelineBase.get();
             } catch (InterruptedException | ExecutionException e) {
                 CINNABAR_CORE_LOG.error(e.getCause().toString());
             }
         }
-        return builtPipeline.state() == Future.State.SUCCESS;
+        return pipelineBase.state() == Future.State.SUCCESS;
     }
     
     public DescriptorSetLayout descriptorSetLayout() {
-        return builtPipeline.resultNow().descriptorSetLayout;
+        return pipelineBase.resultNow().descriptorSetLayout;
     }
     
     public long pipelineLayout() {
-        return builtPipeline.resultNow().pipelineLayout;
+        return pipelineBase.resultNow().pipelineLayout;
     }
     
-    public long pipelineHandle() {
-        return builtPipeline.resultNow().pipelineHandle;
+    public long pipelineHandle(long renderPass) {
+        final var pipeline = builtPipelines.get(renderPass);
+        if (pipeline != null) {
+            return pipeline.pipelineHandle();
+        }
+        final var newPipeline = buildPipeline(pipelineBase.resultNow(), renderPass);
+        builtPipelines.put(renderPass, newPipeline);
+        return newPipeline.pipelineHandle;
     }
     
-    private static BuiltPipeline buildPipeline(CinnabarDevice device, ExtRenderPipeline pipeline, String vertexSource, String fragmentSource) {
+    private static PipelineBase buildPipelineBase(CinnabarDevice device, ExtRenderPipeline pipeline, String vertexSource, String fragmentSource) {
         
         // TODO: remove this when the shader gets fixed
         if ("minecraft:core/entity".equals(pipeline.getVertexShader().toString())) {
@@ -382,181 +399,173 @@ public class CinnabarRenderPipeline implements CVKCompiledRenderPipeline, Destro
             throw e;
         }
         
-        try (final var stack = MemoryStack.stackPush()) {
+        final var stack = MemoryStack.create();
+        
+        final var mainUTF8 = stack.UTF8("main");
+        final var shaderStages = VkPipelineShaderStageCreateInfo.calloc(2, stack);
+        shaderStages.position(0);
+        shaderStages.sType$Default();
+        shaderStages.stage(VK_SHADER_STAGE_VERTEX_BIT);
+        shaderStages.module(vertexShader.handle());
+        shaderStages.pName(mainUTF8);
+        shaderStages.position(1);
+        shaderStages.sType$Default();
+        shaderStages.stage(VK_SHADER_STAGE_FRAGMENT_BIT);
+        shaderStages.module(fragmentShader.handle());
+        shaderStages.pName(mainUTF8);
+        shaderStages.position(0);
+        
+        final var viewportState = VkPipelineViewportStateCreateInfo.calloc(stack).sType$Default();
+        viewportState.pNext(0);
+        viewportState.flags(0);
+        viewportState.viewportCount(1);
+        viewportState.pViewports(null);
+        viewportState.scissorCount(1);
+        viewportState.pScissors(null);
+        
+        final var dynamicState = VkPipelineDynamicStateCreateInfo.calloc(stack).sType$Default();
+        final var dynamicStates = stack.callocInt(2);
+        dynamicStates.put(0, VK_DYNAMIC_STATE_VIEWPORT);
+        dynamicStates.put(1, VK_DYNAMIC_STATE_SCISSOR);
+        dynamicState.pDynamicStates(dynamicStates);
+        
+        final var multiSampleState = VkPipelineMultisampleStateCreateInfo.calloc(stack).sType$Default();
+        multiSampleState.rasterizationSamples(VK_SAMPLE_COUNT_1_BIT);
+        multiSampleState.sampleShadingEnable(false);
+        
+        final var inputBuffers = pipeline.getVertexInputBuffers();
+        final var bufferBindings = VkVertexInputBindingDescription.calloc(inputBuffers.size(), stack);
+        final var attribBindings = VkVertexInputAttributeDescription.calloc(inputBuffers.stream().mapToInt(binding -> binding.bufferFormat().getElements().size()).sum(), stack);
+        for (VertexInputBuffer vertexInputBuffer : inputBuffers) {
+            final var bufferFormat = vertexInputBuffer.bufferFormat();
+            bufferBindings.binding(vertexInputBuffer.bindingIndex());
+            bufferBindings.stride(bufferFormat.getVertexSize());
+            bufferBindings.inputRate(vertexInputBuffer.inputRate().ordinal());
             
-            final var mainUTF8 = stack.UTF8("main");
-            final var shaderStages = VkPipelineShaderStageCreateInfo.calloc(2, stack);
-            shaderStages.position(0);
-            shaderStages.sType$Default();
-            shaderStages.stage(VK_SHADER_STAGE_VERTEX_BIT);
-            shaderStages.module(vertexShader.handle());
-            shaderStages.pName(mainUTF8);
-            shaderStages.position(1);
-            shaderStages.sType$Default();
-            shaderStages.stage(VK_SHADER_STAGE_FRAGMENT_BIT);
-            shaderStages.module(fragmentShader.handle());
-            shaderStages.pName(mainUTF8);
-            shaderStages.position(0);
-            
-            final var viewportState = VkPipelineViewportStateCreateInfo.calloc(stack).sType$Default();
-            viewportState.pNext(0);
-            viewportState.flags(0);
-            viewportState.viewportCount(1);
-            viewportState.pViewports(null);
-            viewportState.scissorCount(1);
-            viewportState.pScissors(null);
-            
-            final var renderingCreateInfo = VkPipelineRenderingCreateInfo.calloc(stack).sType$Default();
-            renderingCreateInfo.colorAttachmentCount(1);
-            final var colorFormat = stack.callocInt(1);
-            colorFormat.put(0, MagicNumbers.FramebufferColorFormat);
-            renderingCreateInfo.pColorAttachmentFormats(colorFormat);
-            renderingCreateInfo.depthAttachmentFormat(MagicNumbers.FramebufferDepthFormat); // TODO: this may not be D32, it may be D32_S8
-            
-            final var dynamicState = VkPipelineDynamicStateCreateInfo.calloc(stack).sType$Default();
-            final var dynamicStates = stack.callocInt(2);
-            dynamicStates.put(0, VK_DYNAMIC_STATE_VIEWPORT);
-            dynamicStates.put(1, VK_DYNAMIC_STATE_SCISSOR);
-            dynamicState.pDynamicStates(dynamicStates);
-            
-            final var multiSampleState = VkPipelineMultisampleStateCreateInfo.calloc(stack).sType$Default();
-            multiSampleState.rasterizationSamples(VK_SAMPLE_COUNT_1_BIT);
-            multiSampleState.sampleShadingEnable(false);
-            
-            final var inputBuffers = pipeline.getVertexInputBuffers();
-            final var bufferBindings = VkVertexInputBindingDescription.calloc(inputBuffers.size(), stack);
-            final var attribBindings = VkVertexInputAttributeDescription.calloc(inputBuffers.stream().mapToInt(binding -> binding.bufferFormat().getElements().size()).sum(), stack);
-            for (VertexInputBuffer vertexInputBuffer : inputBuffers) {
-                final var bufferFormat = vertexInputBuffer.bufferFormat();
-                bufferBindings.binding(vertexInputBuffer.bindingIndex());
-                bufferBindings.stride(bufferFormat.getVertexSize());
-                bufferBindings.inputRate(vertexInputBuffer.inputRate().ordinal());
-                
-                for (VertexFormatElement element : vertexInputBuffer.bufferFormat().getElements()) {
-                    final var name = bufferFormat.getElementName(element);
-                    @Nullable
-                    final var info = attribInfo.get(name);
-                    if (info == null) {
-                        continue;
-                    }
-                    
-                    attribBindings.location(info.leftInt());
-                    attribBindings.binding(vertexInputBuffer.bindingIndex());
-                    final var typeInfo = info.right();
-                    attribBindings.format(mapTypeAndCountToVkFormat(element.type(), element.count(), element.usage(), spvcBaseTypeToVertexFormatElementType(typeInfo.leftInt())));
-                    attribBindings.offset(bufferFormat.getOffset(element));
-                    attribBindings.position(attribBindings.position() + 1);
+            for (VertexFormatElement element : vertexInputBuffer.bufferFormat().getElements()) {
+                final var name = bufferFormat.getElementName(element);
+                @Nullable
+                final var info = attribInfo.get(name);
+                if (info == null) {
+                    continue;
                 }
+                
+                attribBindings.location(info.leftInt());
+                attribBindings.binding(vertexInputBuffer.bindingIndex());
+                final var typeInfo = info.right();
+                attribBindings.format(mapTypeAndCountToVkFormat(element.type(), element.count(), element.usage(), spvcBaseTypeToVertexFormatElementType(typeInfo.leftInt())));
+                attribBindings.offset(bufferFormat.getOffset(element));
+                attribBindings.position(attribBindings.position() + 1);
             }
-            bufferBindings.position(0);
-            attribBindings.flip();
-            
-            final var vertexInputState = VkPipelineVertexInputStateCreateInfo.calloc(stack).sType$Default();
-            vertexInputState.pVertexBindingDescriptions(bufferBindings);
-            vertexInputState.pVertexAttributeDescriptions(attribBindings);
-            
-            final var inputAssemblyState = VkPipelineInputAssemblyStateCreateInfo.calloc(stack).sType$Default();
-            inputAssemblyState.topology(primitiveTopology(pipeline.getVertexFormatMode()));
-            
-            final var rasterizationState = VkPipelineRasterizationStateCreateInfo.calloc(stack).sType$Default();
-            rasterizationState.pNext(0);
-            rasterizationState.flags(0);
-            rasterizationState.depthClampEnable(false);
-            rasterizationState.rasterizerDiscardEnable(false);
-            rasterizationState.polygonMode(switch (pipeline.getPolygonMode()) {
-                case FILL -> VK_POLYGON_MODE_FILL;
-                case WIREFRAME -> VK_POLYGON_MODE_LINE;
-            });
-            rasterizationState.cullMode(pipeline.isCull() ? VK_CULL_MODE_BACK_BIT : VK_CULL_MODE_NONE);
-            // negative viewport height, this is fine
-            rasterizationState.frontFace(VK_FRONT_FACE_CLOCKWISE);
-            rasterizationState.depthBiasEnable(pipeline.getDepthBiasConstant() != 0.0f || pipeline.getDepthBiasScaleFactor() != 0.0f);
-            rasterizationState.depthBiasConstantFactor(pipeline.getDepthBiasConstant());
-            rasterizationState.depthBiasClamp(0);
-            rasterizationState.depthBiasSlopeFactor(pipeline.getDepthBiasScaleFactor());
-            rasterizationState.lineWidth(1.0f);
-            
-            final var depthTestEnable = pipeline.getDepthTestFunction() != DepthTestFunction.NO_DEPTH_TEST || pipeline.isWriteDepth();
-            
-            final var depthStencilState = VkPipelineDepthStencilStateCreateInfo.calloc(stack).sType$Default();
-            // TODO: stencil support, once its in the Neo3D pipeline
-            depthStencilState.depthBoundsTestEnable(false);
-            depthStencilState.stencilTestEnable(false);
-            depthStencilState.depthTestEnable(depthTestEnable);
-            depthStencilState.depthWriteEnable(pipeline.isWriteDepth());
-            depthStencilState.depthCompareOp(switch (pipeline.getDepthTestFunction()) {
-                // TODO: finish out this enum (depth funcs)
-                case NO_DEPTH_TEST -> VK_COMPARE_OP_ALWAYS;
-                case EQUAL_DEPTH_TEST -> VK_COMPARE_OP_EQUAL;
-                case LEQUAL_DEPTH_TEST -> VK_COMPARE_OP_LESS_OR_EQUAL;
-                case LESS_DEPTH_TEST -> VK_COMPARE_OP_LESS;
-                case GREATER_DEPTH_TEST -> VK_COMPARE_OP_GREATER;
-            });
-            
-            
-            final var blendAttachment = VkPipelineColorBlendAttachmentState.calloc(1, stack);
-            final var blendFuncOptional = pipeline.getBlendFunction();
-            blendAttachment.blendEnable(blendFuncOptional.isPresent());
-            if (blendFuncOptional.isPresent()) {
-                final var blendFunc = blendFuncOptional.get();
-                blendAttachment.srcColorBlendFactor(vkFactor(blendFunc.sourceColor()));
-                blendAttachment.dstColorBlendFactor(vkFactor(blendFunc.destColor()));
-                // TODO: add blend equation to Neo3D, and bug Dinnerbone for it
+        }
+        bufferBindings.position(0);
+        attribBindings.flip();
+        
+        final var vertexInputState = VkPipelineVertexInputStateCreateInfo.calloc(stack).sType$Default();
+        vertexInputState.pVertexBindingDescriptions(bufferBindings);
+        vertexInputState.pVertexAttributeDescriptions(attribBindings);
+        
+        final var inputAssemblyState = VkPipelineInputAssemblyStateCreateInfo.calloc(stack).sType$Default();
+        inputAssemblyState.topology(primitiveTopology(pipeline.getVertexFormatMode()));
+        
+        final var rasterizationState = VkPipelineRasterizationStateCreateInfo.calloc(stack).sType$Default();
+        rasterizationState.pNext(0);
+        rasterizationState.flags(0);
+        rasterizationState.depthClampEnable(false);
+        rasterizationState.rasterizerDiscardEnable(false);
+        rasterizationState.polygonMode(switch (pipeline.getPolygonMode()) {
+            case FILL -> VK_POLYGON_MODE_FILL;
+            case WIREFRAME -> VK_POLYGON_MODE_LINE;
+        });
+        rasterizationState.cullMode(pipeline.isCull() ? VK_CULL_MODE_BACK_BIT : VK_CULL_MODE_NONE);
+        // negative viewport height, this is fine
+        rasterizationState.frontFace(VK_FRONT_FACE_CLOCKWISE);
+        rasterizationState.depthBiasEnable(pipeline.getDepthBiasConstant() != 0.0f || pipeline.getDepthBiasScaleFactor() != 0.0f);
+        rasterizationState.depthBiasConstantFactor(pipeline.getDepthBiasConstant());
+        rasterizationState.depthBiasClamp(0);
+        rasterizationState.depthBiasSlopeFactor(pipeline.getDepthBiasScaleFactor());
+        rasterizationState.lineWidth(1.0f);
+        
+        final var depthTestEnable = pipeline.getDepthTestFunction() != NO_DEPTH_TEST || pipeline.isWriteDepth();
+        
+        final var depthStencilState = VkPipelineDepthStencilStateCreateInfo.calloc(stack).sType$Default();
+        // TODO: stencil support, once its in the Neo3D pipeline
+        depthStencilState.depthBoundsTestEnable(false);
+        depthStencilState.stencilTestEnable(false);
+        depthStencilState.depthTestEnable(depthTestEnable);
+        depthStencilState.depthWriteEnable(pipeline.isWriteDepth());
+        depthStencilState.depthCompareOp(switch (pipeline.getDepthTestFunction()) {
+            // TODO: finish out this enum (depth funcs)
+            case NO_DEPTH_TEST -> VK_COMPARE_OP_ALWAYS;
+            case EQUAL_DEPTH_TEST -> VK_COMPARE_OP_EQUAL;
+            case LEQUAL_DEPTH_TEST -> VK_COMPARE_OP_LESS_OR_EQUAL;
+            case LESS_DEPTH_TEST -> VK_COMPARE_OP_LESS;
+            case GREATER_DEPTH_TEST -> VK_COMPARE_OP_GREATER;
+        });
+        
+        
+        final var blendAttachment = VkPipelineColorBlendAttachmentState.calloc(1, stack);
+        final var blendFuncOptional = pipeline.getBlendFunction();
+        blendAttachment.blendEnable(blendFuncOptional.isPresent());
+        if (blendFuncOptional.isPresent()) {
+            final var blendFunc = blendFuncOptional.get();
+            blendAttachment.srcColorBlendFactor(vkFactor(blendFunc.sourceColor()));
+            blendAttachment.dstColorBlendFactor(vkFactor(blendFunc.destColor()));
+            // TODO: add blend equation to Neo3D, and bug Dinnerbone for it
+            blendAttachment.colorBlendOp(VK_BLEND_OP_ADD);
+            blendAttachment.srcAlphaBlendFactor(vkFactor(blendFunc.sourceAlpha()));
+            blendAttachment.dstAlphaBlendFactor(vkFactor(blendFunc.destAlpha()));
+            blendAttachment.alphaBlendOp(VK_BLEND_OP_ADD);
+        }
+        blendAttachment.colorWriteMask((pipeline.isWriteColor() ? (VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT) : 0) | (pipeline.isWriteAlpha() ? VK_COLOR_COMPONENT_A_BIT : 0));
+        
+        final var blendState = VkPipelineColorBlendStateCreateInfo.calloc(stack).sType$Default();
+        if (pipeline.getColorLogic() == LogicOp.OR_REVERSE) {
+            if (device.workarounds.hasLogicOp) {
+                blendState.logicOpEnable(true);
+                blendState.logicOp(VK_LOGIC_OP_OR_REVERSE);
+            } else {
+                // LogicOp isn't available on MacOS, and in 21.7 Mojang switched text rendering to this, so, use this instead
+                blendAttachment.blendEnable(true);
+                blendAttachment.srcColorBlendFactor(VK_BLEND_FACTOR_ONE_MINUS_DST_COLOR);
+                blendAttachment.dstColorBlendFactor(VK_BLEND_FACTOR_ONE_MINUS_SRC_COLOR);
                 blendAttachment.colorBlendOp(VK_BLEND_OP_ADD);
-                blendAttachment.srcAlphaBlendFactor(vkFactor(blendFunc.sourceAlpha()));
-                blendAttachment.dstAlphaBlendFactor(vkFactor(blendFunc.destAlpha()));
+                blendAttachment.srcAlphaBlendFactor(VK_BLEND_FACTOR_ONE);
+                blendAttachment.dstAlphaBlendFactor(VK_BLEND_FACTOR_ZERO);
                 blendAttachment.alphaBlendOp(VK_BLEND_OP_ADD);
             }
-            blendAttachment.colorWriteMask((pipeline.isWriteColor() ? (VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT) : 0) | (pipeline.isWriteAlpha() ? VK_COLOR_COMPONENT_A_BIT : 0));
+        }
+        blendState.pAttachments(blendAttachment);
+        
+        final var createInfo = VkGraphicsPipelineCreateInfo.calloc(1, stack);
+        createInfo.sType$Default();
+        createInfo.flags(0);
+        createInfo.pStages(shaderStages);
+        createInfo.pVertexInputState(vertexInputState);
+        createInfo.pInputAssemblyState(inputAssemblyState);
+        createInfo.pTessellationState(null);
+        createInfo.pViewportState(viewportState);
+        createInfo.pRasterizationState(rasterizationState);
+        createInfo.pMultisampleState(multiSampleState);
+        createInfo.pDepthStencilState(depthStencilState);
+        createInfo.pColorBlendState(blendState);
+        createInfo.pDynamicState(dynamicState);
+        createInfo.layout(pipelineLayout);
+        createInfo.renderPass(VK_NULL_HANDLE);
+        createInfo.subpass(0);
+        createInfo.basePipelineHandle(VK_NULL_HANDLE);
+        createInfo.basePipelineIndex(-1);
+        
+        return new PipelineBase(device, vertexShader, fragmentShader, descriptorSetLayout, pipelineLayout, createInfo, stack);
+    }
+    
+    private static BuiltPipeline buildPipeline(PipelineBase pipelineBase, long renderPass) {
+        try (final var stack = MemoryStack.stackPush()) {
             
-            final var blendState = VkPipelineColorBlendStateCreateInfo.calloc(stack).sType$Default();
-            if (pipeline.getColorLogic() == LogicOp.OR_REVERSE) {
-                if (device.workarounds.hasLogicOp) {
-                    blendState.logicOpEnable(true);
-                    blendState.logicOp(VK_LOGIC_OP_OR_REVERSE);
-                } else {
-                    // LogicOp isn't available on MacOS, and in 21.7 Mojang switched text rendering to this, so, use this instead
-                    blendAttachment.blendEnable(true);
-                    blendAttachment.srcColorBlendFactor(VK_BLEND_FACTOR_ONE_MINUS_DST_COLOR);
-                    blendAttachment.dstColorBlendFactor(VK_BLEND_FACTOR_ONE_MINUS_SRC_COLOR);
-                    blendAttachment.colorBlendOp(VK_BLEND_OP_ADD);
-                    blendAttachment.srcAlphaBlendFactor(VK_BLEND_FACTOR_ONE);
-                    blendAttachment.dstAlphaBlendFactor(VK_BLEND_FACTOR_ZERO);
-                    blendAttachment.alphaBlendOp(VK_BLEND_OP_ADD);
-                }
-            }
-            blendState.pAttachments(blendAttachment);
-            
-            final var createInfo = VkGraphicsPipelineCreateInfo.calloc(1, stack);
-            createInfo.sType$Default();
-            createInfo.pNext(renderingCreateInfo);
-            createInfo.flags(0);
-            createInfo.pStages(shaderStages);
-            createInfo.pVertexInputState(vertexInputState);
-            createInfo.pInputAssemblyState(inputAssemblyState);
-            createInfo.pTessellationState(null);
-            createInfo.pViewportState(viewportState);
-            createInfo.pRasterizationState(rasterizationState);
-            createInfo.pMultisampleState(multiSampleState);
-            createInfo.pDepthStencilState(depthStencilState);
-            createInfo.pColorBlendState(blendState);
-            createInfo.pDynamicState(dynamicState);
-            createInfo.layout(pipelineLayout);
-            createInfo.renderPass(VK_NULL_HANDLE);
-            createInfo.subpass(0);
-            createInfo.basePipelineHandle(VK_NULL_HANDLE);
-            createInfo.basePipelineIndex(-1);
-            
+            pipelineBase.createInfo.renderPass(renderPass);
             final var handle = stack.callocLong(1);
-            checkVkCode(vkCreateGraphicsPipelines(device.vkDevice, 0, createInfo, null, handle));
-            
-            return new BuiltPipeline(device, vertexShader, fragmentShader, descriptorSetLayout, pipelineLayout, handle.get(0));
-        } catch (RuntimeException e) {
-            vertexShader.destroy();
-            fragmentShader.destroy();
-            descriptorSetLayout.destroy();
-            vkDestroyPipelineLayout(device.vkDevice, pipelineLayout, null);
-            throw e;
+            checkVkCode(vkCreateGraphicsPipelines(pipelineBase.device.vkDevice, 0, pipelineBase.createInfo, null, handle));
+            return new BuiltPipeline(pipelineBase, handle.get(0), renderPass);
         }
     }
     
