@@ -10,7 +10,6 @@ import static org.lwjgl.vulkan.VK12.*;
 
 public class DriverWorkarounds {
     public final boolean allowIncrementalDescriptorPush;
-    public final boolean hasLogicOp;
     
     public DriverWorkarounds(VkDevice device) {
         try (final var stack = MemoryStack.stackPush()) {
@@ -25,7 +24,6 @@ public class DriverWorkarounds {
             
             // Intel's driver is broken for these
             allowIncrementalDescriptorPush = physicalDeviceProperties.vendorID() != 0x8086;
-            hasLogicOp = deviceFeatures10.logicOp();
         }
     }
 }

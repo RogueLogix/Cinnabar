@@ -8,6 +8,8 @@ import graphics.cinnabar.api.b3dext.pipeline.ExtRenderPipeline;
 import graphics.cinnabar.api.b3dext.systems.ExtCapabilities;
 import graphics.cinnabar.api.b3dext.textures.ExtGpuTexture;
 import graphics.cinnabar.api.cvk.buffers.CVKGpuBuffer;
+import graphics.cinnabar.api.cvk.configuration.CVKDeviceFeatures;
+import graphics.cinnabar.api.cvk.configuration.CVKDeviceProperties;
 import graphics.cinnabar.api.cvk.pipeline.CVKCompiledRenderPipeline;
 import graphics.cinnabar.api.cvk.systems.CVKGpuDevice;
 import graphics.cinnabar.api.cvk.textures.CVKGpuTexture;
@@ -19,6 +21,9 @@ import graphics.cinnabar.core.DriverWorkarounds;
 import graphics.cinnabar.core.b3d.buffers.BufferPool;
 import graphics.cinnabar.core.b3d.buffers.CinnabarIndividualGpuBuffer;
 import graphics.cinnabar.core.b3d.command.CinnabarCommandEncoder;
+import graphics.cinnabar.core.b3d.configuration.CinnabarGpuDeviceFeatures;
+import graphics.cinnabar.core.b3d.configuration.CinnabarGpuDeviceProperties;
+import graphics.cinnabar.core.b3d.configuration.ConfigureCinnabarDeviceEvent;
 import graphics.cinnabar.core.b3d.pipeline.CinnabarRenderPipeline;
 import graphics.cinnabar.core.b3d.texture.CinnabarGpuTexture;
 import graphics.cinnabar.core.b3d.texture.CinnabarGpuTextureView;
@@ -36,6 +41,8 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.resources.ResourceLocation;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.loading.FMLEnvironment;
+import net.neoforged.neoforge.client.blaze3d.GpuDeviceFeatures;
+import net.neoforged.neoforge.client.blaze3d.GpuDeviceProperties;
 import net.neoforged.neoforge.client.event.CustomizeGuiOverlayEvent;
 import net.neoforged.neoforge.common.NeoForge;
 import org.jetbrains.annotations.Nullable;
@@ -62,6 +69,9 @@ import static org.lwjgl.vulkan.EXTDebugUtils.vkDestroyDebugUtilsMessengerEXT;
 import static org.lwjgl.vulkan.VK12.*;
 
 public class CinnabarDevice implements CVKGpuDevice {
+    
+    private final CVKDeviceProperties deviceProperties;
+    private final CVKDeviceFeatures enabledFeatures;
     
     public final VkInstance vkInstance;
     private final long debugCallback;
@@ -133,6 +143,10 @@ public class CinnabarDevice implements CVKGpuDevice {
         
         physicalDeviceProperties2.pNext(physicalDevice12Properties);
         vkGetPhysicalDeviceProperties2(vkPhysicalDevice, physicalDeviceProperties2);
+        
+        deviceProperties = new CinnabarGpuDeviceProperties.Immutable(new CinnabarGpuDeviceProperties());
+        final var event = net.neoforged.fml.ModLoader.postEventWithReturn(new ConfigureCinnabarDeviceEvent(deviceProperties, new CinnabarGpuDeviceFeatures()));
+        enabledFeatures = new CinnabarGpuDeviceFeatures.Immutable(event);
         
         final VulkanStartup.Device deviceAndQueues;
         try {
@@ -474,6 +488,18 @@ public class CinnabarDevice implements CVKGpuDevice {
     @Override
     public CVKGpuTextureView createTextureView(ExtGpuTexture texture, ExtGpuTexture.Type type, TextureFormat format, int baseMipLevel, int mipLevels, int baseArrayLayer, int layerCount) {
         return new CinnabarGpuTextureView(this, (CinnabarGpuTexture) texture, type, format, baseMipLevel, mipLevels, baseArrayLayer, layerCount);
+    }
+    
+    // --------- Neo GpuDeviceExtension ---------
+    
+    @Override
+    public GpuDeviceProperties deviceProperties() {
+        return deviceProperties;
+    }
+    
+    @Override
+    public GpuDeviceFeatures enabledFeatures() {
+        return enabledFeatures;
     }
     
     // --------- Vanilla GpuDevice ---------

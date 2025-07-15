@@ -688,25 +688,12 @@ public class VulkanStartup {
             }
             queueCreateInfos.position(0);
             
-            final boolean hasLogicOp;
-            {
-                final var physicalDeviceFeatures = VkPhysicalDeviceFeatures2.calloc(stack).sType$Default();
-                final var physicalDeviceFeatures10 = physicalDeviceFeatures.features();
-                final var physicalDeviceFeatures11 = VkPhysicalDeviceVulkan11Features.calloc(stack).sType$Default();
-                final var physicalDeviceFeatures12 = VkPhysicalDeviceVulkan12Features.calloc(stack).sType$Default();
-                physicalDeviceFeatures.pNext(physicalDeviceFeatures11);
-                physicalDeviceFeatures.pNext(physicalDeviceFeatures12);
-                vkGetPhysicalDeviceFeatures2(vkPhysicalDevice, physicalDeviceFeatures);
-                hasLogicOp = physicalDeviceFeatures10.logicOp();
-            }
-            
             final var physicalDeviceFeatures10 = VkPhysicalDeviceFeatures.calloc(stack);
             final var physicalDeviceFeatures11 = VkPhysicalDeviceVulkan11Features.calloc(stack).sType$Default();
             final var physicalDeviceFeatures12 = VkPhysicalDeviceVulkan12Features.calloc(stack).sType$Default();
             
             physicalDeviceFeatures10.drawIndirectFirstInstance(true);
             physicalDeviceFeatures10.fillModeNonSolid(true);
-            physicalDeviceFeatures10.logicOp(hasLogicOp);
             physicalDeviceFeatures10.multiDrawIndirect(true);
             
             physicalDeviceFeatures11.shaderDrawParameters(true);

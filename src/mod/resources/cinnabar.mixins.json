@@ -8,6 +8,7 @@
   ],
   "client": [
     "CachedOrthoProjectionMatrixBufferMixin",
+    "ClientHooksMixin",
     "RenderSystemMixin",
     "GameRendererMixin",
     "TimerQueryMixin",

@@ -38,7 +38,7 @@ public interface ExtCommandEncoder extends CommandEncoder {
         final List<BufferCopy> copiesList = switch (copies.length) {
             case 0 -> List.of();
             case 1 -> List.of(copies[0]);
-            case 2 -> List.of(copies[1]);
+            case 2 -> List.of(copies[0], copies[1]);
             default -> ReferenceArrayList.wrap(copies);
         };
         copyBufferToBuffer(src, dst, copiesList);

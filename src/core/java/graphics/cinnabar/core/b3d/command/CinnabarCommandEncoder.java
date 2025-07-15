@@ -344,6 +344,11 @@ public class CinnabarCommandEncoder implements CVKCommandEncoder, Destroyable {
         };
     }
     
+    @Override
+    public void copyToBuffer(GpuBufferSlice src, GpuBufferSlice dst) {
+        copyBufferToBuffer(src, dst);
+    }
+    
     public void setupTexture(CinnabarGpuTexture texture) {
         try (final var stack = memoryStack.push()) {
             final var barrier = VkImageMemoryBarrier.calloc(1, stack).sType$Default();
