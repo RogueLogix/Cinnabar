@@ -57,6 +57,8 @@ public interface CVKGpuDevice extends ExtGpuDevice {
     
     int transferQueueFamily();
     
+    CVKGpuTexture creatUninitializedTexture(@Nullable String label, int usage, ExtGpuTexture.Type type, TextureFormat format, int width, int height, int depth, int layers, int mips);
+    
     // ---------- Overrides for return type, function unmodified ----------
     
     // ----- Ext -----
