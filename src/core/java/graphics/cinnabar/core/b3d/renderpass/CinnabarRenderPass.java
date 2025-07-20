@@ -99,7 +99,6 @@ public class CinnabarRenderPass implements CVKRenderPass {
             viewport.x(0);
             viewport.y(0);
             viewport.width(renderWidth);
-            // flips the view, consistent with OpenGL
             viewport.height(renderHeight);
             viewport.minDepth(0.0f);
             viewport.maxDepth(1.0f);
@@ -308,12 +307,23 @@ public class CinnabarRenderPass implements CVKRenderPass {
         enableScissor(0, 0, renderWidth, renderHeight);
     }
     
-    @Override
+    public void setViewport(int x, int y, int width, int height) {
+        try (final var stack = memoryStack.push()) {
+            final var viewport = VkViewport.calloc(1, stack);
+            viewport.x(x);
+            viewport.y(y);
+            viewport.width(width);
+            viewport.height(height);
+            viewport.minDepth(0.0f);
+            viewport.maxDepth(1.0f);
+            vkCmdSetViewport(commandBuffer, 0, viewport);
+        }
+    }
+    
     public void enableStencilTest(StencilTest stencilTest) {
         throw new NotImplemented("Stencil cannot be set dynamically in Cinnabar");
     }
     
-    @Override
     public void disableStencilTest() {
         throw new NotImplemented("Stencil cannot be set dynamically in Cinnabar");
     }
@@ -645,7 +655,7 @@ public class CinnabarRenderPass implements CVKRenderPass {
                     
                     final var drawsCPUBuffer = new VkBuffer(device, (long) drawCount * VkDrawIndexedIndirectCommand.SIZEOF, VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT, device.hostMemoryType);
                     device.destroyEndOfFrame(drawsCPUBuffer);
-                    LibCString.nmemcpy(drawsCPUBuffer.allocationInfo.pMappedData(), drawCommands.address(0), (long)drawCount * VkDrawIndexedIndirectCommand.SIZEOF);
+                    LibCString.nmemcpy(drawsCPUBuffer.allocationInfo.pMappedData(), drawCommands.address(0), (long) drawCount * VkDrawIndexedIndirectCommand.SIZEOF);
                     vkCmdDrawIndexedIndirect(commandBuffer, drawsCPUBuffer.handle, 0, drawCount, VkDrawIndexedIndirectCommand.SIZEOF);
                 } else if (canBatchVertexBuffer) {
                     vkCmdBindVertexBuffers(commandBuffer, 0, new long[]{expectedVertexBuffer.handle}, new long[]{0});

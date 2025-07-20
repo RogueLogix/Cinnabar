@@ -43,6 +43,7 @@ import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.loading.FMLEnvironment;
 import net.neoforged.neoforge.client.blaze3d.GpuDeviceFeatures;
 import net.neoforged.neoforge.client.blaze3d.GpuDeviceProperties;
+import net.neoforged.neoforge.client.config.NeoForgeClientConfig;
 import net.neoforged.neoforge.client.event.CustomizeGuiOverlayEvent;
 import net.neoforged.neoforge.common.NeoForge;
 import org.jetbrains.annotations.Nullable;
@@ -125,7 +126,7 @@ public class CinnabarDevice implements CVKGpuDevice {
         CINNABAR_CORE_LOG.info("Initializing CinnabarDevice");
         try (final var stack = MemoryStack.stackPush()) {
             final var debugCreateInfo = VulkanDebug.getCreateInfo(stack, new VulkanDebug.MessageSeverity[]{VulkanDebug.MessageSeverity.ERROR, VulkanDebug.MessageSeverity.WARNING, VulkanDebug.MessageSeverity.INFO}, new VulkanDebug.MessageType[]{VulkanDebug.MessageType.GENERAL, VulkanDebug.MessageType.VALIDATION});
-            final var instanceAndDebugCallback = VulkanStartup.createVkInstance(true, CONFIG.EnableMesaOverlay, debugCreateInfo);
+            final var instanceAndDebugCallback = VulkanStartup.createVkInstance(NeoForgeClientConfig.INSTANCE.enableB3DValidationLayer.getAsBoolean(), CONFIG.EnableMesaOverlay, debugCreateInfo);
             vkInstance = instanceAndDebugCallback.instance();
             debugCallback = instanceAndDebugCallback.debugCallback();
             enabledLayersAndInstanceExtensions = instanceAndDebugCallback.enabledInsanceExtensions();
