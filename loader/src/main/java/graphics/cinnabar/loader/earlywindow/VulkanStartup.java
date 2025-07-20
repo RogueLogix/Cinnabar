@@ -200,8 +200,10 @@ public class VulkanStartup {
                 }
                 if (!hasKHRValidation) {
                     LOGGER.error("Unable to initialize validation layers, are they installed?");
+                    validationLayers = false;
                 } else if (!hasEXTDebug) {
                     LOGGER.error("Unable to initialize validation layers, VK_EXT_debug_utils not present");
+                    validationLayers = false;
                 } else {
                     if (FMLLoader.isProduction()) {
                         TinyFileDialogs.tinyfd_messageBox("Minecraft: Cinnabar", """
