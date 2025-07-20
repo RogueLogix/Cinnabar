@@ -22,7 +22,7 @@ public class RenderSystemMixin {
         if (DEVICE != null) {
             return DEVICE;
         }
-        if (CinnabarCore.cinnabarDeviceSingleton != null){
+        if (CinnabarCore.cinnabarDeviceSingleton != null) {
             return CinnabarCore.cinnabarDeviceSingleton;
         }
         throw new IllegalStateException("Can't getDevice() before it was initialized");

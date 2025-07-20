@@ -29,20 +29,20 @@ import static org.lwjgl.vulkan.VK10.*;
 
 public class CinnabarEarlyWindowProvider implements ImmediateWindowProvider {
     private static final Logger LOGGER = LogUtils.getLogger();
-
+    
     static {
         LOGGER.trace("CinnabarEarlyWindowProvider loaded!");
     }
-
+    
     public static final String EARLY_WINDOW_NAME = "CinnabarEarlyWindow";
-
+    
     private static boolean nameQueried = false;
     private static boolean configInjected = false;
-
+    
     private static final Method SET_CONFIG_VALUE;
     private static final Field CONFIG_DATA;
     private static final Field CONFIG_INSTANCE;
-
+    
     static {
         try {
             CONFIG_DATA = FMLConfig.class.getDeclaredField("configData");
@@ -55,7 +55,7 @@ public class CinnabarEarlyWindowProvider implements ImmediateWindowProvider {
             throw new RuntimeException(e);
         }
     }
-
+    
     public static void attemptConfigInit() {
         if (nameQueried || configInjected) {
             return;
@@ -82,23 +82,23 @@ public class CinnabarEarlyWindowProvider implements ImmediateWindowProvider {
             configInjected = true;
         }
     }
-
+    
     private int winWidth;
     private int winHeight;
     private boolean maximized;
-
+    
     private long window;
     private long surface;
-
+    
     private VulkanStartup.Instance instance;
     private VulkanStartup.Device device;
     private BasicSwapchain swapchain;
     private long commandPool;
     private VkCommandBuffer commandBuffer;
-
+    
     private ScheduledExecutorService renderScheduler;
     private ScheduledFuture<?> windowTick;
-
+    
     @Override
     public String name() {
         if (nameQueried) {
@@ -111,7 +111,7 @@ public class CinnabarEarlyWindowProvider implements ImmediateWindowProvider {
         nameQueried = true;
         return EARLY_WINDOW_NAME;
     }
-
+    
     @Override
     public Runnable initialize(String[] arguments) {
         if (!configInjected) {
@@ -122,11 +122,11 @@ public class CinnabarEarlyWindowProvider implements ImmediateWindowProvider {
         var mcversionopt = parser.accepts("fml.mcVersion").withRequiredArg().ofType(String.class);
         var forgeversionopt = parser.accepts("fml.neoForgeVersion").withRequiredArg().ofType(String.class);
         var widthopt = parser.accepts("width")
-                .withRequiredArg().ofType(Integer.class)
-                .defaultsTo(FMLConfig.getIntConfigValue(FMLConfig.ConfigValue.EARLY_WINDOW_WIDTH));
+                               .withRequiredArg().ofType(Integer.class)
+                               .defaultsTo(FMLConfig.getIntConfigValue(FMLConfig.ConfigValue.EARLY_WINDOW_WIDTH));
         var heightopt = parser.accepts("height")
-                .withRequiredArg().ofType(Integer.class)
-                .defaultsTo(FMLConfig.getIntConfigValue(FMLConfig.ConfigValue.EARLY_WINDOW_HEIGHT));
+                                .withRequiredArg().ofType(Integer.class)
+                                .defaultsTo(FMLConfig.getIntConfigValue(FMLConfig.ConfigValue.EARLY_WINDOW_HEIGHT));
         var maximizedopt = parser.accepts("earlywindow.maximized");
         parser.allowsUnrecognizedOptions();
         var parsed = parser.parse(arguments);
@@ -135,7 +135,7 @@ public class CinnabarEarlyWindowProvider implements ImmediateWindowProvider {
         FMLConfig.updateConfig(FMLConfig.ConfigValue.EARLY_WINDOW_WIDTH, winWidth);
         FMLConfig.updateConfig(FMLConfig.ConfigValue.EARLY_WINDOW_HEIGHT, winHeight);
         this.maximized = parsed.has(maximizedopt) || FMLConfig.getBoolConfigValue(FMLConfig.ConfigValue.EARLY_WINDOW_MAXIMIZED);
-
+        
         var forgeVersion = parsed.valueOf(forgeversionopt);
         StartupNotificationManager.modLoaderConsumer().ifPresent(c -> c.accept("NeoForge loading " + forgeVersion));
         
@@ -151,22 +151,22 @@ public class CinnabarEarlyWindowProvider implements ImmediateWindowProvider {
         
         glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
         window = glfwCreateWindow(winWidth, winHeight, "Cinnabar Early Loading", 0, 0);
-
+        
         if (this.maximized) {
             glfwMaximizeWindow(window);
         }
-
+        
         instance = VulkanStartup.createVkInstance(false, false, null);
         device = VulkanStartup.createLogicalDeviceAndQueues(instance.instance(), VulkanStartup.selectPhysicalDevice(instance.instance(), false, -1, instance.enabledInsanceExtensions()), instance.enabledInsanceExtensions());
-
+        
         try (final var stack = MemoryStack.stackPush()) {
             final var surfacePtr = stack.longs(0);
             GLFWClassloadHelper.glfwExtCreateWindowSurface(instance.instance(), window, null, surfacePtr);
             surface = surfacePtr.get(0);
         }
-
+        
         swapchain = new BasicSwapchain(device, surface, 0);
-
+        
         try (final var stack = MemoryStack.stackPush()) {
             final var createInfo = VkCommandPoolCreateInfo.calloc(stack).sType$Default();
             createInfo.flags(VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
@@ -174,7 +174,7 @@ public class CinnabarEarlyWindowProvider implements ImmediateWindowProvider {
             final var ptr = stack.mallocLong(1);
             vkCreateCommandPool(device.device(), createInfo, null, ptr);
             commandPool = ptr.get(0);
-
+            
             final var allocInfo = VkCommandBufferAllocateInfo.calloc(stack).sType$Default();
             allocInfo.commandPool(commandPool);
             allocInfo.level(VK_COMMAND_BUFFER_LEVEL_PRIMARY);
@@ -183,7 +183,7 @@ public class CinnabarEarlyWindowProvider implements ImmediateWindowProvider {
             vkAllocateCommandBuffers(device.device(), allocInfo, cb);
             commandBuffer = new VkCommandBuffer(cb.get(0), device.device());
         }
-
+        
         renderScheduler = Executors.newSingleThreadScheduledExecutor(r -> {
             final var thread = Executors.defaultThreadFactory().newThread(r);
             thread.setDaemon(true);
@@ -192,13 +192,13 @@ public class CinnabarEarlyWindowProvider implements ImmediateWindowProvider {
         windowTick = renderScheduler.scheduleAtFixedRate(this::drawLoop, 50, 50, TimeUnit.MILLISECONDS);
         return org.lwjgl.glfw.GLFW::glfwPollEvents;
     }
-
+    
     void recreateSwapchain() {
         final var oldChain = swapchain;
         swapchain = new BasicSwapchain(device, surface, oldChain.swapchainHandle);
         oldChain.destroy();
     }
-
+    
     public void textureLayoutTransition(VkCommandBuffer commandBuffer, long image, int srcLayout, int dstLayout) {
         try (final var stack = MemoryStack.stackPush()) {
             final var barrier = VkImageMemoryBarrier.calloc(1, stack).sType$Default();
@@ -215,16 +215,16 @@ public class CinnabarEarlyWindowProvider implements ImmediateWindowProvider {
             subresourceRange.levelCount(1);
             subresourceRange.baseArrayLayer(0);
             subresourceRange.layerCount(1);
-
+            
             vkCmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, 0, null, null, barrier);
         }
     }
-
+    
     synchronized void drawLoop() {
         while (!swapchain.acquire()) {
             recreateSwapchain();
         }
-
+        
         try (final var stack = MemoryStack.stackPush()) {
             vkBeginCommandBuffer(commandBuffer, VkCommandBufferBeginInfo.calloc(stack).sType$Default());
             textureLayoutTransition(commandBuffer, swapchain.acquiredImage(), VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
@@ -237,12 +237,12 @@ public class CinnabarEarlyWindowProvider implements ImmediateWindowProvider {
             submitInfo.pCommandBuffers(stack.pointers(commandBuffer));
             vkQueueSubmit(device.queues().getFirst().queue(), submitInfo, 0);
         }
-
+        
         while (!swapchain.present()) {
             recreateSwapchain();
         }
     }
-
+    
     @Override
     public long takeOverGlfwWindow() {
         windowTick.cancel(false);
@@ -262,22 +262,22 @@ public class CinnabarEarlyWindowProvider implements ImmediateWindowProvider {
         instance.destroy();
         return window;
     }
-
+    
     @Override
     public void periodicTick() {
-
+        
     }
-
+    
     @Override
     public void updateProgress(String label) {
-
+        
     }
-
+    
     @Override
     public void completeProgress() {
-
+        
     }
-
+    
     @Override
     public void crash(String message) {
         glfwDestroyWindow(window);

@@ -32,7 +32,7 @@ public class PhosphophylliteCompound implements ROBNObject {
         fromROBN(ROBNbuffer);
     }
     
-    public void put(String key, @Nullable Object value){
+    public void put(String key, @Nullable Object value) {
         if (value == null) {
             return;
         }

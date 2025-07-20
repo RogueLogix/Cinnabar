@@ -11,5 +11,5 @@ import java.lang.annotation.Target;
 @Retention(RetentionPolicy.RUNTIME)
 public @interface UsedFromReflection {
     // where its called from (if a single place)
-    String value() default  "";
+    String value() default "";
 }

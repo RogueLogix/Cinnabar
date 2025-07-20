@@ -13,5 +13,5 @@ import java.lang.annotation.Target;
 public @interface API {
     // mark things as API, so compiler warnings can be ignored
     // also notes to me that these functions are exposed as API, and other mods may be reliant on their existence/behavior
-    String note() default  "";
+    String note() default "";
 }

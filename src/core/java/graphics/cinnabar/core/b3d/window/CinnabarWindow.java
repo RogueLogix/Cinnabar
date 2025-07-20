@@ -68,7 +68,7 @@ public class CinnabarWindow extends Window {
     
     @Override
     public void updateDisplay(@Nullable TracyFrameCapture tracyFrameCapture) {
-        if(device == null){
+        if (device == null) {
             super.updateDisplay(tracyFrameCapture);
             return;
         }
@@ -81,7 +81,7 @@ public class CinnabarWindow extends Window {
         boolean shouldRecreateSwapchain = !swapchain.present();
         shouldRecreateSwapchain = shouldRecreateSwapchain || this.getWidth() != swapchain.width;
         shouldRecreateSwapchain = shouldRecreateSwapchain || this.getHeight() != swapchain.height;
-
+        
         if (this.fullscreen != this.actuallyFullscreen) {
             this.actuallyFullscreen = this.fullscreen;
             shouldRecreateSwapchain = true;

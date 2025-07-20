@@ -1,8 +1,8 @@
 package graphics.cinnabar.core.b3d.window;
 
+import graphics.cinnabar.api.vk.VulkanObject;
 import graphics.cinnabar.core.b3d.CinnabarDevice;
 import graphics.cinnabar.core.util.MagicNumbers;
-import graphics.cinnabar.api.vk.VulkanObject;
 import it.unimi.dsi.fastutil.longs.LongArrayList;
 import it.unimi.dsi.fastutil.longs.LongList;
 import it.unimi.dsi.fastutil.longs.LongLists;
@@ -149,7 +149,7 @@ public class CinnabarSwapchain implements VulkanObject {
             // at that point, the semaphore is reset, and i can put it back into the list of free semaphores
             int code = vkAcquireNextImageKHR(device.vkDevice, swapchainHandle, Long.MAX_VALUE, nextSemaphore, VK_NULL_HANDLE, frameIndexPtr);
             currentImageIndex = frameIndexPtr.get(0);
-            if(currentImageIndex != -1) {
+            if (currentImageIndex != -1) {
                 if (acquirePresentSemaphores[currentImageIndex] != VK_NULL_HANDLE) {
                     freeSemaphores.push(acquirePresentSemaphores[currentImageIndex]);
                 }

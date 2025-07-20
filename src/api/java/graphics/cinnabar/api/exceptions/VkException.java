@@ -17,7 +17,7 @@ public class VkException extends RuntimeException {
     @Contract
     public static int checkVkCode(int code) {
         switch (code) {
-            case VK_SUCCESS, VK_NOT_READY, VK_TIMEOUT, VK_EVENT_SET, VK_EVENT_RESET, VK_INCOMPLETE, VK_SUBOPTIMAL_KHR-> {
+            case VK_SUCCESS, VK_NOT_READY, VK_TIMEOUT, VK_EVENT_SET, VK_EVENT_RESET, VK_INCOMPLETE, VK_SUBOPTIMAL_KHR -> {
                 // these are all success codes, so, dont do anything
             }
             case VK_ERROR_OUT_OF_HOST_MEMORY -> throw new OutOfMemoryError();

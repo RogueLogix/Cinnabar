@@ -1,7 +1,7 @@
 package graphics.cinnabar.core.vk.shaders;
 
-import graphics.cinnabar.api.cvk.systems.CVKGpuDevice;
 import graphics.cinnabar.api.annotations.ThreadSafety;
+import graphics.cinnabar.api.cvk.systems.CVKGpuDevice;
 import graphics.cinnabar.api.util.Destroyable;
 
 import static org.lwjgl.util.shaderc.Shaderc.*;
@@ -27,12 +27,12 @@ public class ThreadGlobals implements Destroyable {
         shaderc_compile_options_set_forced_version_profile(ShaderCCompilerVKOptions, 460, shaderc_profile_core);
     }
     
-    private ThreadGlobals(){
+    private ThreadGlobals() {
     }
     
     @Override
     @ThreadSafety.MainGraphics
     public void destroy() {
-    
+        
     }
 }

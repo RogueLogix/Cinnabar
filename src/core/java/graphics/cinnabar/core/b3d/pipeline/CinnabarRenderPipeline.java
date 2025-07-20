@@ -491,7 +491,7 @@ public class CinnabarRenderPipeline implements CVKCompiledRenderPipeline, Destro
         
         final var depthStencilState = VkPipelineDepthStencilStateCreateInfo.calloc(stack).sType$Default();
         depthStencilState.depthBoundsTestEnable(false);
-        if(pipeline.getStencilTest().isPresent()){
+        if (pipeline.getStencilTest().isPresent()) {
             final var stencilTest = pipeline.getStencilTest().get();
             depthStencilState.stencilTestEnable(true);
             {

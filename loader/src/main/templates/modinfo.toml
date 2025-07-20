@@ -1,1 +1,1 @@
-neoVersionRange="${neo_version_range}"
+neoVersionRange = "${neo_version_range}"

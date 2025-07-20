@@ -47,18 +47,18 @@ public class Element {
         return value.toString();
     }
     
-    public boolean asBool(){
+    public boolean asBool() {
         assert value != null;
         return (boolean) value;
     }
     
     public long asLong() {
         assert value != null;
-        return ((Number)value).longValue();
+        return ((Number) value).longValue();
     }
     
     public double asDouble() {
         assert value != null;
-        return ((Number)value).doubleValue();
+        return ((Number) value).doubleValue();
     }
 }

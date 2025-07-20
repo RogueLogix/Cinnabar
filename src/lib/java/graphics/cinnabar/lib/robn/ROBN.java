@@ -304,7 +304,7 @@ public class ROBN {
                 buf.add((byte) ((val >> (8 * (Endianness.NATIVE.val == Endianness.BIG.val ? 0 : 7))) & 0xFF));
                 return;
             }
-
+            
             case BigDecimal bigDecimal -> {
                 // TODO: 7/24/20  BigDecimal
             }

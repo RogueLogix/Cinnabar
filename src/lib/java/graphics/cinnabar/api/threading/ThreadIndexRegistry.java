@@ -36,7 +36,7 @@ public class ThreadIndexRegistry {
     public static synchronized ThreadIndex registerThisThread() {
         @Nullable
         final var existingIndex = threadIndexThreadLocal.get();
-        if(existingIndex != null){
+        if (existingIndex != null) {
             return existingIndex;
         }
         if (nextVal == totalThreads) {

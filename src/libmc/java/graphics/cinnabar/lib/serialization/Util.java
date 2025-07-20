@@ -1,6 +1,5 @@
 package graphics.cinnabar.lib.serialization;
 
-import graphics.cinnabar.lib.serialization.PhosphophylliteCompound;
 import net.minecraft.nbt.CompoundTag;
 
 public class Util {

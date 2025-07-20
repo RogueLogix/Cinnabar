@@ -2,8 +2,8 @@ package graphics.cinnabar.core.b3d.texture;
 
 import com.mojang.blaze3d.textures.TextureFormat;
 import graphics.cinnabar.api.cvk.textures.CVKGpuTexture;
-import graphics.cinnabar.core.b3d.CinnabarDevice;
 import graphics.cinnabar.api.vk.VulkanObject;
+import graphics.cinnabar.core.b3d.CinnabarDevice;
 import graphics.cinnabar.core.vk.VulkanSampler;
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.util.vma.VmaAllocationCreateInfo;

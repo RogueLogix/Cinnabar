@@ -28,7 +28,7 @@ public class Std140ArrayBuilder extends Std140Builder {
         return super.align(alignment);
     }
     
-    public Std140ArrayBuilder arrayAlign(){
+    public Std140ArrayBuilder arrayAlign() {
         align(firstElementAlignment);
         return this;
     }

@@ -3,8 +3,8 @@ package graphics.cinnabar.core.b3d.texture;
 import com.mojang.blaze3d.textures.TextureFormat;
 import graphics.cinnabar.api.b3dext.textures.ExtGpuTexture;
 import graphics.cinnabar.api.cvk.textures.CVKGpuTextureView;
-import graphics.cinnabar.core.b3d.CinnabarDevice;
 import graphics.cinnabar.api.vk.VulkanObject;
+import graphics.cinnabar.core.b3d.CinnabarDevice;
 import it.unimi.dsi.fastutil.longs.Long2ReferenceMap;
 import it.unimi.dsi.fastutil.longs.Long2ReferenceOpenHashMap;
 import it.unimi.dsi.fastutil.objects.Reference2LongArrayMap;
@@ -63,8 +63,8 @@ public class CinnabarGpuTextureView extends CVKGpuTextureView implements VulkanO
     
     @Override
     public void close() {
-        if (closed){
-           return; 
+        if (closed) {
+            return;
         }
         closed = true;
         device.destroyEndOfFrame(this);

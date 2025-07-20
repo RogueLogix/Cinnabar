@@ -170,20 +170,20 @@ public class SpecFloatNode extends SpecNumberNode {
     public String generateComment() {
         final var comment = new StringBuilder(baseComment);
         final var fieldAnnotation = field.getAnnotation(ConfigValue.class);
-    
+        
         if (!fieldAnnotation.range().equals("(,)")) {
             if (comment.length() != 0) {
                 comment.append('\n');
             }
             comment.append("Valid range: ").append(fieldAnnotation.range());
         }
-    
+        
         if (comment.length() != 0) {
             comment.append('\n');
         }
         comment.append("Default: ");
         comment.append(defaultValue);
-    
+        
         return comment.toString();
     }
     

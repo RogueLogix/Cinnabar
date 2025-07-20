@@ -40,7 +40,7 @@ public class GLFWClassloadHelper {
             return;
         }
         
-        String path = ((SharedLibrary)sharedLibrary).getPath();
+        String path = ((SharedLibrary) sharedLibrary).getPath();
         if (path == null) {
             apiLog("GLFW Vulkan path override not set: Could not resolve the shared library path.");
             return;
@@ -84,7 +84,8 @@ public class GLFWClassloadHelper {
     @Nullable
     @NativeType("char const **")
     public static PointerBuffer glfwGetRequiredInstanceExtensions() {
-        MemoryStack stack = stackGet(); int stackPointer = stack.getPointer();
+        MemoryStack stack = stackGet();
+        int stackPointer = stack.getPointer();
         IntBuffer count = stack.callocInt(1);
         try {
             long __functionAddress = GLFWVulkan.Functions.GetRequiredInstanceExtensions;

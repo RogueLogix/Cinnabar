@@ -1,8 +1,8 @@
 package graphics.cinnabar.core.rewrites;
 
 import com.mojang.blaze3d.buffers.Std140Builder;
-import graphics.cinnabar.core.b3d.buffers.Std140ArrayBuilder;
 import graphics.cinnabar.api.annotations.RewriteHierarchy;
+import graphics.cinnabar.core.b3d.buffers.Std140ArrayBuilder;
 import net.minecraft.client.renderer.fog.FogRenderer;
 import org.jetbrains.annotations.NotNull;
 import org.joml.Vector4f;
@@ -25,14 +25,14 @@ public class FogRendererRewrite extends FogRenderer {
             float p_423452_
     ) {
         p_423489_.position(p_423628_);
-        final var arrayBuilder = (Std140ArrayBuilder)Std140Builder.intoBuffer(p_423489_)
-                .putVec4(p_423543_)
-                .putFloat(p_423485_)
-                .putFloat(p_423650_)
-                .putFloat(p_423492_)
-                .putFloat(p_423500_)
-                .putFloat(p_423575_)
-                .putFloat(p_423452_);
+        final var arrayBuilder = (Std140ArrayBuilder) Std140Builder.intoBuffer(p_423489_)
+                                                              .putVec4(p_423543_)
+                                                              .putFloat(p_423485_)
+                                                              .putFloat(p_423650_)
+                                                              .putFloat(p_423492_)
+                                                              .putFloat(p_423500_)
+                                                              .putFloat(p_423575_)
+                                                              .putFloat(p_423452_);
         arrayBuilder.arrayAlign();
     }
     

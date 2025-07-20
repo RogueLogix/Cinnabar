@@ -1,12 +1,12 @@
 package graphics.cinnabar.lib.config;
 
-import it.unimi.dsi.fastutil.objects.ObjectArrayList;
+import graphics.cinnabar.api.util.Pair;
 import graphics.cinnabar.lib.config.spec.ConfigOptionsDefaults;
 import graphics.cinnabar.lib.config.spec.SpecObjectNode;
 import graphics.cinnabar.lib.parsers.Element;
-import graphics.cinnabar.api.util.Pair;
-
+import it.unimi.dsi.fastutil.objects.ObjectArrayList;
 import org.jetbrains.annotations.Nullable;
+
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;

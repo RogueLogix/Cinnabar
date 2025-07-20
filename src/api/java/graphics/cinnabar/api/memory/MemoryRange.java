@@ -19,7 +19,7 @@ public record MemoryRange(long offset, long size) implements Comparable<MemoryRa
     }
     
     public Pair<MemoryRange, MemoryRange> split(long size) {
-        if(CinnabarAPI.DEBUG_MODE) {
+        if (CinnabarAPI.DEBUG_MODE) {
             if (size > this.size) {
                 throw new IllegalArgumentException("Cannot split allocation to larger size");
             }

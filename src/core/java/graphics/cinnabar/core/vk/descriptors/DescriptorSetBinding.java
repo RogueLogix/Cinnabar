@@ -27,7 +27,7 @@ public interface DescriptorSetBinding {
     
     @Constant
     @ThreadSafety.Many
-    default int stageFlags(){
+    default int stageFlags() {
         return VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
     }
 }

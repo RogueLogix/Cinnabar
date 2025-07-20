@@ -10,7 +10,7 @@ import org.apache.logging.log4j.Logger;
 public class Cinnabar {
     
     static {
-        if (FMLEnvironment.dist == Dist.DEDICATED_SERVER){
+        if (FMLEnvironment.dist == Dist.DEDICATED_SERVER) {
             throw new IllegalStateException("Cinnabar is a client only mod, and should not be loaded on a dedicated server");
         }
     }

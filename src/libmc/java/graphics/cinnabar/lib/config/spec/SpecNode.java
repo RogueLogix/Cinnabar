@@ -2,7 +2,6 @@ package graphics.cinnabar.lib.config.spec;
 
 import graphics.cinnabar.lib.config.ConfigValue;
 import graphics.cinnabar.lib.parsers.Element;
-
 import org.jetbrains.annotations.Nullable;
 
 public abstract class SpecNode {
@@ -40,7 +39,8 @@ public abstract class SpecNode {
     
     
     /**
-     * Ommits no elements, doesnt generate comments
+     * Omits no elements, doesnt generate comments
+     *
      * @return Element tree for syncing to client
      */
     public abstract Element generateSyncElement();

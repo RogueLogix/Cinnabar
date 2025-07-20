@@ -18,11 +18,11 @@ public @interface ConfigValue {
         ;
         
         private final Boolean2BooleanFunction function;
-    
+        
         BoolOption(Boolean2BooleanFunction function) {
             this.function = function;
         }
-    
+        
         public boolean from(boolean defaultValue) {
             return function.apply(defaultValue);
         }

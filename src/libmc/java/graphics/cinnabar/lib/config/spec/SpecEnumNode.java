@@ -1,8 +1,8 @@
 package graphics.cinnabar.lib.config.spec;
 
-import it.unimi.dsi.fastutil.objects.ObjectArrayList;
 import graphics.cinnabar.lib.config.ConfigValue;
 import graphics.cinnabar.lib.parsers.Element;
+import it.unimi.dsi.fastutil.objects.ObjectArrayList;
 import org.jetbrains.annotations.Nullable;
 
 import java.lang.reflect.Field;

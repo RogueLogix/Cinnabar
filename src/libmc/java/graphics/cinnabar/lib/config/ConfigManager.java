@@ -2,6 +2,10 @@ package graphics.cinnabar.lib.config;
 
 import com.mojang.brigadier.Command;
 import graphics.cinnabar.lib.annotations.OnModLoad;
+import graphics.cinnabar.lib.parsers.ROBN;
+import graphics.cinnabar.lib.serialization.PhosphophylliteCompound;
+import graphics.cinnabar.lib.util.ReflectionUtil;
+import graphics.cinnabar.lib.util.TriConsumer;
 import it.unimi.dsi.fastutil.bytes.ByteArrayList;
 import it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.objects.ObjectArrayList;
@@ -20,14 +24,10 @@ import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.neoforge.event.server.ServerAboutToStartEvent;
 import net.neoforged.neoforge.event.server.ServerStoppedEvent;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
-import graphics.cinnabar.lib.parsers.ROBN;
-import graphics.cinnabar.lib.serialization.PhosphophylliteCompound;
-import graphics.cinnabar.lib.util.ReflectionUtil;
-import graphics.cinnabar.lib.util.TriConsumer;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-
 import org.jetbrains.annotations.Nullable;
+
 import java.lang.reflect.Method;
 import java.util.Arrays;
 import java.util.List;
@@ -157,7 +157,7 @@ public class ConfigManager {
     
     public static List<ConfigRegistration> getAllConfigsForMod(String modName) {
         return Stream.concat(clientConfigs.values().stream(), Stream.concat(commonConfigs.values().stream(), serverConfigs.values().stream()))
-                .filter(configRegistration -> configRegistration.modName.equals(modName)).collect(Collectors.toList());
+                       .filter(configRegistration -> configRegistration.modName.equals(modName)).collect(Collectors.toList());
     }
     
     

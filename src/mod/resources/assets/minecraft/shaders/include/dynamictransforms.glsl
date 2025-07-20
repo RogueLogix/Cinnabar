@@ -22,11 +22,11 @@ struct DynTransforms {
     vec3 ModelOffset;
     mat4 TextureMat;
     float LineWidth;
-    // std140 unpadded 164 bytes in size, align 16, 176 byte array stride
-    #define REQUIRED_PADDING_VEC4S  ((((176 + (CINNABAR_UBO_ALIGNMENT - 1)) & ~(CINNABAR_UBO_ALIGNMENT - 1)) - 176) / 16)
-    #if REQUIRED_PADDING_VEC4S > 0
+// std140 unpadded 164 bytes in size, align 16, 176 byte array stride
+#define REQUIRED_PADDING_VEC4S  ((((176 + (CINNABAR_UBO_ALIGNMENT - 1)) & ~(CINNABAR_UBO_ALIGNMENT - 1)) - 176) / 16)
+#if REQUIRED_PADDING_VEC4S > 0
     vec4[REQUIRED_PADDING_VEC4S] padding;
-    #endif
+#endif
 };
 
 layout(std140) buffer readonly DynamicTransforms {
@@ -57,7 +57,7 @@ void main() {
 
 #define main realMain
 
-#else 
+#else
 
 // if not running on VK, fallback to the normal UBO definition
 layout(std140) uniform DynamicTransforms {

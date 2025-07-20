@@ -17,7 +17,7 @@ import java.util.Set;
 public class ShaderManagerMixin {
     
     @SuppressWarnings("SpellCheckingInspection")
-    @Inject(method = "apply", at = @At(value = "INVOKE", target = "Lcom/mojang/blaze3d/systems/GpuDevice;clearPipelineCache()V"),  locals = LocalCapture.CAPTURE_FAILHARD)
+    @Inject(method = "apply", at = @At(value = "INVOKE", target = "Lcom/mojang/blaze3d/systems/GpuDevice;clearPipelineCache()V"), locals = LocalCapture.CAPTURE_FAILHARD)
     protected void cinnabar$kickPipelinesFirst(ShaderManager.Configs configs, ResourceManager resourceManager, ProfilerFiller profilerFiller, CallbackInfo callbackInfo, ShaderManager.CompilationCache sourceCache, Set<RenderPipeline> pipelineSet) {
         for (RenderPipeline renderPipeline : pipelineSet) {
             RenderSystem.getDevice().precompilePipeline(renderPipeline, sourceCache::getShaderSource);

@@ -219,18 +219,18 @@ public class SpecObjectNode extends SpecNode {
     @Nullable
     public Element generateDefaultElement(boolean advanced) {
         final var subElements = subNodeList.stream()
-                .filter(specNode -> !specNode.hidden)
-                .map(specNode -> {
-                    if (specNode instanceof SpecObjectNode objectNode) {
-                        return objectNode.generateDefaultElement(advanced);
-                    }
-                    if (!advanced && specNode.advanced) {
-                        return null;
-                    }
-                    return specNode.generateDefaultElement();
-                })
-                .filter(Objects::nonNull)
-                .toArray(Element[]::new);
+                                        .filter(specNode -> !specNode.hidden)
+                                        .map(specNode -> {
+                                            if (specNode instanceof SpecObjectNode objectNode) {
+                                                return objectNode.generateDefaultElement(advanced);
+                                            }
+                                            if (!advanced && specNode.advanced) {
+                                                return null;
+                                            }
+                                            return specNode.generateDefaultElement();
+                                        })
+                                        .filter(Objects::nonNull)
+                                        .toArray(Element[]::new);
         if (subElements.length == 0) {
             return null;
         }
@@ -246,18 +246,18 @@ public class SpecObjectNode extends SpecNode {
     @Nullable
     public Element generateCurrentElement(boolean advanced) {
         final var subElements = subNodeList.stream()
-                .filter(specNode -> !specNode.hidden)
-                .map(specNode -> {
-                    if (specNode instanceof SpecObjectNode objectNode) {
-                        return objectNode.generateCurrentElement(advanced);
-                    }
-                    if (!advanced && specNode.advanced) {
-                        return null;
-                    }
-                    return specNode.generateCurrentElement();
-                })
-                .filter(Objects::nonNull)
-                .toArray(Element[]::new);
+                                        .filter(specNode -> !specNode.hidden)
+                                        .map(specNode -> {
+                                            if (specNode instanceof SpecObjectNode objectNode) {
+                                                return objectNode.generateCurrentElement(advanced);
+                                            }
+                                            if (!advanced && specNode.advanced) {
+                                                return null;
+                                            }
+                                            return specNode.generateCurrentElement();
+                                        })
+                                        .filter(Objects::nonNull)
+                                        .toArray(Element[]::new);
         if (subElements.length == 0) {
             return null;
         }
@@ -277,15 +277,15 @@ public class SpecObjectNode extends SpecNode {
             return generateDefaultElement(false);
         }
         final var subElements = Arrays.stream(element.subArray)
-                .map(subElement -> {
-                    var node = subNodes.get(subElement.name);
-                    if (node == null) {
-                        return null;
-                    }
-                    return node.correctToValidState(subElement);
-                })
-                .filter(Objects::nonNull)
-                .toArray(Element[]::new);
+                                        .map(subElement -> {
+                                            var node = subNodes.get(subElement.name);
+                                            if (node == null) {
+                                                return null;
+                                            }
+                                            return node.correctToValidState(subElement);
+                                        })
+                                        .filter(Objects::nonNull)
+                                        .toArray(Element[]::new);
         if (subElements.length == 0) {
             return null;
         }

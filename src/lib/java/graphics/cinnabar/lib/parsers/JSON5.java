@@ -2,8 +2,8 @@ package graphics.cinnabar.lib.parsers;
 
 import graphics.cinnabar.lib.repack.tnjson.ParseException;
 import graphics.cinnabar.lib.repack.tnjson.TnJson;
-
 import org.jetbrains.annotations.Nullable;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -32,7 +32,7 @@ public class JSON5 {
             return new Element(Element.Type.String, null, name, obj);
         } else if (obj instanceof Boolean) {
             return new Element(Element.Type.Boolean, null, name, obj);
-        } else if (obj instanceof Number){
+        } else if (obj instanceof Number) {
             return new Element(Element.Type.Number, null, name, obj);
         }
         throw new IllegalStateException("Unknown object type");

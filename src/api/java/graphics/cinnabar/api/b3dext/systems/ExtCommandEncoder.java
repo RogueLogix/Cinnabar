@@ -30,7 +30,7 @@ public interface ExtCommandEncoder extends CommandEncoder {
     }
     
     /**
-     * @param copies: no ranges is equivalent to passing a single BufferCopy() 
+     * @param copies: no ranges is equivalent to passing a single BufferCopy()
      */
     void copyBufferToBuffer(GpuBufferSlice src, GpuBufferSlice dst, List<BufferCopy> copies);
     

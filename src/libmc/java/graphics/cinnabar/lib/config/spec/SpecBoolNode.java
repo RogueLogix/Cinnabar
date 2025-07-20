@@ -56,7 +56,7 @@ public class SpecBoolNode extends SpecValueNode {
     @Override
     public String generateComment() {
         final var comment = new StringBuilder(baseComment);
-    
+        
         if (comment.length() != 0) {
             comment.append('\n');
         }

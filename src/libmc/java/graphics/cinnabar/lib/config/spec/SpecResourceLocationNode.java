@@ -1,7 +1,7 @@
 package graphics.cinnabar.lib.config.spec;
 
-import net.minecraft.resources.ResourceLocation;
 import graphics.cinnabar.lib.parsers.Element;
+import net.minecraft.resources.ResourceLocation;
 import org.jetbrains.annotations.Nullable;
 
 import java.lang.reflect.Field;

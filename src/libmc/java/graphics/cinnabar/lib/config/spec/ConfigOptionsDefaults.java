@@ -2,7 +2,6 @@ package graphics.cinnabar.lib.config.spec;
 
 import graphics.cinnabar.lib.config.ConfigType;
 import graphics.cinnabar.lib.config.ConfigValue;
-
 import org.jetbrains.annotations.Nullable;
 
 public record ConfigOptionsDefaults(ConfigType type, boolean advanced, boolean hidden, boolean reloadable) {

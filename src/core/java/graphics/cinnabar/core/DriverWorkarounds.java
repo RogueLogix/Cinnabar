@@ -6,7 +6,8 @@ import org.lwjgl.vulkan.VkPhysicalDeviceFeatures;
 import org.lwjgl.vulkan.VkPhysicalDeviceProperties2;
 import org.lwjgl.vulkan.VkPhysicalDeviceVulkan12Properties;
 
-import static org.lwjgl.vulkan.VK12.*;
+import static org.lwjgl.vulkan.VK12.vkGetPhysicalDeviceFeatures;
+import static org.lwjgl.vulkan.VK12.vkGetPhysicalDeviceProperties2;
 
 public class DriverWorkarounds {
     public final boolean allowIncrementalDescriptorPush;

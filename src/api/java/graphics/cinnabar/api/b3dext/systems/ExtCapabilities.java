@@ -6,7 +6,7 @@ public record ExtCapabilities(
         boolean drawIndirect,
         boolean drawID
 ) {
-    public ExtCapabilities(){
+    public ExtCapabilities() {
         this(true, true, true, true);
     }
 }

@@ -3,8 +3,8 @@ package graphics.cinnabar.lib.parsers;
 import com.electronwill.nightconfig.core.Config;
 import com.electronwill.nightconfig.core.io.ParsingException;
 import com.electronwill.nightconfig.toml.TomlParser;
-
 import org.jetbrains.annotations.Nullable;
+
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;

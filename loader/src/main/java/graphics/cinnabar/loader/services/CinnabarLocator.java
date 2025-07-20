@@ -2,7 +2,6 @@ package graphics.cinnabar.loader.services;
 
 import com.mojang.logging.LogUtils;
 import cpw.mods.jarhandling.JarContents;
-
 import net.neoforged.fml.loading.FMLEnvironment;
 import net.neoforged.neoforgespi.ILaunchContext;
 import net.neoforged.neoforgespi.locating.*;

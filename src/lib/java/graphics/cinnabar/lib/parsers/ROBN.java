@@ -1,8 +1,8 @@
 package graphics.cinnabar.lib.parsers;
 
 import it.unimi.dsi.fastutil.bytes.ByteArrayList;
-
 import org.jetbrains.annotations.Nullable;
+
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;

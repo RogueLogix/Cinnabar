@@ -1,8 +1,8 @@
 package graphics.cinnabar.lib.config.spec;
 
 import graphics.cinnabar.lib.config.ConfigValue;
-
 import org.jetbrains.annotations.Nullable;
+
 import java.lang.reflect.Field;
 
 public abstract class SpecValueNode extends SpecNode {

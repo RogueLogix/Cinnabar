@@ -13,11 +13,11 @@ import org.lwjgl.system.MemoryUtil;
 public class GrowingMemoryStack extends MemoryStack implements Destroyable {
     private static final long STACK_BLOCK_SIZE = 256 * MagicMemorySizes.KiB;
     private final ReferenceArrayList<PointerWrapper> stackBlocks = new ReferenceArrayList<>();
-
+    
     private IntLongMutablePair currentFrame;
     private final ReferenceArrayList<IntLongMutablePair> frames = new ReferenceArrayList<>();
     private final ReferenceArrayList<LongArrayList> frameOverflowAllocs = new ReferenceArrayList<>();
-
+    
     public GrowingMemoryStack() {
         super(null, 1, (int) STACK_BLOCK_SIZE);
         stackBlocks.add(PointerWrapper.alloc(STACK_BLOCK_SIZE));
@@ -29,19 +29,19 @@ public class GrowingMemoryStack extends MemoryStack implements Destroyable {
         stackBlocks.forEach(PointerWrapper::free);
         frameOverflowAllocs.forEach(overflow -> overflow.forEach(MemoryUtil::nmemFree));
     }
-
+    
     public void reset() {
         currentFrame = new IntLongMutablePair(0, 0);
         frames.clear();
     }
-
+    
     @Override
     public MemoryStack push() {
         frames.push(currentFrame);
         currentFrame = new IntLongMutablePair(currentFrame.leftInt(), currentFrame.rightLong());
         return this;
     }
-
+    
     @Override
     public MemoryStack pop() {
         currentFrame = frames.pop();
@@ -54,20 +54,20 @@ public class GrowingMemoryStack extends MemoryStack implements Destroyable {
         }
         return this;
     }
-
+    
     public long getAddress() {
         throw new NotImplemented();
     }
-
+    
     public int getPointer() {
         throw new NotImplemented();
     }
-
+    
     @Override
     public void setPointer(int pointer) {
         super.setPointer(pointer);
     }
-
+    
     @Override
     public long nmalloc(int alignment, int size) {
         if (size > STACK_BLOCK_SIZE) {

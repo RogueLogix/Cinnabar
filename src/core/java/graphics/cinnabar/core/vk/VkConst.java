@@ -8,7 +8,7 @@ import static org.lwjgl.vulkan.VK12.*;
 public class VkConst {
     
     public static int toVk(StencilOperation op) {
-        return switch (op){
+        return switch (op) {
             case KEEP -> VK_STENCIL_OP_KEEP;
             case ZERO -> VK_STENCIL_OP_ZERO;
             case REPLACE -> VK_STENCIL_OP_REPLACE;
@@ -21,7 +21,7 @@ public class VkConst {
     }
     
     public static int toVk(StencilFunction compare) {
-        return switch (compare){
+        return switch (compare) {
             case NEVER -> VK_COMPARE_OP_NEVER;
             case ALWAYS -> VK_COMPARE_OP_ALWAYS;
             case LESS -> VK_COMPARE_OP_LESS;

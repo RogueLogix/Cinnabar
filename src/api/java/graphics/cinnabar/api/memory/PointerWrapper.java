@@ -616,7 +616,7 @@ public record PointerWrapper(long pointer, long size) implements Comparable<Poin
         return slice(size * index, size);
     }
     
-    public boolean canSlice(long offset, long size){
+    public boolean canSlice(long offset, long size) {
         return size > 0 && offset >= 0 && (offset + size) <= this.size;
     }
     
