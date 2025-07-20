@@ -16,6 +16,7 @@ import graphics.cinnabar.api.threading.WorkFuture;
 import graphics.cinnabar.api.util.Destroyable;
 import graphics.cinnabar.core.b3d.CinnabarDevice;
 import graphics.cinnabar.core.b3d.texture.CinnabarGpuTexture;
+import graphics.cinnabar.core.vk.VkConst;
 import graphics.cinnabar.core.vk.descriptors.*;
 import graphics.cinnabar.core.vk.shaders.ShaderModule;
 import graphics.cinnabar.core.vk.shaders.ThreadGlobals;
@@ -489,9 +490,35 @@ public class CinnabarRenderPipeline implements CVKCompiledRenderPipeline, Destro
         final var depthTestEnable = pipeline.getDepthTestFunction() != NO_DEPTH_TEST || pipeline.isWriteDepth();
         
         final var depthStencilState = VkPipelineDepthStencilStateCreateInfo.calloc(stack).sType$Default();
-        // TODO: stencil support, once its in the Neo3D pipeline
         depthStencilState.depthBoundsTestEnable(false);
-        depthStencilState.stencilTestEnable(false);
+        if(pipeline.getStencilTest().isPresent()){
+            final var stencilTest = pipeline.getStencilTest().get();
+            depthStencilState.stencilTestEnable(true);
+            {
+                final var frontOp = depthStencilState.front();
+                final var frontTest = stencilTest.front();
+                frontOp.failOp(VkConst.toVk(frontTest.fail()));
+                frontOp.depthFailOp(VkConst.toVk(frontTest.depthFail()));
+                frontOp.passOp(VkConst.toVk(frontTest.pass()));
+                frontOp.compareOp(VkConst.toVk(frontTest.compare()));
+                frontOp.compareMask(stencilTest.readMask());
+                frontOp.writeMask(stencilTest.writeMask());
+                frontOp.reference(stencilTest.referenceValue());
+            }
+            {
+                final var backOp = depthStencilState.back();
+                final var backTest = stencilTest.back();
+                backOp.failOp(VkConst.toVk(backTest.fail()));
+                backOp.depthFailOp(VkConst.toVk(backTest.depthFail()));
+                backOp.passOp(VkConst.toVk(backTest.pass()));
+                backOp.compareOp(VkConst.toVk(backTest.compare()));
+                backOp.compareMask(stencilTest.readMask());
+                backOp.writeMask(stencilTest.writeMask());
+                backOp.reference(stencilTest.referenceValue());
+            }
+        } else {
+            depthStencilState.stencilTestEnable(false);
+        }
         depthStencilState.depthTestEnable(depthTestEnable);
         depthStencilState.depthWriteEnable(pipeline.isWriteDepth());
         depthStencilState.depthCompareOp(switch (pipeline.getDepthTestFunction()) {

@@ -7,7 +7,6 @@ import com.mojang.blaze3d.systems.ScissorState;
 import com.mojang.blaze3d.textures.GpuTextureView;
 import com.mojang.blaze3d.vertex.VertexFormat;
 import graphics.cinnabar.api.cvk.systems.CVKRenderPass;
-import graphics.cinnabar.api.exceptions.NotImplemented;
 import graphics.cinnabar.core.b3d.CinnabarDevice;
 import graphics.cinnabar.core.b3d.buffers.CinnabarGpuBuffer;
 import graphics.cinnabar.core.b3d.pipeline.CinnabarRenderPipeline;
@@ -19,7 +18,6 @@ import it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.objects.ObjectArraySet;
 import it.unimi.dsi.fastutil.objects.ReferenceArrayList;
 import net.minecraft.util.ARGB;
-import net.neoforged.neoforge.client.stencil.StencilTest;
 import org.jetbrains.annotations.Nullable;
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.system.libc.LibCString;
@@ -306,6 +304,7 @@ public class CinnabarRenderPass implements CVKRenderPass {
         enableScissor(0, 0, renderWidth, renderHeight);
     }
     
+    @Override
     public void setViewport(int x, int y, int width, int height) {
         try (final var stack = memoryStack.push()) {
             final var viewport = VkViewport.calloc(1, stack);
@@ -317,14 +316,6 @@ public class CinnabarRenderPass implements CVKRenderPass {
             viewport.maxDepth(1.0f);
             vkCmdSetViewport(commandBuffer, 0, viewport);
         }
-    }
-    
-    public void enableStencilTest(StencilTest stencilTest) {
-        throw new NotImplemented("Stencil cannot be set dynamically in Cinnabar");
-    }
-    
-    public void disableStencilTest() {
-        throw new NotImplemented("Stencil cannot be set dynamically in Cinnabar");
     }
     
     @Override
