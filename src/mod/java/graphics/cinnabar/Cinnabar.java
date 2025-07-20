@@ -1,13 +1,8 @@
 package graphics.cinnabar;
 
-import graphics.cinnabar.core.CinnabarConfig;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.loading.FMLEnvironment;
-import graphics.cinnabar.lib.config.ConfigFormat;
-import graphics.cinnabar.lib.config.ConfigManager;
-import graphics.cinnabar.lib.config.ConfigType;
-import graphics.cinnabar.lib.config.RegisterConfig;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 

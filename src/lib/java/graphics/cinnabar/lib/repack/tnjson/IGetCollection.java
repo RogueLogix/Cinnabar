@@ -14,7 +14,7 @@ public interface IGetCollection {
    * @see #forObject(String)
    * @see #forList(String)
    */
-  public static final String PATH_ROOT_KEY = JsonParser.PATH_ROOT_KEY;
+  String PATH_ROOT_KEY = JsonParser.PATH_ROOT_KEY;
 
 
   /**

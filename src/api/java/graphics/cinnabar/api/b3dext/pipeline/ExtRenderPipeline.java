@@ -6,13 +6,11 @@ import com.mojang.blaze3d.platform.DepthTestFunction;
 import com.mojang.blaze3d.platform.LogicOp;
 import com.mojang.blaze3d.platform.PolygonMode;
 import com.mojang.blaze3d.vertex.VertexFormat;
-import graphics.cinnabar.api.annotations.API;
 import graphics.cinnabar.api.annotations.RewriteHierarchy;
 import graphics.cinnabar.api.b3dext.vertex.VertexInputBuffer;
 import it.unimi.dsi.fastutil.objects.ReferenceArrayList;
 import net.minecraft.client.renderer.ShaderDefines;
 import net.minecraft.resources.ResourceLocation;
-import org.codehaus.plexus.util.dag.Vertex;
 
 import java.util.ArrayList;
 import java.util.Collections;

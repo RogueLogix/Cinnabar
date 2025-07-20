@@ -1,11 +1,8 @@
 package graphics.cinnabar.lib.datastructures;
 
 import graphics.cinnabar.api.annotations.ThreadSafety;
-import it.unimi.dsi.fastutil.Pair;
 import it.unimi.dsi.fastutil.longs.LongReferenceImmutablePair;
 import it.unimi.dsi.fastutil.longs.LongReferencePair;
-import it.unimi.dsi.fastutil.objects.ReferenceArrayList;
-import it.unimi.dsi.fastutil.objects.ReferenceList;
 import org.jetbrains.annotations.Nullable;
 
 import java.lang.invoke.MethodHandles;

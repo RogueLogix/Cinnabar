@@ -30,7 +30,7 @@ class JsonParser {
    * Inner immutable class for represent path by root of json-object
    */
   private class Path {
-    private String path;
+    private final String path;
 
     public Path(String str) {
       this.path = str;
@@ -260,7 +260,7 @@ class JsonParser {
         c = getCharFromEscapedText();
       }
       if ((terminator == 0 && (c== '\'' || c == '"')) || isLineTerminator(c)) {
-        throw new ParseException("Invalid character '"+ charToLog(c) +"' for identifier '"+ b.toString() +"' at position "+ index +", path '"+ path.getName() +"'.", index, path.getName());
+        throw new ParseException("Invalid character '"+ charToLog(c) +"' for identifier '"+ b +"' at position "+ index +", path '"+ path.getName() +"'.", index, path.getName());
       }
       else {
         b.append(c);
@@ -357,7 +357,7 @@ class JsonParser {
     // therefore
     // for maxintlen == 9 or 9 characters dec / hex
     // for maxlonglen == 18 or 17 characters dec / hex
-    int maxintlen = hasX ? 9 : 9;
+    int maxintlen = 9;
     int maxlonglen = hasX ? 17 : 18;
     if (literal.charAt(0) == '-') {
       maxintlen++;
@@ -424,12 +424,11 @@ class JsonParser {
       case '"': resultChar = '"';  break;
       case '\\': resultChar = '\\'; break;
       case 'u':
-        StringBuilder bu = new StringBuilder();
-        bu.append(content.charAt(++index));
-        bu.append(content.charAt(++index));
-        bu.append(content.charAt(++index));
-        bu.append(content.charAt(++index));
-        int hexValU = Integer.parseInt(bu.toString(), 16);
+          String bu = String.valueOf(content.charAt(++index)) +
+                              content.charAt(++index) +
+                              content.charAt(++index) +
+                              content.charAt(++index);
+        int hexValU = Integer.parseInt(bu, 16);
         resultChar = (char) hexValU;
         break;
 

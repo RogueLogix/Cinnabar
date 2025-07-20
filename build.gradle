@@ -201,7 +201,7 @@ neoForge {
             client()
             systemProperty 'neoforge.enabledGameTestNamespaces', project.mod_id
             programArguments.addAll "--CinnabarLaunchedFromIDE"
-            environment.put("ENABLE_VULKAN_RENDERDOC_CAPTURE", "1");
+            environment.put("ENABLE_VULKAN_RENDERDOC_CAPTURE", "1")
         }
 
         configureEach {

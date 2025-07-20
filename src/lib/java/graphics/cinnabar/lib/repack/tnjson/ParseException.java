@@ -5,8 +5,8 @@ package graphics.cinnabar.lib.repack.tnjson;
  */
 public class ParseException extends RuntimeException {
 
-  private int position;
-  private String path;
+  private final int position;
+  private final String path;
 
   public ParseException(String s, int position, String path) {
     super(s);

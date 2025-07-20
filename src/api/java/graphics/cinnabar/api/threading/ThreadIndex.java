@@ -27,7 +27,7 @@ public record ThreadIndex(@API(note = "will be in range [0, threadCount)") int i
     static final ThreadIndex INVALID = new ThreadIndex(-1);
     
     @API(note = "total number of threads with a registered index, this is decided at startup, will always be at least three")
-    public static int threadCount = Bootstrapper.threadCount;
+    public static final int threadCount = Bootstrapper.threadCount;
     
     @Internal
     static Supplier<@Nullable ThreadIndex> registryLookupFunc = () -> INVALID;

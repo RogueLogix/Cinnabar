@@ -1,6 +1,5 @@
 package graphics.cinnabar.lib.repack.tnjson;
 
-import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
@@ -29,7 +28,7 @@ public class MapNavigator {
   public static Object fromPath(Map map, String path) {
 
     Object res = map;
-    List<String> pathList =  Arrays.asList(path.split("\\."));
+    String[] pathList = path.split("\\.");
 
     StringBuilder node = new StringBuilder();
 
@@ -45,7 +44,7 @@ public class MapNavigator {
         res = ((List) res).get(ix);
       }
       else {
-        throw new RuntimeException("Incorrect path: node=" + node.toString() + " is not a Map or List.");
+        throw new RuntimeException("Incorrect path: node=" + node + " is not a Map or List.");
       }
       node.append(".").append(pat);
     }

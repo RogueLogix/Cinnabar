@@ -74,6 +74,7 @@ public class CinnabarEarlyWindowProvider implements ImmediateWindowProvider {
             LOGGER.trace("Injecting CinnabarEarlyWindow into FML config for early window provider");
             try {
                 // overwrite it being fmlearlywindow, but only in memory
+                //noinspection RedundantCast
                 SET_CONFIG_VALUE.invoke(FMLConfig.ConfigValue.EARLY_WINDOW_PROVIDER, (CommentedConfig) CONFIG_DATA.get(CONFIG_INSTANCE.get(null)), EARLY_WINDOW_NAME);
             } catch (IllegalAccessException | InvocationTargetException e) {
                 throw new RuntimeException(e);

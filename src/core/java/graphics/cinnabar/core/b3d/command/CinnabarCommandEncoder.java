@@ -8,7 +8,6 @@ import com.mojang.blaze3d.textures.GpuTexture;
 import com.mojang.blaze3d.textures.GpuTextureView;
 import graphics.cinnabar.api.cvk.systems.CVKCommandEncoder;
 import graphics.cinnabar.api.memory.GrowingMemoryStack;
-import graphics.cinnabar.api.threading.IWorkQueue;
 import graphics.cinnabar.api.util.Destroyable;
 import graphics.cinnabar.core.b3d.CinnabarDevice;
 import graphics.cinnabar.core.b3d.buffers.BufferPool;
@@ -21,19 +20,16 @@ import graphics.cinnabar.core.util.MagicNumbers;
 import graphics.cinnabar.core.vk.descriptors.DescriptorPool;
 import graphics.cinnabar.core.vk.descriptors.IDescriptorPool;
 import graphics.cinnabar.core.vk.memory.VkBuffer;
-import graphics.cinnabar.lib.threading.QueueSystem;
 import graphics.cinnabar.lib.threading.VulkanSemaphore;
 import graphics.cinnabar.lib.threading.WorkQueue;
 import it.unimi.dsi.fastutil.objects.ReferenceArrayList;
 import net.minecraft.client.Minecraft;
 import net.minecraft.util.ARGB;
 import org.jetbrains.annotations.Nullable;
-import org.lwjgl.system.MemoryStack;
 import org.lwjgl.system.MemoryUtil;
 import org.lwjgl.system.libc.LibCString;
 import org.lwjgl.vulkan.*;
 
-import java.lang.invoke.VarHandle;
 import java.nio.ByteBuffer;
 import java.nio.IntBuffer;
 import java.util.List;
@@ -248,7 +244,7 @@ public class CinnabarCommandEncoder implements CVKCommandEncoder, Destroyable {
                 // creating a renderpass needs texture views, but im only passed textures... amazing
                 final var colorTextureView = device.createTextureView(colorTexture);
                 final var depthTextureView = device.createTextureView(depthTexture);
-                final var renderpass = createRenderPass(() -> "ClearColorDepthTextures", colorTextureView, OptionalInt.empty(), depthTextureView, OptionalDouble.empty());
+                final var renderpass = createRenderPass(() -> "ClearColorDepthTextures", colorTextureView, OptionalInt.empty(), depthTextureView, OptionalDouble.empty())
         ) {
             renderpass.enableScissor(scissorX, scissorY, scissorWidth, scissorHeight);
             renderpass.clearAttachments(clearColor, clearDepth);

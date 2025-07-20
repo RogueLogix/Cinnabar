@@ -1,6 +1,5 @@
 package graphics.cinnabar.lib.config.spec;
 
-import graphics.cinnabar.api.annotations.NotNullDefault;
 import graphics.cinnabar.lib.config.ConfigType;
 import graphics.cinnabar.lib.config.ConfigValue;
 import graphics.cinnabar.lib.parsers.Element;
@@ -11,8 +10,6 @@ import org.jetbrains.annotations.Nullable;
 import java.lang.reflect.Field;
 import java.util.*;
 import java.util.stream.Collectors;
-
-import static graphics.cinnabar.lib.CinnabarLib.CINNABAR_LIB_LOG;
 
 public class SpecObjectNode extends SpecNode {
     

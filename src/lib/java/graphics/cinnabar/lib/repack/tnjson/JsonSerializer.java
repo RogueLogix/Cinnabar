@@ -372,7 +372,7 @@ class JsonSerializer {
       //no method, no problem
     }
     catch (InvocationTargetException | IllegalAccessException e) {
-      throw new SerializeException("Error on invoke method toJson by class: "+cls.getName()+", object: " + String.valueOf(obj)+".", e);
+      throw new SerializeException("Error on invoke method toJson by class: "+cls.getName()+", object: " + obj +".", e);
     }
     int valuelevel = level + 1;
 
@@ -428,7 +428,7 @@ class JsonSerializer {
       return value;
     }
     catch (Throwable t) {
-      throw new SerializeException("Error on extract value from object " + fromObj.getClass().getName() + " ("+String.valueOf(fromObj) + ") from field " + field.getName(), t);
+      throw new SerializeException("Error on extract value from object " + fromObj.getClass().getName() + " ("+ fromObj + ") from field " + field.getName(), t);
     }
     finally {
       field.setAccessible(accessible);
