@@ -94,10 +94,8 @@ public class CinnabarDevice implements CVKGpuDevice {
     
     public final VkQueue graphicsQueue;
     public final int graphicsQueueFamily;
-    @Nullable
     public final VkQueue computeQueue;
     public final int computeQueueFamily;
-    @Nullable
     public final VkQueue transferQueue;
     public final int transferQueueFamily;
     
@@ -458,6 +456,36 @@ public class CinnabarDevice implements CVKGpuDevice {
     
     public boolean debugMarkerEnabled() {
         return debugMarkerEnabled;
+    }
+    
+    @Override
+    public VkQueue graphicsQueue() {
+        return graphicsQueue;
+    }
+    
+    @Override
+    public int graphicsQueueFamily() {
+        return graphicsQueueFamily;
+    }
+    
+    @Override
+    public VkQueue computeQueue() {
+        return computeQueue;
+    }
+    
+    @Override
+    public int computeQueueFamily() {
+        return computeQueueFamily;
+    }
+    
+    @Override
+    public VkQueue transferQueue() {
+        return transferQueue;
+    }
+    
+    @Override
+    public int transferQueueFamily() {
+        return transferQueueFamily;
     }
     
     // --------- ExtGpuDevice ---------

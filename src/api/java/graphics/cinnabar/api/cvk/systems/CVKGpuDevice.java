@@ -17,6 +17,7 @@ import net.minecraft.resources.ResourceLocation;
 import org.jetbrains.annotations.Nullable;
 import org.lwjgl.vulkan.VkDevice;
 import org.lwjgl.vulkan.VkInstance;
+import org.lwjgl.vulkan.VkQueue;
 
 import java.nio.ByteBuffer;
 import java.util.function.BiFunction;
@@ -43,6 +44,18 @@ public interface CVKGpuDevice extends ExtGpuDevice {
     
     @Internal
     void endFrame();
+    
+    VkQueue graphicsQueue();
+    
+    int graphicsQueueFamily();
+    
+    VkQueue computeQueue();
+    
+    int computeQueueFamily();
+    
+    VkQueue transferQueue();
+    
+    int transferQueueFamily();
     
     // ---------- Overrides for return type, function unmodified ----------
     
