@@ -498,7 +498,7 @@ public class CinnabarDevice implements CVKGpuDevice {
     }
     
     @Override
-    public CinnabarGpuTexture creatUninitializedTexture(@Nullable String label, int usage, ExtGpuTexture.Type type, TextureFormat format, int width, int height, int depth, int layers, int mips) {
+    public CinnabarGpuTexture createUninitializedTexture(@Nullable String label, int usage, ExtGpuTexture.Type type, TextureFormat format, int width, int height, int depth, int layers, int mips) {
         if (label == null) {
             label = "Texture";
         }
@@ -507,7 +507,7 @@ public class CinnabarDevice implements CVKGpuDevice {
     
     @Override
     public CVKGpuTexture createTexture(@Nullable String label, int usage, ExtGpuTexture.Type type, TextureFormat format, int width, int height, int depth, int layers, int mips) {
-        final var texture = creatUninitializedTexture(label, usage, type, format, width, height, depth, layers, mips);
+        final var texture = createUninitializedTexture(label, usage, type, format, width, height, depth, layers, mips);
         commandEncoder.setupTexture(texture);
         return texture;
     }
