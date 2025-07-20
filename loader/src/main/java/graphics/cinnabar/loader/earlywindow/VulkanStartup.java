@@ -25,12 +25,7 @@ import static org.lwjgl.vulkan.EXTDebugMarker.VK_EXT_DEBUG_MARKER_EXTENSION_NAME
 import static org.lwjgl.vulkan.EXTDebugReport.VK_EXT_DEBUG_REPORT_EXTENSION_NAME;
 import static org.lwjgl.vulkan.EXTDebugUtils.*;
 import static org.lwjgl.vulkan.KHRPortabilitySubset.VK_KHR_PORTABILITY_SUBSET_EXTENSION_NAME;
-import static org.lwjgl.vulkan.KHRPushDescriptor.VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME;
 import static org.lwjgl.vulkan.KHRSwapchain.VK_KHR_SWAPCHAIN_EXTENSION_NAME;
-import static org.lwjgl.vulkan.VK10.*;
-import static org.lwjgl.vulkan.VK11.*;
-import static org.lwjgl.vulkan.VK12.VK_SUCCESS;
-import static org.lwjgl.vulkan.VK12.vkDestroyDevice;
 import static org.lwjgl.vulkan.VK12.*;
 
 public class VulkanStartup {
@@ -60,9 +55,6 @@ public class VulkanStartup {
     );
     
     private static final List<String> requiredDeviceExtensions = List.of(
-            // TODO: drop use of push descriptors in favor of dynamic descriptor sets (or get Mojang to mirror descriptor sets),
-            //       also, should probably query the number supported, but i also never use that many
-            VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME,
             VK_KHR_SWAPCHAIN_EXTENSION_NAME
     );
     

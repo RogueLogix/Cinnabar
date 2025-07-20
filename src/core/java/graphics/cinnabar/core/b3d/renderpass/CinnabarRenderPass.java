@@ -29,7 +29,6 @@ import java.util.*;
 import java.util.function.BiConsumer;
 import java.util.function.Supplier;
 
-import static org.lwjgl.vulkan.KHRPushDescriptor.vkCmdPushDescriptorSetKHR;
 import static org.lwjgl.vulkan.VK12.*;
 
 public class CinnabarRenderPass implements CVKRenderPass {
@@ -484,7 +483,14 @@ public class CinnabarRenderPass implements CVKRenderPass {
         if (descriptorWrites.position() != 0) {
             descriptorWrites.limit(descriptorWrites.position());
             descriptorWrites.position(0);
-            vkCmdPushDescriptorSetKHR(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, boundPipeline.pipelineLayout(), 0, descriptorWrites);
+            final var descriptorSetHandle = device.createCommandEncoder().currentDescriptorPool().allocSet(boundPipeline.descriptorSetLayout().handle);
+            for (int i = 0; i < descriptorWrites.limit(); i++) {
+                descriptorWrites.position(i);
+                descriptorWrites.dstSet(descriptorSetHandle);
+            }
+            descriptorWrites.position(0);
+            vkUpdateDescriptorSets(device.vkDevice, descriptorWrites, null);
+            vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, boundPipeline.pipelineLayout(), 0, new long[]{descriptorSetHandle}, null);
         }
         descriptorWrites.position(0);
         descriptorBufferInfos.position(0);

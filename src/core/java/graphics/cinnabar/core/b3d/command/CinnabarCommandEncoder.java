@@ -18,6 +18,8 @@ import graphics.cinnabar.core.b3d.texture.CinnabarGpuTexture;
 import graphics.cinnabar.core.b3d.texture.CinnabarGpuTextureView;
 import graphics.cinnabar.core.b3d.window.CinnabarWindow;
 import graphics.cinnabar.core.util.MagicNumbers;
+import graphics.cinnabar.core.vk.descriptors.DescriptorPool;
+import graphics.cinnabar.core.vk.descriptors.IDescriptorPool;
 import graphics.cinnabar.core.vk.memory.VkBuffer;
 import graphics.cinnabar.lib.threading.QueueSystem;
 import graphics.cinnabar.lib.threading.VulkanSemaphore;
@@ -50,6 +52,7 @@ public class CinnabarCommandEncoder implements CVKCommandEncoder, Destroyable {
     private final GrowingMemoryStack memoryStack = new GrowingMemoryStack();
     
     private final ReferenceArrayList<VulkanTransientCommandBufferPool> commandPools = new ReferenceArrayList<>();
+    private final ReferenceArrayList<IDescriptorPool> descriptorPools = new ReferenceArrayList<>();
     
     @Nullable
     private VkCommandBuffer beginFrameTransferCommandBuffer;
@@ -67,6 +70,7 @@ public class CinnabarCommandEncoder implements CVKCommandEncoder, Destroyable {
         this.device = device;
         for (int i = 0; i < MagicNumbers.MaximumFramesInFlight; i++) {
             commandPools.add(new VulkanTransientCommandBufferPool(device, device.graphicsQueueFamily));
+            descriptorPools.add(new DescriptorPool(device));
         }
         beginCommandBuffers();
         
@@ -85,6 +89,7 @@ public class CinnabarCommandEncoder implements CVKCommandEncoder, Destroyable {
     @Override
     public void destroy() {
         commandPools.forEach(VulkanTransientCommandBufferPool::destroy);
+        descriptorPools.forEach(Destroyable::destroy);
         // wait for pending GPU work
         interFrameSemaphore.wait(device.currentFrame() - 1, -1L);
         // fake the GPU being done with work
@@ -100,8 +105,13 @@ public class CinnabarCommandEncoder implements CVKCommandEncoder, Destroyable {
         return commandPools.get(device.currentFrameIndex());
     }
     
+    public IDescriptorPool currentDescriptorPool() {
+        return descriptorPools.get(device.currentFrameIndex());
+    }
+    
     private void beginCommandBuffers() {
         currentCommandPool().reset(false, false);
+        currentDescriptorPool().reset();
         beginFrameTransferCommandBuffer = currentCommandPool().alloc("beginFrameTransfer");
         vkBeginCommandBuffer(beginFrameTransferCommandBuffer, commandBufferBeginInfo);
         commandBuffers.add(beginFrameTransferCommandBuffer);

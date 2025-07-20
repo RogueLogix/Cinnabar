@@ -32,9 +32,7 @@ public class VkException extends RuntimeException {
             case VK_ERROR_INCOMPATIBLE_DRIVER -> throw new VkException("VK_ERROR_INCOMPATIBLE_DRIVER");
             case VK_ERROR_TOO_MANY_OBJECTS -> throw new VkTooManyObjects();
             case VK_ERROR_FORMAT_NOT_SUPPORTED -> throw new VkException("VK_ERROR_FORMAT_NOT_SUPPORTED");
-            case VK_ERROR_FRAGMENTED_POOL -> throw new VkException("VK_ERROR_FRAGMENTED_POOL");
             case -13 /* VK_ERROR_UNKNOWN */ -> throw new VkException("VK_ERROR_UNKNOWN");
-            case VK_ERROR_OUT_OF_POOL_MEMORY -> throw new VkException("VK_ERROR_OUT_OF_POOL_MEMORY");
             case VK_ERROR_INVALID_EXTERNAL_HANDLE -> throw new VkException("VK_ERROR_INVALID_EXTERNAL_HANDLE");
             case -1000161000 /* VK_ERROR_FRAGMENTATION */ -> throw new VkException("VK_ERROR_FRAGMENTATION");
             case -1000257000 /* VK_ERROR_INVALID_OPAQUE_CAPTURE_ADDRESS */ -> throw new VkException("VK_ERROR_INVALID_OPAQUE_CAPTURE_ADDRESS");
