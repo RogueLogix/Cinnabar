@@ -292,8 +292,12 @@ public class CinnabarRenderPass implements CVKRenderPass {
         try (final var stack = memoryStack.push()) {
             scissorState.enable(x, y, width, height);
             final var scissor = VkRect2D.calloc(1, stack);
-            scissor.offset().set(x, y);
-            scissor.extent().set(width, height);
+            // sometimes negative, but must be >= 0
+            scissor.offset().set(Math.max(x, 0), Math.max(y, 0));
+            // adjust if x or y is negative
+            width -= Math.max(-x, 0);
+            height -= Math.max(-y, 0);
+            scissor.extent().set(Math.max(width, 0), Math.max(height, 0));
             vkCmdSetScissor(commandBuffer, 0, scissor);
         }
     }
