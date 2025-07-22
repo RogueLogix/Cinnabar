@@ -289,6 +289,17 @@ public class CinnabarRenderPass implements CVKRenderPass {
     
     @Override
     public void enableScissor(int x, int y, int width, int height) {
+        {
+            // in case of invalid inputs, which happens
+            int x1 = Math.clamp(Math.min(x, x + width), 0, renderWidth);
+            int x2 = Math.clamp(Math.max(x, x + width), 0, renderWidth);
+            int y1 = Math.clamp(Math.min(y, y + height), 0, renderHeight);
+            int y2 = Math.clamp(Math.max(y, y + height), 0, renderHeight);
+            x = x1;
+            y = y1;
+            width = x2 - x;
+            height = y2 - y;
+        }
         try (final var stack = memoryStack.push()) {
             scissorState.enable(x, y, width, height);
             final var scissor = VkRect2D.calloc(1, stack);
