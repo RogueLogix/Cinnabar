@@ -1,3 +1,11 @@
+# 1.21.8-0.0.6-beta
+
+- 1.21.8
+- drop requirement for VK_KHR_dynamic_rendering (no support from Kepler GPUs)
+- drop requirement for VK_KHR_push_descriptor (no support from Kepler or GCN 1/2/3 GPUs on windows)
+- clamp scissor to valid area (#6)
+- prefer mappable device memory if it's available
+
 # 1.21.6-0.0.5-alpha
 
 - update Neo to 21.6.20-beta
