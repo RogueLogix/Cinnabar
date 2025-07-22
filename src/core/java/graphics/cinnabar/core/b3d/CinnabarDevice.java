@@ -203,7 +203,7 @@ public class CinnabarDevice implements CVKGpuDevice {
             vmaAllocator = handlePtr.get(0);
         }
         
-        deviceMemoryType = pickMemoryType(VK_MEMORY_HEAP_DEVICE_LOCAL_BIT, 0);
+        deviceMemoryType = pickMemoryType(VK_MEMORY_HEAP_DEVICE_LOCAL_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
         hostMemoryType = pickMemoryType(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, 0);
         
         commandEncoder = new CinnabarCommandEncoder(this);
