@@ -1,20 +1,22 @@
-package graphics.cinnabar.lib.vulkan;
+package graphics.cinnabar.loader.earlywindow.vulkan;
 
-import graphics.cinnabar.api.exceptions.VkException;
+import com.mojang.logging.LogUtils;
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.system.MemoryUtil;
 import org.lwjgl.vulkan.VkDebugUtilsMessengerCallbackDataEXT;
 import org.lwjgl.vulkan.VkDebugUtilsMessengerCallbackEXT;
 import org.lwjgl.vulkan.VkDebugUtilsMessengerCreateInfoEXT;
+import org.slf4j.Logger;
 
 import java.io.PrintWriter;
 import java.io.StringWriter;
 
-import static graphics.cinnabar.lib.CinnabarLib.CINNABAR_LIB_LOG;
 import static org.lwjgl.vulkan.EXTDebugUtils.*;
 import static org.lwjgl.vulkan.VK10.VK_FALSE;
 
 public class VulkanDebug extends VkDebugUtilsMessengerCallbackEXT {
+    private static final Logger LOGGER = LogUtils.getLogger();
+    
     public static VkDebugUtilsMessengerCreateInfoEXT getCreateInfo(MemoryStack stack, MessageSeverity[] severities, MessageType[] messageTypes) {
         final var dbgCreateInfo = VkDebugUtilsMessengerCreateInfoEXT.malloc(stack);
         dbgCreateInfo.sType(VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT);
@@ -75,13 +77,13 @@ public class VulkanDebug extends VkDebugUtilsMessengerCallbackEXT {
         }
         
         final var messageString = callbackData.pMessageString();
-        CINNABAR_LIB_LOG.warn(String.format("%s: %s", prefix, messageString));
+        LOGGER.warn("{}: {}", prefix, messageString);
         // vkDestroyDevice may print a lot of messages, and the stack is not helpful
         if (printStackTrace && !messageString.contains("vkDestroyDevice")) {
             StringWriter sw = new StringWriter();
             PrintWriter pw = new PrintWriter(sw);
-            new VkException().printStackTrace(pw);
-            CINNABAR_LIB_LOG.warn(sw.toString());
+            new Exception().printStackTrace(pw);
+            LOGGER.warn(sw.toString());
             // force a segfault, aka crash the JVM immediately
             MemoryUtil.memSet(0L, 0, 1L);
         }

@@ -5,8 +5,10 @@ import com.mojang.logging.LogUtils;
 import graphics.cinnabar.loader.earlywindow.GLFWClassloadHelper;
 import graphics.cinnabar.loader.earlywindow.VulkanStartup;
 import graphics.cinnabar.loader.earlywindow.vulkan.BasicSwapchain;
+import graphics.cinnabar.loader.earlywindow.vulkan.VulkanDebug;
 import joptsimple.OptionParser;
 import net.neoforged.fml.loading.FMLConfig;
+import net.neoforged.fml.loading.FMLLoader;
 import net.neoforged.fml.loading.progress.StartupNotificationManager;
 import net.neoforged.neoforgespi.earlywindow.ImmediateWindowProvider;
 import org.lwjgl.system.MemoryStack;
@@ -122,11 +124,11 @@ public class CinnabarEarlyWindowProvider implements ImmediateWindowProvider {
         var mcversionopt = parser.accepts("fml.mcVersion").withRequiredArg().ofType(String.class);
         var forgeversionopt = parser.accepts("fml.neoForgeVersion").withRequiredArg().ofType(String.class);
         var widthopt = parser.accepts("width")
-                               .withRequiredArg().ofType(Integer.class)
-                               .defaultsTo(FMLConfig.getIntConfigValue(FMLConfig.ConfigValue.EARLY_WINDOW_WIDTH));
+                .withRequiredArg().ofType(Integer.class)
+                .defaultsTo(FMLConfig.getIntConfigValue(FMLConfig.ConfigValue.EARLY_WINDOW_WIDTH));
         var heightopt = parser.accepts("height")
-                                .withRequiredArg().ofType(Integer.class)
-                                .defaultsTo(FMLConfig.getIntConfigValue(FMLConfig.ConfigValue.EARLY_WINDOW_HEIGHT));
+                .withRequiredArg().ofType(Integer.class)
+                .defaultsTo(FMLConfig.getIntConfigValue(FMLConfig.ConfigValue.EARLY_WINDOW_HEIGHT));
         var maximizedopt = parser.accepts("earlywindow.maximized");
         parser.allowsUnrecognizedOptions();
         var parsed = parser.parse(arguments);
@@ -155,19 +157,20 @@ public class CinnabarEarlyWindowProvider implements ImmediateWindowProvider {
         if (this.maximized) {
             glfwMaximizeWindow(window);
         }
-        
-        instance = VulkanStartup.createVkInstance(false, false, null);
-        device = VulkanStartup.createLogicalDeviceAndQueues(instance.instance(), VulkanStartup.selectPhysicalDevice(instance.instance(), false, -1, instance.enabledInsanceExtensions()), instance.enabledInsanceExtensions());
-        
         try (final var stack = MemoryStack.stackPush()) {
-            final var surfacePtr = stack.longs(0);
-            GLFWClassloadHelper.glfwExtCreateWindowSurface(instance.instance(), window, null, surfacePtr);
-            surface = surfacePtr.get(0);
-        }
-        
-        swapchain = new BasicSwapchain(device, surface, 0);
-        
-        try (final var stack = MemoryStack.stackPush()) {
+            
+            final var debugCreateInfo = VulkanDebug.getCreateInfo(stack, new VulkanDebug.MessageSeverity[]{VulkanDebug.MessageSeverity.ERROR, VulkanDebug.MessageSeverity.WARNING, VulkanDebug.MessageSeverity.INFO}, new VulkanDebug.MessageType[]{VulkanDebug.MessageType.GENERAL, VulkanDebug.MessageType.VALIDATION});
+            instance = VulkanStartup.createVkInstance(!FMLLoader.isProduction(), false, debugCreateInfo);
+            device = VulkanStartup.createLogicalDeviceAndQueues(instance.instance(), VulkanStartup.selectPhysicalDevice(instance.instance(), false, -1, instance.enabledInsanceExtensions()), instance.enabledInsanceExtensions());
+            
+            try (final var __ = stack.push()) {
+                final var surfacePtr = stack.longs(0);
+                GLFWClassloadHelper.glfwExtCreateWindowSurface(instance.instance(), window, null, surfacePtr);
+                surface = surfacePtr.get(0);
+            }
+            
+            swapchain = new BasicSwapchain(device, surface, 0);
+            
             final var createInfo = VkCommandPoolCreateInfo.calloc(stack).sType$Default();
             createInfo.flags(VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
             createInfo.queueFamilyIndex(device.queues().getFirst().queueFamily());

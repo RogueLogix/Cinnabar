@@ -31,7 +31,7 @@ import graphics.cinnabar.core.b3d.window.CinnabarWindow;
 import graphics.cinnabar.core.util.MagicNumbers;
 import graphics.cinnabar.core.vk.VulkanSampler;
 import graphics.cinnabar.lib.util.MathUtil;
-import graphics.cinnabar.lib.vulkan.VulkanDebug;
+import graphics.cinnabar.loader.earlywindow.vulkan.VulkanDebug;
 import graphics.cinnabar.loader.earlywindow.VulkanStartup;
 import it.unimi.dsi.fastutil.ints.Int2LongMap;
 import it.unimi.dsi.fastutil.ints.Int2LongOpenHashMap;
