@@ -1,6 +1,7 @@
 package graphics.cinnabar.loader.earlywindow;
 
 import com.mojang.logging.LogUtils;
+import graphics.cinnabar.loader.services.CinnabarGraphicsBootstrapper;
 import it.unimi.dsi.fastutil.Pair;
 import it.unimi.dsi.fastutil.ints.IntArrayList;
 import it.unimi.dsi.fastutil.objects.ObjectArrayList;
@@ -122,33 +123,12 @@ public class VulkanStartup {
             final var appInfo = VkApplicationInfo.calloc(stack);
             final var appName = stack.UTF8("Minecraft");
             final var engineName = stack.UTF8("Cinnabar");
-            // TODO: pull this from FML/MC, so i don't have to update this every MC update
-            final int appVersion;
-            {
-                final var fmlVersionInfo = FMLLoader.versionInfo();
-                if (fmlVersionInfo != null) {
-                    final var mcVersionString = fmlVersionInfo.mcVersion();
-                    final var mcVersionChunks = mcVersionString.split("-")[0].split("\\.");
-                    appVersion = VK_MAKE_VERSION(Integer.parseInt(mcVersionChunks[0]), Integer.parseInt(mcVersionChunks[1]), Integer.parseInt(mcVersionChunks[2]));
-                } else {
-                    appVersion = 0;
-                }
-            }
-            final int engineVersion;
-            final var modLoadingList = FMLLoader.getLoadingModList();
-            if (modLoadingList != null) {
-                @Nullable
-                final var modFile = modLoadingList.getModFileById("cinnabar");
-                if (modFile != null) {
-                    final var modVersionString = modFile.versionString();
-                    final var modVersionChunks = modVersionString.split("-")[0].split("\\.");
-                    engineVersion = VK_MAKE_VERSION(Integer.parseInt(modVersionChunks[0]), Integer.parseInt(modVersionChunks[1]), Integer.parseInt(modVersionChunks[2]));
-                } else {
-                    engineVersion = 0;
-                }
-            } else {
-                engineVersion = 0;
-            }
+            final String mcVersionString = CinnabarGraphicsBootstrapper.config.get("minecraft_version");
+            final var mcVersionChunks = mcVersionString.split("-")[0].split("\\.");
+            final int appVersion = VK_MAKE_VERSION(Integer.parseInt(mcVersionChunks[0]), Integer.parseInt(mcVersionChunks[1]), Integer.parseInt(mcVersionChunks[2]));
+            final String modVersionString = CinnabarGraphicsBootstrapper.config.get("cinnabar_version");
+            final var modVersionChunks = modVersionString.split("-")[0].split("\\.");
+            final int engineVersion = VK_MAKE_VERSION(Integer.parseInt(modVersionChunks[0]), Integer.parseInt(modVersionChunks[1]), Integer.parseInt(modVersionChunks[2]));
             appInfo.sType(VK_STRUCTURE_TYPE_APPLICATION_INFO);
             appInfo.pApplicationName(appName);
             appInfo.applicationVersion(appVersion);
@@ -445,7 +425,8 @@ public class VulkanStartup {
                         case VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU -> "Discrete GPU";
                         case VK_PHYSICAL_DEVICE_TYPE_VIRTUAL_GPU -> "Virtual GPU";
                         case VK_PHYSICAL_DEVICE_TYPE_CPU -> "CPU (Software)";
-                        default -> throw new IllegalStateException("Unexpected value: " + deviceProperties.deviceType());
+                        default ->
+                                throw new IllegalStateException("Unexpected value: " + deviceProperties.deviceType());
                     };
                     final var APIVersionEncoded = deviceProperties.apiVersion();
                     final var driverVersionEncoded = deviceProperties.driverVersion();

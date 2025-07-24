@@ -1,1 +1,3 @@
-neoVersionRange = "${neo_version_range}"
+neo_version = "${neo_version}"
+minecraft_version = "${minecraft_version}"
+cinnabar_version = "${cinnabar_version}"

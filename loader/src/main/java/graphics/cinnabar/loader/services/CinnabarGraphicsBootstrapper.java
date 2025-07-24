@@ -1,5 +1,7 @@
 package graphics.cinnabar.loader.services;
 
+import com.electronwill.nightconfig.core.UnmodifiableConfig;
+import com.electronwill.nightconfig.toml.TomlFormat;
 import com.mojang.logging.LogUtils;
 import net.neoforged.neoforgespi.earlywindow.GraphicsBootstrapper;
 import org.apache.maven.artifact.versioning.ComparableVersion;
@@ -13,6 +15,7 @@ import java.nio.file.Path;
 
 public class CinnabarGraphicsBootstrapper implements GraphicsBootstrapper {
     private static final Logger LOGGER = LogUtils.getLogger();
+    public static UnmodifiableConfig config;
     
     static {
         LOGGER.trace("CinnabarGraphicsBootstrapper LOADED!");
@@ -26,6 +29,15 @@ public class CinnabarGraphicsBootstrapper implements GraphicsBootstrapper {
     @Override
     public void bootstrap(String[] arguments) {
         Configuration.STACK_SIZE.set(256);
+        try {
+            final var resource = CinnabarLocator.class.getResource("/modinfo.toml");
+            assert resource != null;
+            final var lines = Files.readString(Path.of(resource.toURI()));
+            config = TomlFormat.instance().createParser().parse(lines).unmodifiable();
+        } catch (IOException | URISyntaxException e) {
+            throw new RuntimeException(e);
+        }
+        config.get("neo_version");
         for (int i = 0; i < arguments.length - 1; i++) {
             if ("--fml.neoForgeVersion".equals(arguments[i])) {
                 if (!neoVersionSupported(arguments[i + 1])) {
@@ -39,24 +51,8 @@ public class CinnabarGraphicsBootstrapper implements GraphicsBootstrapper {
     }
     
     private static boolean neoVersionSupported(String neoVersion) {
-        final String[] versionBounds;
-        try {
-            final var resource = CinnabarLocator.class.getResource("/modinfo.toml");
-            assert resource != null;
-            final var lines = Files.readAllLines(Path.of(resource.toURI()));
-            final var neoVersionString = lines.getFirst().split("=")[1];
-            versionBounds = neoVersionString.substring(2, neoVersionString.length() - 2).split(",");
-        } catch (IOException | URISyntaxException e) {
-            throw new RuntimeException(e);
-        }
         final var currentVersion = new ComparableVersion(neoVersion);
-        if (versionBounds.length > 1) {
-            final var upperBound = new ComparableVersion(versionBounds[1]);
-            if (currentVersion.compareTo(upperBound) >= 0) {
-                return false;
-            }
-        }
-        final var lowerBound = new ComparableVersion(versionBounds[0]);
+        final var lowerBound = new ComparableVersion(config.get("neo_version"));
         return lowerBound.compareTo(currentVersion) <= 0;
     }
 }
