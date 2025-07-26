@@ -40,7 +40,7 @@ public class BasicSwapchain {
             final var createInfo = VkSwapchainCreateInfoKHR.calloc(stack).sType$Default();
             createInfo.surface(surface);
             
-            createInfo.minImageCount(2);
+            createInfo.minImageCount(surfaceCapabilities.minImageCount());
             createInfo.imageFormat(VK_FORMAT_B8G8R8A8_UNORM);
             createInfo.imageColorSpace(VK_COLOR_SPACE_SRGB_NONLINEAR_KHR);
             createInfo.imageExtent(extent);
