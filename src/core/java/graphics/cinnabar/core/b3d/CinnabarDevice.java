@@ -389,7 +389,7 @@ public class CinnabarDevice implements CVKGpuDevice {
             attachmentDescriptions.format(CinnabarGpuTexture.toVk(colorFormat));
             attachmentDescriptions.samples(VK_SAMPLE_COUNT_1_BIT);
             attachmentDescriptions.loadOp(VK_ATTACHMENT_LOAD_OP_LOAD);
-            attachmentDescriptions.loadOp(VK_ATTACHMENT_STORE_OP_STORE);
+            attachmentDescriptions.storeOp(VK_ATTACHMENT_STORE_OP_STORE);
             attachmentDescriptions.initialLayout(VK_IMAGE_LAYOUT_GENERAL);
             attachmentDescriptions.finalLayout(VK_IMAGE_LAYOUT_GENERAL);
             attachmentDescriptions.limit(1);
@@ -399,9 +399,9 @@ public class CinnabarDevice implements CVKGpuDevice {
                 attachmentDescriptions.format(CinnabarGpuTexture.toVk(depthFormat));
                 attachmentDescriptions.samples(VK_SAMPLE_COUNT_1_BIT);
                 attachmentDescriptions.loadOp(VK_ATTACHMENT_LOAD_OP_LOAD);
-                attachmentDescriptions.loadOp(VK_ATTACHMENT_STORE_OP_STORE);
+                attachmentDescriptions.storeOp(VK_ATTACHMENT_STORE_OP_STORE);
                 attachmentDescriptions.stencilLoadOp(VK_ATTACHMENT_LOAD_OP_LOAD);
-                attachmentDescriptions.stencilLoadOp(VK_ATTACHMENT_STORE_OP_STORE);
+                attachmentDescriptions.stencilStoreOp(VK_ATTACHMENT_STORE_OP_STORE);
                 attachmentDescriptions.initialLayout(VK_IMAGE_LAYOUT_GENERAL);
                 attachmentDescriptions.finalLayout(VK_IMAGE_LAYOUT_GENERAL);
                 attachmentDescriptions.position(0);
