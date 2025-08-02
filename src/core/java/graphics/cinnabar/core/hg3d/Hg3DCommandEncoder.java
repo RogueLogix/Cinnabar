@@ -38,7 +38,7 @@ import static org.lwjgl.vulkan.VK10.*;
 
 public class Hg3DCommandEncoder implements CommandEncoder, Hg3DObject, Destroyable {
     
-    private static final long UPLOAD_BUFFER_SIZE = 64 * MagicMemorySizes.MiB;
+    private static final long UPLOAD_BUFFER_SIZE = 4 * MagicMemorySizes.MiB;
     private final Hg3DGpuDevice device;
     private final HgQueue queue;
     private final HgCommandBuffer.Pool commandPool;
@@ -54,6 +54,7 @@ public class Hg3DCommandEncoder implements CommandEncoder, Hg3DObject, Destroyab
     @Nullable
     private HgBuffer uploadBuffer;
     private long uploadBufferAllocated = 0;
+    private final ReferenceArrayList<HgBuffer> availableUploadBuffers = new ReferenceArrayList<>();
     
     Hg3DCommandEncoder(Hg3DGpuDevice device) {
         this.device = device;
@@ -121,10 +122,15 @@ public class Hg3DCommandEncoder implements CommandEncoder, Hg3DObject, Destroyab
         if (uploadBuffer == null || uploadBuffer.size() < uploadBufferAllocated + size) {
             if (uploadBuffer != null) {
                 uploadBuffer.unmap();
-                device.destroyEndOfFrame(uploadBuffer);
+                final var currentUploadBuffer = uploadBuffer;
+                device.destroyEndOfFrame(() -> this.availableUploadBuffers.add(currentUploadBuffer));
                 uploadBuffer = null;
             }
-            uploadBuffer = device.hgDevice().createBuffer(HgBuffer.MemoryType.MAPPABLE, UPLOAD_BUFFER_SIZE, VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
+            if (availableUploadBuffers.isEmpty()) {
+                uploadBuffer = device.hgDevice().createBuffer(HgBuffer.MemoryType.MAPPABLE, UPLOAD_BUFFER_SIZE, VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
+            } else {
+                uploadBuffer = availableUploadBuffers.pop();
+            }
             uploadBuffer.map();
             uploadBufferAllocated = 0;
         }
@@ -149,6 +155,21 @@ public class Hg3DCommandEncoder implements CommandEncoder, Hg3DObject, Destroyab
         }
         device.destroyEndOfFrame(commandBuffers);
         commandBuffers.clear();
+    }
+    
+    public void resetUploadBuffer() {
+        if (availableUploadBuffers.size() > 3) {
+            while (availableUploadBuffers.size() > 2) {
+                availableUploadBuffers.pop().destroy();
+            }
+        }
+        if (uploadBuffer == null) {
+            return;
+        }
+        final var currentUploadBuffer = uploadBuffer;
+        device.destroyEndOfFrame(() -> this.availableUploadBuffers.add(currentUploadBuffer));
+        uploadBuffer = null;
+        uploadBufferAllocated = 0;
     }
     
     @Override

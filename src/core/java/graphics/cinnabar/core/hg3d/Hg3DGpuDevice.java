@@ -113,6 +113,7 @@ public class Hg3DGpuDevice implements GpuDevice {
         // wait for the last time this frame index was submitted
         // the semaphore starts at MaximumFramesInFlight, so this returns immediately for the first few frames
         interFrameSemaphore.waitValue(currentFrame - MagicNumbers.MaximumFramesInFlight, -1L);
+        commandEncoder.resetUploadBuffer();
     }
     
     @Override
