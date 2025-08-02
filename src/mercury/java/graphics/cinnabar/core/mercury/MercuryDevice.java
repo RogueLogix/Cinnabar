@@ -32,6 +32,7 @@ public class MercuryDevice implements HgDevice {
     private final VkPhysicalDevice vkPhysicalDevice;
     private final VkDevice vkDevice;
     private final long vmaAllocator;
+    private int currentVmaFrame = 0;
     
     public MercuryDevice() {
         // TODO: the vulkan instance can be statically created
@@ -227,5 +228,10 @@ public class MercuryDevice implements HgDevice {
                 lines.add(String.format("Heap %d usage: %s/%s/%s", i, MathUtil.byteString(stats.statistics().allocationBytes()), MathUtil.byteString(stats.statistics().blockBytes()), MathUtil.byteString(stats.budget())));
             }
         }
+    }
+    
+    @Override
+    public void markFame() {
+        vmaSetCurrentFrameIndex(vmaAllocator, currentVmaFrame++);
     }
 }
