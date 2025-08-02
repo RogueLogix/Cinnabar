@@ -273,6 +273,7 @@ public class Hg3DCommandEncoder implements CommandEncoder, Hg3DObject, Destroyab
         final var tempBuffer = uploadBufferSlice(bufferSize);
         final var ptr = tempBuffer.map();
         LibCString.nmemcpy(ptr.pointer(), buffer, ptr.size());
+        tempBuffer.unmap();
         
         final var hg3dTexture = (Hg3DGpuTexture) texture;
         final var hgImage = hg3dTexture.image();
