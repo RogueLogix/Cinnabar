@@ -372,7 +372,6 @@ afterEvaluate {
             exclude("org/lwjgl/system/**")
         }
     }
-
 }
 
 tasks.named('wrapper', Wrapper).configure {
@@ -406,5 +405,38 @@ if (curseforgeToken != null && this.project == this.rootProject) {
         mainFile.withAdditionalFile(sourcesJar)
 
         mainFile.curseFileId
+    }
+}
+
+afterEvaluate {
+    publishing {
+        repositories {
+            maven {
+                name = "logixdevSnapshots"
+                url = "https://maven.logix.dev/snapshots"
+                credentials(PasswordCredentials)
+                authentication {
+                    basic(BasicAuthentication)
+                }
+            }
+            maven {
+                name = "logixdevReleases"
+                url = "https://maven.logix.dev/releases"
+                credentials(PasswordCredentials)
+                authentication {
+                    basic(BasicAuthentication)
+                }
+            }
+        }
+        publications {
+            MainMaven(MavenPublication) {
+                groupId = "graphics.cinnabar"
+                artifactId = "cinnabar"
+                version = getGitDescribedVersion()
+                artifact apiJar
+                artifact sourcesJar
+                artifact fatJar
+            }
+        }
     }
 }
