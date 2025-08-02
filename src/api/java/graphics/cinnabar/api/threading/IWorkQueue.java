@@ -61,7 +61,7 @@ public interface IWorkQueue {
     void enqueue(Work work);
     
     @API(note = "For best performance, use a random access list (ArrayList)")
-    void enqueue(List<Work> work);
+    void enqueue(List<? extends Work> work);
     
     void signal(ISemaphore semaphore, long value);
     

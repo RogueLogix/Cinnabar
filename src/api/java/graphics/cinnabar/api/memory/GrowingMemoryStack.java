@@ -20,7 +20,6 @@ public class GrowingMemoryStack extends MemoryStack implements Destroyable {
     
     public GrowingMemoryStack() {
         super(null, 1, (int) STACK_BLOCK_SIZE);
-        stackBlocks.add(PointerWrapper.alloc(STACK_BLOCK_SIZE));
         currentFrame = new IntLongMutablePair(0, 0);
     }
     
@@ -33,6 +32,8 @@ public class GrowingMemoryStack extends MemoryStack implements Destroyable {
     public void reset() {
         currentFrame = new IntLongMutablePair(0, 0);
         frames.clear();
+        stackBlocks.forEach(PointerWrapper::free);
+        stackBlocks.clear();
     }
     
     @Override
@@ -83,6 +84,9 @@ public class GrowingMemoryStack extends MemoryStack implements Destroyable {
         }
         final var currentStackBlockIndex = currentFrame.leftInt();
         final var currentStackBlockAllocated = currentFrame.rightLong();
+        while (stackBlocks.size() <= currentStackBlockIndex) {
+            stackBlocks.add(PointerWrapper.alloc(STACK_BLOCK_SIZE));
+        }
         var stackBlock = stackBlocks.get(currentStackBlockIndex);
         long allocAddress = ((stackBlock.pointer() + currentStackBlockAllocated) + (alignment - 1)) & (-alignment);
         long allocOffset = allocAddress - stackBlock.pointer();

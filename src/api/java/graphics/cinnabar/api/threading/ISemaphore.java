@@ -4,8 +4,7 @@ public interface ISemaphore {
     
     long value();
     
-    // TODO: rename this
-    void wait(long value, long timeout);
+    void waitValue(long value, long timeout);
     
-    void signal(long value);
+    void singlaValue(long value);
 }

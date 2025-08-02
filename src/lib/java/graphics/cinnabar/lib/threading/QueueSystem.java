@@ -1,13 +1,9 @@
 package graphics.cinnabar.lib.threading;
 
+import graphics.cinnabar.api.hg.HgSemaphore;
 import graphics.cinnabar.api.threading.ThreadIndex;
 import graphics.cinnabar.api.threading.ThreadIndexRegistry;
 import it.unimi.dsi.fastutil.objects.ReferenceArrayList;
-import it.unimi.dsi.fastutil.objects.ReferenceLongImmutablePair;
-import org.lwjgl.system.MemoryStack;
-import org.lwjgl.vulkan.VkSemaphoreWaitInfo;
-
-import static org.lwjgl.vulkan.VK12.*;
 
 public final class QueueSystem {
     private static int nextMainThreadQueue = 0;
@@ -16,7 +12,7 @@ public final class QueueSystem {
     private static final ReferenceArrayList<WorkQueue.SingleThread> cleanupThreadQueues = new ReferenceArrayList<>();
     private static int nextBackgroundQueue = 0;
     private static final ReferenceArrayList<WorkQueue.MultiThreaded> backgroundQueues = new ReferenceArrayList<>();
-    private static final ReferenceArrayList<ReferenceLongImmutablePair<VulkanSemaphore>> vkSemaphores = new ReferenceArrayList<>();
+    private static final ReferenceArrayList<HgSemaphore.Op> hgSemaphores = new ReferenceArrayList<>();
     
     public static WorkQueue createMainThreadQueue() {
         synchronized (mainThreadQueues) {
@@ -192,10 +188,10 @@ public final class QueueSystem {
         }
     }
     
-    public static void wakeThreadsOnSinal(VulkanSemaphore semaphore, long value) {
-        synchronized (vkSemaphores) {
-            vkSemaphores.add(new ReferenceLongImmutablePair<>(semaphore, value));
-            vkSemaphores.notify();
+    public static void wakeThreadsOnSinal(HgSemaphore semaphore, long value) {
+        synchronized (hgSemaphores) {
+            hgSemaphores.add(new HgSemaphore.Op(semaphore, value));
+            hgSemaphores.notify();
         }
     }
     
@@ -203,52 +199,38 @@ public final class QueueSystem {
         try {
             
             while (true) {
-                tryVulkanWait:
-                try (final var stack = MemoryStack.stackPush()) {
-                    final var count = vkSemaphores.size();
-                    if (count == 0) {
-                        break tryVulkanWait;
-                    }
-                    final var vkDevice = vkSemaphores.getFirst().first().device();
-                    
-                    final var handles = stack.callocLong(count);
-                    final var values = stack.callocLong(count);
-                    for (int i = 0; i < count; i++) {
-                        final var semaphore = vkSemaphores.get(i);
-                        if (vkDevice != semaphore.left().device()) {
-                            System.exit(-1);
+                final var count = hgSemaphores.size();
+                if (count == 0) {
+                    synchronized (hgSemaphores) {
+                        try {
+                            hgSemaphores.wait();
+                        } catch (InterruptedException ignored) {
                         }
-                        handles.put(i, semaphore.key().handle());
-                        values.put(i, semaphore.valueLong());
                     }
-                    
-                    final var waitInfo = VkSemaphoreWaitInfo.calloc(stack).sType$Default();
-                    waitInfo.flags(VK_SEMAPHORE_WAIT_ANY_BIT);
-                    waitInfo.semaphoreCount(count);
-                    waitInfo.pSemaphores(handles);
-                    waitInfo.pValues(values);
-                    vkWaitSemaphores(vkDevice, waitInfo, -1);
-                    
-                    wakeWorkers(-1);
-                    wakeCleanupThread(-1);
-                    
-                    synchronized (vkSemaphores) {
-                        final var valuePtr = stack.longs(0);
-                        for (int i = 0; i < vkSemaphores.size(); i++) {
-                            final var pair = vkSemaphores.get(i);
-                            vkGetSemaphoreCounterValue(vkDevice, pair.key().handle(), valuePtr);
-                            if (pair.valueLong() <= valuePtr.get(0)) {
-                                // this semaphore signaled, remove it from the list
-                                vkSemaphores.remove(i);
-                                i--;
-                            }
-                        }
+                    continue;
+                }
+                final var hgDevice = hgSemaphores.getFirst().semaphore().device();
+                
+                for (int i = 0; i < count; i++) {
+                    final var semaphore = hgSemaphores.get(i);
+                    if (hgDevice != semaphore.semaphore().device()) {
+                        System.exit(-1);
                     }
                 }
-                synchronized (vkSemaphores) {
-                    try {
-                        vkSemaphores.wait();
-                    } catch (InterruptedException ignored) {
+                
+                hgDevice.waitSemaphores(hgSemaphores, -1, true);
+                
+                wakeWorkers(-1);
+                wakeCleanupThread(-1);
+                
+                synchronized (hgSemaphores) {
+                    for (int i = 0; i < hgSemaphores.size(); i++) {
+                        final var op = hgSemaphores.get(i);
+                        if (op.value() <= op.semaphore().value()) {
+                            // this semaphore signaled, remove it from the list
+                            hgSemaphores.remove(i);
+                            i--;
+                        }
                     }
                 }
             }

@@ -28,7 +28,7 @@ public class AtomicQueueSemaphore implements ISemaphore {
     }
     
     @Override
-    public void wait(long value, long timeout) {
+    public void waitValue(long value, long timeout) {
         if (value() >= value) {
             return;
         }
@@ -39,7 +39,7 @@ public class AtomicQueueSemaphore implements ISemaphore {
     }
     
     @Override
-    public void signal(long value) {
+    public void singlaValue(long value) {
         VALUE_VAR_HANDLE.setRelease(this, value);
         // wake workers, this may have unblocked a queue
         // TODO: is there a better way to handle this?

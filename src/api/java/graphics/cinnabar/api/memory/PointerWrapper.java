@@ -10,6 +10,7 @@ import sun.misc.Unsafe;
 
 import javax.annotation.Nonnull;
 import java.lang.Math;
+import java.nio.ByteBuffer;
 
 import static graphics.cinnabar.api.CinnabarAPI.Internals.CINNABAR_API_LOG;
 import static graphics.cinnabar.api.memory.LeakDetection.*;
@@ -660,5 +661,9 @@ public record PointerWrapper(long pointer, long size) implements Comparable<Poin
         }
         // this is backwards so that child allocations are placed afterward
         return Long.compare(other.size, this.size);
+    }
+    
+    public ByteBuffer byteBuffer() {
+        return MemoryUtil.memByteBuffer(pointer, Math.toIntExact(size));
     }
 }

@@ -27,6 +27,7 @@ import static org.lwjgl.vulkan.EXTDebugReport.VK_EXT_DEBUG_REPORT_EXTENSION_NAME
 import static org.lwjgl.vulkan.EXTDebugUtils.*;
 import static org.lwjgl.vulkan.KHRPortabilitySubset.VK_KHR_PORTABILITY_SUBSET_EXTENSION_NAME;
 import static org.lwjgl.vulkan.KHRSwapchain.VK_KHR_SWAPCHAIN_EXTENSION_NAME;
+import static org.lwjgl.vulkan.KHRSynchronization2.VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME;
 import static org.lwjgl.vulkan.VK12.*;
 
 public class VulkanStartup {
@@ -56,6 +57,7 @@ public class VulkanStartup {
     );
     
     private static final List<String> requiredDeviceExtensions = List.of(
+            VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME,
             VK_KHR_SWAPCHAIN_EXTENSION_NAME
     );
     
@@ -237,8 +239,7 @@ public class VulkanStartup {
             createInfo.ppEnabledLayerNames(layerPointers);
             
             
-            @Nullable
-            final var glfwExtensions = GLFWClassloadHelper.glfwGetRequiredInstanceExtensions();
+            @Nullable final var glfwExtensions = GLFWClassloadHelper.glfwGetRequiredInstanceExtensions();
             if (glfwExtensions == null) {
                 throw new IllegalStateException("GLFW unable to present VK image");
             }
@@ -253,8 +254,7 @@ public class VulkanStartup {
             }
             createInfo.ppEnabledExtensionNames(extensionPointers);
             
-            @Nullable
-            final var allocationCallbacks = Configuration.DEBUG_MEMORY_ALLOCATOR.get(false) ? callbacks() : null;
+            @Nullable final var allocationCallbacks = Configuration.DEBUG_MEMORY_ALLOCATOR.get(false) ? callbacks() : null;
             final var instancePointer = stack.mallocPointer(1);
             final var instanceCreateCode = vkCreateInstance(createInfo, allocationCallbacks, instancePointer);
             if (instanceCreateCode != VK_SUCCESS) {
@@ -298,8 +298,10 @@ public class VulkanStartup {
             final var physicalDeviceFeatures10 = physicalDeviceFeatures.features();
             final var physicalDeviceFeatures11 = VkPhysicalDeviceVulkan11Features.calloc(stack).sType$Default();
             final var physicalDeviceFeatures12 = VkPhysicalDeviceVulkan12Features.calloc(stack).sType$Default();
+            final var sync2Features = VkPhysicalDeviceSynchronization2FeaturesKHR.calloc(stack).sType$Default();
             physicalDeviceFeatures.pNext(physicalDeviceFeatures11);
             physicalDeviceFeatures.pNext(physicalDeviceFeatures12);
+            physicalDeviceFeatures.pNext(sync2Features);
             
             @Nullable
             VkPhysicalDevice selectedPhysicalDevice = null;
@@ -410,7 +412,7 @@ public class VulkanStartup {
                 }
                 
                 vkGetPhysicalDeviceFeatures2(physicalDevice, physicalDeviceFeatures);
-                if (!hasAllRequiredFeatures(physicalDeviceFeatures10, physicalDeviceFeatures11, physicalDeviceFeatures12)) {
+                if (!hasAllRequiredFeatures(physicalDeviceFeatures10, physicalDeviceFeatures11, physicalDeviceFeatures12, sync2Features)) {
                     LOGGER.info("Skipping device, missing required features");
                     continue;
                 }
@@ -425,8 +427,7 @@ public class VulkanStartup {
                         case VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU -> "Discrete GPU";
                         case VK_PHYSICAL_DEVICE_TYPE_VIRTUAL_GPU -> "Virtual GPU";
                         case VK_PHYSICAL_DEVICE_TYPE_CPU -> "CPU (Software)";
-                        default ->
-                                throw new IllegalStateException("Unexpected value: " + deviceProperties.deviceType());
+                        default -> throw new IllegalStateException("Unexpected value: " + deviceProperties.deviceType());
                     };
                     final var APIVersionEncoded = deviceProperties.apiVersion();
                     final var driverVersionEncoded = deviceProperties.driverVersion();
@@ -518,7 +519,8 @@ public class VulkanStartup {
     private static boolean hasAllRequiredFeatures(
             VkPhysicalDeviceFeatures physicalDeviceFeatures10,
             VkPhysicalDeviceVulkan11Features physicalDeviceFeatures11,
-            VkPhysicalDeviceVulkan12Features physicalDeviceFeatures12
+            VkPhysicalDeviceVulkan12Features physicalDeviceFeatures12,
+            VkPhysicalDeviceSynchronization2FeaturesKHR sync2Features
     ) {
         boolean hasAllFeatures = true;
         
@@ -542,6 +544,11 @@ public class VulkanStartup {
         
         if (!physicalDeviceFeatures12.timelineSemaphore()) {
             logMissingFeature("timelineSemaphore");
+            hasAllFeatures = false;
+        }
+        
+        if (!sync2Features.synchronization2()) {
+            logMissingFeature("synchronization2");
             hasAllFeatures = false;
         }
         
@@ -666,6 +673,7 @@ public class VulkanStartup {
             final var physicalDeviceFeatures10 = VkPhysicalDeviceFeatures.calloc(stack);
             final var physicalDeviceFeatures11 = VkPhysicalDeviceVulkan11Features.calloc(stack).sType$Default();
             final var physicalDeviceFeatures12 = VkPhysicalDeviceVulkan12Features.calloc(stack).sType$Default();
+            final var sync2Features = VkPhysicalDeviceSynchronization2FeaturesKHR.calloc(stack).sType$Default();
             
             physicalDeviceFeatures10.drawIndirectFirstInstance(true);
             physicalDeviceFeatures10.fillModeNonSolid(true);
@@ -675,11 +683,14 @@ public class VulkanStartup {
             
             physicalDeviceFeatures12.timelineSemaphore(true);
             
+            sync2Features.synchronization2(true);
+            
             final var deviceCreateInfo = VkDeviceCreateInfo.calloc(stack).sType$Default();
             deviceCreateInfo.pQueueCreateInfos(queueCreateInfos);
             deviceCreateInfo.pEnabledFeatures(physicalDeviceFeatures10);
             deviceCreateInfo.pNext(physicalDeviceFeatures11);
             deviceCreateInfo.pNext(physicalDeviceFeatures12);
+            deviceCreateInfo.pNext(sync2Features);
             
             final var extensionCountPtr = stack.callocInt(1);
             int totalExtensionProperties = 0;

@@ -10,7 +10,6 @@ import static org.lwjgl.vulkan.VK12.vkGetPhysicalDeviceFeatures;
 import static org.lwjgl.vulkan.VK12.vkGetPhysicalDeviceProperties2;
 
 public class DriverWorkarounds {
-    public final boolean allowIncrementalDescriptorPush;
     
     public DriverWorkarounds(VkDevice device) {
         try (final var stack = MemoryStack.stackPush()) {
@@ -22,9 +21,6 @@ public class DriverWorkarounds {
             
             vkGetPhysicalDeviceProperties2(device.getPhysicalDevice(), physicalDeviceProperties2);
             vkGetPhysicalDeviceFeatures(device.getPhysicalDevice(), deviceFeatures10);
-            
-            // Intel's driver is broken for these
-            allowIncrementalDescriptorPush = physicalDeviceProperties.vendorID() != 0x8086;
         }
     }
 }

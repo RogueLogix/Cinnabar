@@ -40,6 +40,6 @@ public @interface ThreadSafety {
     // usages of this function must be synchronized with other uses of the underlying vulkan object
     // refer to Vulkan specification for details
     @interface VulkanObjectHandle {
-        
+        String note() default "";
     }
 }

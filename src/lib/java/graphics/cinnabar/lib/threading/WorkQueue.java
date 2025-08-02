@@ -2,6 +2,7 @@ package graphics.cinnabar.lib.threading;
 
 import graphics.cinnabar.api.annotations.API;
 import graphics.cinnabar.api.annotations.ThreadSafety;
+import graphics.cinnabar.api.hg.HgSemaphore;
 import graphics.cinnabar.api.threading.ISemaphore;
 import graphics.cinnabar.api.threading.IWorkQueue;
 import graphics.cinnabar.api.threading.ThreadIndex;
@@ -18,18 +19,16 @@ import java.util.function.IntConsumer;
 
 public abstract class WorkQueue implements IWorkQueue {
     
-    protected record SemaphoreOp(ISemaphore semaphore, long value, boolean signal) {
-        
-        void doSignal() {
-            assert !signal;
-            semaphore.signal(value);
+    @API
+    @Override
+    @ThreadSafety.Many
+    public void wait(ISemaphore semaphore, long value) {
+        workRing.forceEnqueue(new SemaphoreOp(semaphore, value, false));
+        if (semaphore.value() < value && semaphore instanceof HgSemaphore hgSemaphore) {
+            // this semaphore isn't signaled yet, so this is a submit before signal
+            // wake all the threads when it signals 
+            QueueSystem.wakeThreadsOnSinal(hgSemaphore, value);
         }
-        
-        boolean isSignaled() {
-            assert !signal;
-            return semaphore.value() >= value;
-        }
-        
     }
     
     private static final VarHandle LONG_ARRAY_VAR_HANDLE = MethodHandles.arrayElementVarHandle(long[].class);
@@ -44,13 +43,14 @@ public abstract class WorkQueue implements IWorkQueue {
     @API
     @Override
     @ThreadSafety.Many
-    public void wait(ISemaphore semaphore, long value) {
-        workRing.forceEnqueue(new SemaphoreOp(semaphore, value, false));
-        if (semaphore.value() < value && semaphore instanceof VulkanSemaphore vkSemaphore) {
-            // this semaphore isn't signaled yet, so this is a submit before signal
-            // wake all the threads when it signals 
-            QueueSystem.wakeThreadsOnSinal(vkSemaphore, value);
+    public void enqueue(List<? extends Work> work) {
+        if (work.isEmpty()) {
+            return;
         }
+        // its fine, probably
+        //noinspection unchecked
+        workRing.forceEnqueueMany((List<Object>) (Object) work);
+        threadWake.accept(work.size());
     }
     
     @API
@@ -61,17 +61,18 @@ public abstract class WorkQueue implements IWorkQueue {
         threadWake.accept(1);
     }
     
-    @API
-    @Override
-    @ThreadSafety.Many
-    public void enqueue(List<Work> work) {
-        if (work.isEmpty()) {
-            return;
+    protected record SemaphoreOp(ISemaphore semaphore, long value, boolean signal) {
+        
+        void doSignal() {
+            assert signal;
+            semaphore.singlaValue(value);
         }
-        // its fine, probably
-        //noinspection unchecked
-        workRing.forceEnqueueMany((List<Object>) (Object) work);
-        threadWake.accept(work.size());
+        
+        boolean isSignaled() {
+            assert !signal;
+            return semaphore.value() >= value;
+        }
+        
     }
     
     @API
@@ -111,15 +112,14 @@ public abstract class WorkQueue implements IWorkQueue {
         }
         
         private boolean runOne() {
-            assert ThreadIndex.currentThreadIndex() == index;
+            assert ThreadIndex.currentThreadIndex().equals(index);
             if (pendingWait != null) {
                 if (!pendingWait.isSignaled()) {
                     return false;
                 }
                 pendingWait = null;
             }
-            @Nullable
-            final var item = workRing.dequeue();
+            @Nullable final var item = workRing.dequeue();
             if (item == null) {
                 return false;
             }
@@ -216,16 +216,14 @@ public abstract class WorkQueue implements IWorkQueue {
             processPendingSignals();
             // prevent signaling a semaphore
             LONG_ARRAY_VAR_HANDLE.setRelease(executingIndex, index.index(), 0);
-            @Nullable
-            final var entry = workRing.conditionalDequeue(MultiThreaded::waitConditionCheck);
+            @Nullable final var entry = workRing.conditionalDequeue(MultiThreaded::waitConditionCheck);
             if (entry == null) {
                 LONG_ARRAY_VAR_HANDLE.setRelease(executingIndex, index.index(), Long.MAX_VALUE);
                 return false;
             }
             LONG_ARRAY_VAR_HANDLE.setRelease(executingIndex, index.index(), entry.firstLong());
             
-            @Nullable
-            final var item = entry.value();
+            @Nullable final var item = entry.value();
             switch (item) {
                 case null -> {
                     LONG_ARRAY_VAR_HANDLE.setRelease(executingIndex, index.index(), Long.MAX_VALUE);

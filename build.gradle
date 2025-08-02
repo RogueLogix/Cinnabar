@@ -8,37 +8,28 @@ plugins {
     id("net.darkhax.curseforgegradle") version "1.1.26"
 }
 
+def getGitDescribedVersion = { ->
+    return providers.exec {
+        commandLine 'git', 'describe', '--tags', '--dirty=-local', '--candidates=100'
+    }.standardOutput.asText.get().trim()
+}
 
 allprojects {
-    version = mod_version + (release_type != "release" ? "-$release_type" : "")
+    version = getGitDescribedVersion()
     group = mod_group_id
 }
 
-base {
-    archivesName = "$mod_id-$minecraft_version"
+if (System.env.BUILD_SERVER_PUBLISH != null) {
+    if (version != mod_version + (release_type != "release" ? "-$release_type" : "")) {
+        throw new VerificationException("Expected described version '${mod_version + (release_type != "release" ? "-$release_type" : "")}' got '$version'")
+    }
 }
 
-switch (org.gradle.internal.os.OperatingSystem.current()) {
-    case org.gradle.internal.os.OperatingSystem.LINUX:
-        project.ext.lwjglNatives = "natives-linux"
-        def osArch = System.getProperty("os.arch")
-        if (osArch.startsWith("arm") || osArch.startsWith("aarch64")) {
-            project.ext.lwjglNatives += osArch.contains("64") || osArch.startsWith("armv8") ? "-arm64" : "-arm32"
-        } else if (osArch.startsWith("ppc")) {
-            project.ext.lwjglNatives += "-ppc64le"
-        } else if (osArch.startsWith("riscv")) {
-            project.ext.lwjglNatives += "-riscv64"
-        }
-        break
-    case org.gradle.internal.os.OperatingSystem.MAC_OS:
-        project.ext.lwjglNatives = System.getProperty("os.arch").startsWith("aarch64") ? "natives-macos-arm64" : "natives-macos"
-        break
-    case org.gradle.internal.os.OperatingSystem.WINDOWS:
-        def osArch = System.getProperty("os.arch")
-        project.ext.lwjglNatives = osArch.contains("64")
-                ? "natives-windows${osArch.startsWith("aarch64") ? "-arm64" : ""}"
-                : "natives-windows-x86"
-        break
+// use the git described version instead, its got more info than just the normal mod version
+mod_version = "${getGitDescribedVersion()}"
+
+base {
+    archivesName = "$mod_id-$minecraft_version"
 }
 
 def lwjglJavaLibs = [
@@ -74,8 +65,8 @@ for (lib in lwjglNativeLibs) {
     var baseLibName = "org.lwjgl:lwjgl-$lib:$lwjglVersion"
     loaderLibsToPack.add(baseLibName)
     vkJavaLibs.add(baseLibName)
-    nativeLibsToUse.add(baseLibName + ":$lwjglNatives")
     for (nativePlatform in lwjglNativePlatforms) {
+        nativeLibsToUse.add(baseLibName + ":$nativePlatform")
         loaderLibsToPack.add(baseLibName + ":$nativePlatform")
     }
 }
@@ -169,6 +160,21 @@ sourceSets {
             return true
         }
     }
+    mercury {
+        compileClasspath += api.output
+        compileClasspath += lib.output
+        compileClasspath += main.compileClasspath.filter { File element ->
+            // MC and all related classes
+            if (element.name.startsWith("neoforge")) {
+                return false
+            }
+            // javax.annotation
+            if (element.name.startsWith("annotations-3.0.1") || element.name.startsWith("jsr305")) {
+                return false
+            }
+            return true
+        }
+    }
     main {
         java {
             srcDirs = ["src/mod/java"]
@@ -178,6 +184,7 @@ sourceSets {
         compileClasspath += core.output
         compileClasspath += lib.output
         compileClasspath += mclib.output
+        compileClasspath += mercury.output
     }
 }
 
@@ -195,12 +202,15 @@ neoForge {
         client {
             client()
             systemProperty 'neoforge.enabledGameTestNamespaces', project.mod_id
-            programArguments.addAll "--CinnabarLaunchedFromIDE"
+        }
+        clientAssert {
+            client()
+            systemProperty 'neoforge.enabledGameTestNamespaces', project.mod_id
+            jvmArguments.addAll("-ea:graphics.cinnabar...")
         }
         clientRenderDoc {
             client()
             systemProperty 'neoforge.enabledGameTestNamespaces', project.mod_id
-            programArguments.addAll "--CinnabarLaunchedFromIDE"
             environment.put("ENABLE_VULKAN_RENDERDOC_CAPTURE", "1")
         }
 
@@ -216,6 +226,7 @@ neoForge {
             sourceSet(sourceSets.core)
             sourceSet(sourceSets.lib)
             sourceSet(sourceSets.mclib)
+            sourceSet(sourceSets.mercury)
             sourceSet(sourceSets.main)
         }
         "loader" {
@@ -305,12 +316,14 @@ tasks.register('sourcesJar', Jar).configure { Jar jar1 ->
             sourceSets.api.output,
             sourceSets.lib.output,
             sourceSets.mclib.output,
+            sourceSets.mercury.output,
             sourceSets.core.output,
             sourceSets.main.output,
             project(':loader').sourceSets.main.output,
             sourceSets.api.allJava,
             sourceSets.lib.allJava,
             sourceSets.mclib.allJava,
+            sourceSets.mercury.allJava,
             sourceSets.core.allJava,
             sourceSets.main.allJava,
             project(':loader').sourceSets.main.allJava,
@@ -326,6 +339,7 @@ tasks.named('jar', Jar).configure { Jar jar1 ->
             sourceSets.api.output,
             sourceSets.lib.output,
             sourceSets.mclib.output,
+            sourceSets.mercury.output,
             sourceSets.core.output,
             sourceSets.main.output,
     ])

@@ -3,6 +3,7 @@ package graphics.cinnabar.api.util;
 import graphics.cinnabar.api.annotations.ThreadSafety;
 import graphics.cinnabar.api.threading.IWorkQueue;
 import graphics.cinnabar.api.threading.ThreadIndex;
+import org.jetbrains.annotations.Nullable;
 
 public interface Destroyable extends IWorkQueue.Work {
     
@@ -17,6 +18,12 @@ public interface Destroyable extends IWorkQueue.Work {
      */
     @ThreadSafety.Any
     void destroy();
+    
+    static void destroySafe(@Nullable Destroyable destroyable) {
+        if (destroyable != null) {
+            destroyable.destroy();
+        }
+    }
     
     @Override
     default void accept(ThreadIndex threadIndex) {
