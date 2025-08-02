@@ -72,6 +72,10 @@ public interface HgBuffer extends HgObject {
             buffer.unmap();
         }
         
+        public Slice slice(long offset, long size) {
+            return new Slice(buffer, this.offset + offset, size);
+        }
+        
         public ImageSlice image(int width, int height) {
             return new ImageSlice(buffer, offset, size, width, height);
         }
