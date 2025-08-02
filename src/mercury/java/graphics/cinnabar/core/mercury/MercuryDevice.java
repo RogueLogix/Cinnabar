@@ -2,10 +2,12 @@ package graphics.cinnabar.core.mercury;
 
 import graphics.cinnabar.api.hg.*;
 import graphics.cinnabar.api.hg.enums.HgFormat;
+import graphics.cinnabar.lib.util.MathUtil;
 import graphics.cinnabar.loader.earlywindow.VulkanStartup;
 import graphics.cinnabar.loader.earlywindow.vulkan.VulkanDebug;
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.util.vma.VmaAllocatorCreateInfo;
+import org.lwjgl.util.vma.VmaBudget;
 import org.lwjgl.util.vma.VmaVulkanFunctions;
 import org.lwjgl.vulkan.VkDevice;
 import org.lwjgl.vulkan.VkInstance;
@@ -14,8 +16,7 @@ import org.lwjgl.vulkan.VkSemaphoreWaitInfo;
 
 import java.util.List;
 
-import static org.lwjgl.util.vma.Vma.vmaCreateAllocator;
-import static org.lwjgl.util.vma.Vma.vmaDestroyAllocator;
+import static org.lwjgl.util.vma.Vma.*;
 import static org.lwjgl.vulkan.EXTDebugUtils.vkDestroyDebugUtilsMessengerEXT;
 import static org.lwjgl.vulkan.VK12.*;
 
@@ -211,6 +212,21 @@ public class MercuryDevice implements HgDevice {
             waitInfo.pSemaphores(handles);
             waitInfo.pValues(values);
             return vkWaitSemaphores(vkDevice, waitInfo, -1) == VK_SUCCESS;
+        }
+    }
+    
+    @Override
+    public void addDebugText(List<String> lines) {
+        try (final var stack = MemoryStack.stackPush()) {
+            final var stats = VmaBudget.calloc(VK_MAX_MEMORY_HEAPS, stack);
+            vmaGetHeapBudgets(vmaAllocator, stats);
+            for (int i = 0; i < VK_MAX_MEMORY_HEAPS; i++) {
+                stats.position(i);
+                if (stats.usage() == 0) {
+                    continue;
+                }
+                lines.add(String.format("Heap %d usage: %s/%s/%s", i, MathUtil.byteString(stats.statistics().allocationBytes()), MathUtil.byteString(stats.statistics().blockBytes()), MathUtil.byteString(stats.budget())));
+            }
         }
     }
 }

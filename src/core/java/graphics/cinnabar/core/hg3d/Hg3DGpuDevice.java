@@ -23,9 +23,12 @@ import it.unimi.dsi.fastutil.objects.Reference2ReferenceOpenHashMap;
 import it.unimi.dsi.fastutil.objects.ReferenceArrayList;
 import net.minecraft.client.Minecraft;
 import net.minecraft.resources.ResourceLocation;
+import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.neoforge.client.blaze3d.GpuDeviceFeatures;
 import net.neoforged.neoforge.client.blaze3d.GpuDeviceProperties;
 import net.neoforged.neoforge.client.config.NeoForgeClientConfig;
+import net.neoforged.neoforge.client.event.CustomizeGuiOverlayEvent;
+import net.neoforged.neoforge.common.NeoForge;
 import org.jetbrains.annotations.Nullable;
 
 import java.lang.reflect.InvocationTargetException;
@@ -75,10 +78,13 @@ public class Hg3DGpuDevice implements GpuDevice {
         WorkQueue.AFTER_END_OF_GPU_FRAME.wait(interFrameSemaphore, currentFrame);
         cleanupDoneSemaphore.singlaValue(MagicNumbers.MaximumFramesInFlight);
         
+        NeoForge.EVENT_BUS.register(this);
     }
     
     @Override
     public void close() {
+        NeoForge.EVENT_BUS.unregister(this);
+        
         // wait for pending GPU work
         interFrameSemaphore.waitValue(currentFrame - 1, -1L);
         // fake the GPU being done with work
@@ -304,5 +310,12 @@ public class Hg3DGpuDevice implements GpuDevice {
         index |= (0x3 & addressV) << 5;
         index |= (0x3 & addressW) << 7;
         return samplers.get(index);
+    }
+    
+    @SubscribeEvent
+    private void handleDebugTextEvent(CustomizeGuiOverlayEvent.DebugText event) {
+        final var list = event.getRight();
+        list.add("");
+        hgDevice.addDebugText(list);
     }
 }

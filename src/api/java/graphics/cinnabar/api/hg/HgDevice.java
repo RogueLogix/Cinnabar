@@ -76,4 +76,7 @@ public interface HgDevice extends HgObject {
         
         int maxTexture2dSize();
     }
+    
+    @ThreadSafety.MainGraphics
+    void addDebugText(List<String> lines);
 }
