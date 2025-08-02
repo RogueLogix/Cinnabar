@@ -101,7 +101,7 @@ public class MercuryBuffer extends MercuryObject implements HgBuffer {
     public PointerWrapper map() {
         try (final var stack = MemoryStack.stackPush()) {
             final var pointerReturn = stack.pointers(0);
-            vmaMapMemory(device.vmaAllocator(), vmaAllocation, pointerReturn);
+            checkVkCode(vmaMapMemory(device.vmaAllocator(), vmaAllocation, pointerReturn));
             return new PointerWrapper(pointerReturn.get(0), size);
         }
     }

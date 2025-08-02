@@ -64,6 +64,10 @@ public class Hg3DCommandEncoder implements CommandEncoder, Hg3DObject, Destroyab
     @Override
     public void destroy() {
         commandPool.destroy();
+        if (uploadBuffer != null) {
+            uploadBuffer.unmap();
+            uploadBuffer.destroy();
+        }
     }
     
     @Override
@@ -116,10 +120,12 @@ public class Hg3DCommandEncoder implements CommandEncoder, Hg3DObject, Destroyab
         }
         if (uploadBuffer == null || uploadBuffer.size() < uploadBufferAllocated + size) {
             if (uploadBuffer != null) {
+                uploadBuffer.unmap();
                 device.destroyEndOfFrame(uploadBuffer);
                 uploadBuffer = null;
             }
             uploadBuffer = device.hgDevice().createBuffer(HgBuffer.MemoryType.MAPPABLE, UPLOAD_BUFFER_SIZE, VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
+            uploadBuffer.map();
             uploadBufferAllocated = 0;
         }
         final var slice = uploadBuffer.slice(uploadBufferAllocated, size);
@@ -201,6 +207,7 @@ public class Hg3DCommandEncoder implements CommandEncoder, Hg3DObject, Destroyab
         final var tempBuffer = uploadBufferSlice(buffer.remaining());
         final var ptr = tempBuffer.map();
         LibCString.nmemcpy(ptr.pointer(), MemoryUtil.memAddress(buffer), ptr.size());
+        tempBuffer.unmap();
         final var cb = mainCommandBuffer();
         cb.barrier();
         final var dstSlice = ((Hg3DGpuBuffer) slice.buffer()).buffer().slice(slice.offset(), slice.length());
