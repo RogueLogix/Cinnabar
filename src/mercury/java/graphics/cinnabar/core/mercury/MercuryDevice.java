@@ -120,7 +120,6 @@ public class MercuryDevice implements HgDevice {
         return vmaAllocator;
     }
     
-    
     @Override
     public Properties properties() {
         return properties;

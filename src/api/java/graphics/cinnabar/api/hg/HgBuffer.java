@@ -13,6 +13,14 @@ public interface HgBuffer extends HgObject {
     @ThreadSafety.Many
     long size();
     
+    @Constant
+    @ThreadSafety.Many
+    boolean deviceLocal();
+    
+    @Constant
+    @ThreadSafety.Many
+    boolean mappable();
+    
     @ThreadSafety.Many
     @ThreadSafety.VulkanObjectHandle
     PointerWrapper map();

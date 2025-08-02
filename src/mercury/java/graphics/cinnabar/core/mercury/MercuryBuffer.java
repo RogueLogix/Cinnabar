@@ -5,6 +5,7 @@ import graphics.cinnabar.api.hg.enums.HgFormat;
 import graphics.cinnabar.api.memory.PointerWrapper;
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.util.vma.VmaAllocationCreateInfo;
+import org.lwjgl.util.vma.VmaAllocationInfo;
 import org.lwjgl.vulkan.VkBufferCreateInfo;
 
 import static graphics.cinnabar.api.exceptions.VkException.checkVkCode;
@@ -16,6 +17,8 @@ public class MercuryBuffer extends MercuryObject implements HgBuffer {
     private final long size;
     private final long handle;
     private final long vmaAllocation;
+    private final boolean deviceLocal;
+    private final boolean mappable;
     
     public MercuryBuffer(MercuryDevice device, MemoryType memoryType, long size, long usage) {
         super(device);
@@ -27,13 +30,13 @@ public class MercuryBuffer extends MercuryObject implements HgBuffer {
             final var createInfo = VkBufferCreateInfo.calloc(stack);
             createInfo.sType(VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO);
             createInfo.pNext(0);
-            createInfo.flags(0);
             createInfo.size(size);
             createInfo.usage(Math.toIntExact(usage));
             createInfo.sharingMode(VK_SHARING_MODE_EXCLUSIVE);
             createInfo.pQueueFamilyIndices(null);
             
             final var allocCreateInfo = VmaAllocationCreateInfo.calloc(stack);
+            allocCreateInfo.flags(VMA_ALLOCATION_CREATE_WITHIN_BUDGET_BIT);
             switch (memoryType) {
                 case MAPPABLE -> {
                     allocCreateInfo.usage(VMA_MEMORY_USAGE_AUTO_PREFER_HOST);
@@ -58,9 +61,15 @@ public class MercuryBuffer extends MercuryObject implements HgBuffer {
                 }
             }
             
-            checkVkCode(vmaCreateBuffer(device.vmaAllocator(), createInfo, allocCreateInfo, bufferPtr, allocPtr, null));
+            final var vmaAllocationInfo = VmaAllocationInfo.calloc(stack);
+            checkVkCode(vmaCreateBuffer(device.vmaAllocator(), createInfo, allocCreateInfo, bufferPtr, allocPtr, vmaAllocationInfo));
             vmaAllocation = allocPtr.get(0);
             handle = bufferPtr.get(0);
+            
+            final var flags = stack.ints(0);
+            vmaGetMemoryTypeProperties(device.vmaAllocator(), vmaAllocationInfo.memoryType(), flags);
+            deviceLocal = (flags.get(0) & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) != 0;
+            mappable = (flags.get(0) & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) != 0;
         }
     }
     
@@ -76,6 +85,16 @@ public class MercuryBuffer extends MercuryObject implements HgBuffer {
     @Override
     public long size() {
         return size;
+    }
+    
+    @Override
+    public boolean deviceLocal() {
+        return deviceLocal;
+    }
+    
+    @Override
+    public boolean mappable() {
+        return mappable;
     }
     
     @Override
