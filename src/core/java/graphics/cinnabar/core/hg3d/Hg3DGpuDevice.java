@@ -181,7 +181,7 @@ public class Hg3DGpuDevice implements GpuDevice {
     
     @Override
     public String getRenderer() {
-        return hgDevice.properties().renderer();
+        return hgDevice.properties().renderer() + " " + hgDevice.properties().driverVersion();
     }
     
     @Override
