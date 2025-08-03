@@ -26,9 +26,9 @@ public interface HgCommandBuffer extends HgObject {
     
     HgCommandBuffer initImages(List<HgImage> images);
     
-    HgCommandBuffer copyBufferToBuffer(HgBuffer.Slice src, HgBuffer.Slice dst);
+    // ---------- Outside RenderPass commands ----------
     
-    // ---------- Outside RenderPass commands ---------- 
+    HgCommandBuffer copyBufferToBuffer(HgBuffer.Slice src, HgBuffer.Slice dst);
     
     HgCommandBuffer copyBufferToImage(HgBuffer.ImageSlice buffer, HgImage.TransferRange image);
     
