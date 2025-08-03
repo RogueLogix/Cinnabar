@@ -19,7 +19,8 @@ public class Hg3DGpuBuffer extends GpuBuffer implements Hg3DObject {
     public Hg3DGpuBuffer(Hg3DGpuDevice device, int usage, int size) {
         super(usage, size);
         this.device = device;
-        final boolean clientStorageHint = (usage & USAGE_HINT_CLIENT_STORAGE) != 0;
+        // i consider map for read a client storage hint
+        final boolean clientStorageHint = (usage & (USAGE_HINT_CLIENT_STORAGE | USAGE_MAP_READ)) != 0;
         final boolean mappable = (usage & (USAGE_MAP_READ | USAGE_MAP_WRITE)) != 0;
         preferredMemoryType = clientStorageHint ? HgBuffer.MemoryType.MAPPABLE : mappable ? HgBuffer.MemoryType.MAPPABLE_PREF_DEVICE : HgBuffer.MemoryType.AUTO_PREF_DEVICE;
         buffer = device.hgDevice().createBuffer(preferredMemoryType, size, Hg3DConst.bufferUsageBits(usage));

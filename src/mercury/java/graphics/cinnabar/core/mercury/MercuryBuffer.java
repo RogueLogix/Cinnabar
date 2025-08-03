@@ -40,15 +40,18 @@ public class MercuryBuffer extends MercuryObject implements HgBuffer {
             switch (memoryType) {
                 case MAPPABLE -> {
                     allocCreateInfo.usage(VMA_MEMORY_USAGE_AUTO_PREFER_HOST);
+                    allocCreateInfo.flags(allocCreateInfo.flags() | VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT);
                     allocCreateInfo.requiredFlags(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
                 }
                 case MAPPABLE_PREF_DEVICE -> {
                     allocCreateInfo.usage(VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE);
+                    allocCreateInfo.flags(allocCreateInfo.flags() | VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT);
                     allocCreateInfo.requiredFlags(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
                     allocCreateInfo.preferredFlags(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
                 }
                 case DEVICE_PREF_MAPPABLE -> {
                     allocCreateInfo.usage(VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE);
+                    allocCreateInfo.flags(allocCreateInfo.flags() | VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_ALLOW_TRANSFER_INSTEAD_BIT);
                     allocCreateInfo.requiredFlags(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
                     allocCreateInfo.preferredFlags(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
                 }
