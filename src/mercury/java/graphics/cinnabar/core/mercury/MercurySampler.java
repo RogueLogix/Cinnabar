@@ -21,7 +21,7 @@ public class MercurySampler extends MercuryObject implements HgSampler {
             vkCreateInfo.flags(0);
             vkCreateInfo.magFilter(createInfo.minLinear() ? VK_FILTER_LINEAR : VK_FILTER_NEAREST);
             vkCreateInfo.minFilter(createInfo.magLinear() ? VK_FILTER_LINEAR : VK_FILTER_NEAREST);
-            vkCreateInfo.mipmapMode(VK_SAMPLER_MIPMAP_MODE_NEAREST);
+            vkCreateInfo.mipmapMode(createInfo.mip() ? VK_SAMPLER_MIPMAP_MODE_LINEAR : VK_SAMPLER_MIPMAP_MODE_NEAREST);
             vkCreateInfo.addressModeU(VK_SAMPLER_ADDRESS_MODE_REPEAT);
             vkCreateInfo.addressModeV(VK_SAMPLER_ADDRESS_MODE_REPEAT);
             vkCreateInfo.addressModeW(VK_SAMPLER_ADDRESS_MODE_REPEAT);
