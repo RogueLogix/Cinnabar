@@ -5,14 +5,12 @@ import graphics.cinnabar.api.hg.enums.HgFormat;
 import graphics.cinnabar.lib.util.MathUtil;
 import graphics.cinnabar.loader.earlywindow.VulkanStartup;
 import graphics.cinnabar.loader.earlywindow.vulkan.VulkanDebug;
+import it.unimi.dsi.fastutil.longs.LongLongImmutablePair;
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.util.vma.VmaAllocatorCreateInfo;
 import org.lwjgl.util.vma.VmaBudget;
 import org.lwjgl.util.vma.VmaVulkanFunctions;
-import org.lwjgl.vulkan.VkDevice;
-import org.lwjgl.vulkan.VkInstance;
-import org.lwjgl.vulkan.VkPhysicalDevice;
-import org.lwjgl.vulkan.VkSemaphoreWaitInfo;
+import org.lwjgl.vulkan.*;
 
 import java.util.List;
 
@@ -233,5 +231,25 @@ public class MercuryDevice implements HgDevice {
     @Override
     public void markFame() {
         vmaSetCurrentFrameIndex(vmaAllocator, currentVmaFrame++);
+    }
+    
+    @Override
+    public LongLongImmutablePair deviceLocalMemoryStats() {
+        try (final var stack = MemoryStack.stackPush()) {
+            final var propsPtr = stack.pointers(0);
+            vmaGetMemoryProperties(vmaAllocator, propsPtr);
+            final var props = VkPhysicalDeviceMemoryProperties.createSafe(propsPtr.get(0));
+            int primaryDeviceLocalheap = 0;
+            for (int i = 0; i < props.memoryHeapCount(); i++) {
+                if ((props.memoryHeaps().position(i).flags() & VK_MEMORY_HEAP_DEVICE_LOCAL_BIT) != 0) {
+                    primaryDeviceLocalheap = i;
+                    break;
+                }
+            }
+            final var stats = VmaBudget.calloc(VK_MAX_MEMORY_HEAPS, stack);
+            vmaGetHeapBudgets(vmaAllocator, stats);
+            stats.position(primaryDeviceLocalheap);
+            return new LongLongImmutablePair(stats.statistics().allocationBytes(), stats.budget());
+        }
     }
 }

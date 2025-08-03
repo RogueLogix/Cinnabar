@@ -10,12 +10,9 @@ import com.mojang.blaze3d.textures.GpuTextureView;
 import com.mojang.blaze3d.textures.TextureFormat;
 import graphics.cinnabar.api.hg.*;
 import graphics.cinnabar.api.hg.enums.HgFormat;
-import graphics.cinnabar.api.threading.ISemaphore;
-import graphics.cinnabar.api.threading.IWorkQueue;
 import graphics.cinnabar.api.util.Destroyable;
 import graphics.cinnabar.core.util.MagicNumbers;
 import graphics.cinnabar.lib.CinnabarLibBootstrapper;
-import graphics.cinnabar.lib.threading.AtomicQueueSemaphore;
 import graphics.cinnabar.lib.threading.WorkQueue;
 import it.unimi.dsi.fastutil.ints.Int2ReferenceMap;
 import it.unimi.dsi.fastutil.ints.Int2ReferenceOpenHashMap;
@@ -24,6 +21,7 @@ import it.unimi.dsi.fastutil.objects.ReferenceArrayList;
 import net.minecraft.client.Minecraft;
 import net.minecraft.resources.ResourceLocation;
 import net.neoforged.bus.api.SubscribeEvent;
+import net.neoforged.fml.loading.FMLLoader;
 import net.neoforged.neoforge.client.blaze3d.GpuDeviceFeatures;
 import net.neoforged.neoforge.client.blaze3d.GpuDeviceProperties;
 import net.neoforged.neoforge.client.config.NeoForgeClientConfig;
@@ -47,7 +45,6 @@ public class Hg3DGpuDevice implements GpuDevice {
     private final BiFunction<ResourceLocation, ShaderType, String> shaderSourceProvider;
     
     private final HgSemaphore interFrameSemaphore;
-    private final ISemaphore cleanupDoneSemaphore = new AtomicQueueSemaphore();
     // TODO: move this
     private final Map<RenderPipeline, Hg3DRenderPipeline> pipelineCache = new Reference2ReferenceOpenHashMap<>();
     // TODO: move this
@@ -55,6 +52,7 @@ public class Hg3DGpuDevice implements GpuDevice {
     // TODO: move this
     private final ReferenceArrayList<HgSampler> samplers = new ReferenceArrayList<>();
     private long currentFrame = MagicNumbers.MaximumFramesInFlight;
+    private final ReferenceArrayList<ReferenceArrayList<Destroyable>> pendingDestroys = new ReferenceArrayList<>();
     
     public Hg3DGpuDevice(long windowHandle, int debugLevel, boolean syncDebug, BiFunction<ResourceLocation, ShaderType, String> shaderSourceProvider, boolean debugLabels) {
         CinnabarLibBootstrapper.bootstrap();
@@ -76,7 +74,10 @@ public class Hg3DGpuDevice implements GpuDevice {
         ((Hg3DWindow) Minecraft.getInstance().getWindow()).attachDevice(hgDevice);
         interFrameSemaphore = hgDevice.createSemaphore(0);
         WorkQueue.AFTER_END_OF_GPU_FRAME.wait(interFrameSemaphore, currentFrame);
-        cleanupDoneSemaphore.singlaValue(MagicNumbers.MaximumFramesInFlight);
+        
+        for (int i = 0; i < MagicNumbers.MaximumFramesInFlight; i++) {
+            pendingDestroys.add(new ReferenceArrayList<>());
+        }
         
         NeoForge.EVENT_BUS.register(this);
     }
@@ -90,8 +91,8 @@ public class Hg3DGpuDevice implements GpuDevice {
         // fake the GPU being done with work
         interFrameSemaphore.singlaValue(currentFrame);
         // wait for the cleanup thread to process the release of the semaphore
-        WorkQueue.AFTER_END_OF_GPU_FRAME.signal(cleanupDoneSemaphore, currentFrame + 1);
-        cleanupDoneSemaphore.waitValue(currentFrame + 1, -1L);
+        WorkQueue.AFTER_END_OF_GPU_FRAME.signal(interFrameSemaphore, currentFrame + 1);
+        interFrameSemaphore.waitValue(currentFrame + 1, -1L);
         interFrameSemaphore.destroy();
         commandEncoder.destroy();
         ((Hg3DWindow) Minecraft.getInstance().getWindow()).detachDevice();
@@ -103,15 +104,23 @@ public class Hg3DGpuDevice implements GpuDevice {
         return hgDevice;
     }
     
+    public long currentFrame() {
+        return currentFrame;
+    }
+    
     public void endFrame() {
+        commandEncoder.flush();
         hgDevice.queue(HgQueue.Type.GRAPHICS).submit(HgQueue.Item.signal(interFrameSemaphore, currentFrame, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT));
         hgDevice.markFame();
         currentFrame++;
+        final var toDestroy = pendingDestroys.get((int) (currentFrame % MagicNumbers.MaximumFramesInFlight));
+        while (!toDestroy.isEmpty()) {
+            toDestroy.pop().destroy();
+        }
         WorkQueue.AFTER_END_OF_GPU_FRAME.wait(interFrameSemaphore, currentFrame);
-        WorkQueue.AFTER_END_OF_GPU_FRAME.signal(cleanupDoneSemaphore, currentFrame);
-        cleanupDoneSemaphore.waitValue(currentFrame - MagicNumbers.MaximumFramesInFlight, -1L);
         // wait for the last time this frame index was submitted
         // the semaphore starts at MaximumFramesInFlight, so this returns immediately for the first few frames
+        Hg3DGpuBuffer.Management.newFrame(this);
         interFrameSemaphore.waitValue(currentFrame - MagicNumbers.MaximumFramesInFlight, -1L);
         commandEncoder.resetUploadBuffer();
     }
@@ -179,7 +188,7 @@ public class Hg3DGpuDevice implements GpuDevice {
     
     @Override
     public String getBackendName() {
-        return "CinnabarVK";
+        return "CinnabarVK " + FMLLoader.getLoadingModList().getModFileById("cinnabar").versionString();
     }
     
     @Override
@@ -249,11 +258,11 @@ public class Hg3DGpuDevice implements GpuDevice {
     }
     
     public void destroyEndOfFrame(Destroyable destroyable) {
-        IWorkQueue.AFTER_END_OF_GPU_FRAME.enqueue(destroyable);
+        pendingDestroys.get((int) (currentFrame % MagicNumbers.MaximumFramesInFlight)).add(destroyable);
     }
     
     public void destroyEndOfFrame(List<? extends Destroyable> destroyable) {
-        IWorkQueue.AFTER_END_OF_GPU_FRAME.enqueue(destroyable);
+        pendingDestroys.get((int) (currentFrame % MagicNumbers.MaximumFramesInFlight)).addAll(destroyable);
     }
     
     Hg3DRenderPipeline getPipeline(RenderPipeline pipeline) {

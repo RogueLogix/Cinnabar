@@ -7,7 +7,7 @@ public class WorkQueueBootstrapper {
         IWorkQueue.Bootstrapper.MAIN_THREAD = QueueSystem.createMainThreadQueue();
         IWorkQueue.Bootstrapper.BACKGROUND_CLEANUP = QueueSystem.createCleanupThreadQueue();
         IWorkQueue.Bootstrapper.BACKGROUND_THREADS = QueueSystem.createBackgroundThreadsQueue();
-        IWorkQueue.Bootstrapper.AFTER_END_OF_GPU_FRAME = QueueSystem.createMainThreadQueue();
+        IWorkQueue.Bootstrapper.AFTER_END_OF_GPU_FRAME = QueueSystem.createCleanupThreadQueue();
         
         QueueSystem.startThreads();
     }

@@ -3,6 +3,7 @@ package graphics.cinnabar.api.hg;
 import graphics.cinnabar.api.annotations.Constant;
 import graphics.cinnabar.api.annotations.ThreadSafety;
 import graphics.cinnabar.api.hg.enums.HgFormat;
+import it.unimi.dsi.fastutil.longs.LongLongImmutablePair;
 import org.jetbrains.annotations.ApiStatus;
 
 import java.util.List;
@@ -82,4 +83,7 @@ public interface HgDevice extends HgObject {
     
     @ThreadSafety.Any
     void markFame();
+    
+    @ThreadSafety.Any
+    LongLongImmutablePair deviceLocalMemoryStats();
 }
