@@ -12,6 +12,7 @@ import org.lwjgl.system.MemoryStack;
 import org.lwjgl.vulkan.*;
 
 import static graphics.cinnabar.api.exceptions.VkException.checkVkCode;
+import static graphics.cinnabar.core.mercury.Mercury.*;
 import static org.lwjgl.vulkan.KHRSurface.*;
 import static org.lwjgl.vulkan.KHRSwapchain.*;
 import static org.lwjgl.vulkan.VK10.*;
@@ -135,11 +136,18 @@ public class MercurySwapchain extends MercuryObject implements HgSurface.Swapcha
             final var fenceCreateInfo = VkFenceCreateInfo.calloc(stack).sType$Default();
             vkCreateFence(device.vkDevice(), fenceCreateInfo, null, longPtr);
             fence = longPtr.get(0);
+            
+            if (DEBUG_LOGGING) {
+                MERCURY_LOG.debug("Swapchain {} created; mode: {}, width: {}, height: {}, imageCount: {}, semaphoreCount: {}, previous: {}", hashCode(), presentMode, width, height, swapchainImages.size(), freeSemaphores.size(), previous == null ? null : previous.hashCode());
+            }
         }
     }
     
     @Override
     public void destroy() {
+        if (DEBUG_LOGGING) {
+            MERCURY_LOG.debug("Swapchain {} destroyed;", hashCode());
+        }
         vkDeviceWaitIdle(device.vkDevice());
         freeSemaphores.forEach(Destroyable::destroy);
         activeSemaphores.forEach(Destroyable::destroySafe);
@@ -175,10 +183,16 @@ public class MercurySwapchain extends MercuryObject implements HgSurface.Swapcha
                     freeSemaphores.addLast(activeSemaphores.get(currentImageIndex));
                 }
                 activeSemaphores.set(currentImageIndex, nextSemaphore);
+                if (TRACE_LOGGING) {
+                    MERCURY_LOG.debug("Swapchain {} acquire; frameIndex: {}, semaphore: {}", hashCode(), currentImageIndex, activeSemaphores.get(currentImageIndex));
+                }
             }
             checkVkCode(code);
             if (code != VK_SUCCESS) {
                 swapchainInvalid = true;
+                if (TRACE_LOGGING) {
+                    MERCURY_LOG.debug("Swapchain {} invalidated;", hashCode());
+                }
             }
             return !swapchainInvalid;
         }
@@ -190,6 +204,9 @@ public class MercurySwapchain extends MercuryObject implements HgSurface.Swapcha
             throw new IllegalStateException();
         }
         assert currentImageIndex != -1;
+        if (TRACE_LOGGING) {
+            MERCURY_LOG.debug("Swapchain {} present; frameIndex: {}, semaphore: {}", hashCode(), currentImageIndex, activeSemaphores.get(currentImageIndex));
+        }
         try (final var stack = MemoryStack.stackPush()) {
             final var presentInfo = VkPresentInfoKHR.calloc(stack).sType$Default();
             presentInfo.pWaitSemaphores(stack.longs(currentSemaphore().vkSemaphore()));
@@ -206,6 +223,9 @@ public class MercurySwapchain extends MercuryObject implements HgSurface.Swapcha
             checkVkCode(code);
             if (code != VK_SUCCESS) {
                 swapchainInvalid = true;
+                if (TRACE_LOGGING) {
+                    MERCURY_LOG.debug("Swapchain {} invalidated;", hashCode());
+                }
             }
             return !swapchainInvalid;
         }
