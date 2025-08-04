@@ -39,6 +39,8 @@ import java.util.function.Supplier;
 import static org.lwjgl.vulkan.VK10.VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
 
 public class Hg3DGpuDevice implements GpuDevice {
+    private static final String backendName = "CinnabarVK " + FMLLoader.getLoadingModList().getModFileById("cinnabar").versionString();
+    
     private final HgDevice hgDevice;
     private final Hg3DCommandEncoder commandEncoder;
     
@@ -46,11 +48,8 @@ public class Hg3DGpuDevice implements GpuDevice {
     
     private final HgSemaphore interFrameSemaphore;
     private final HgSemaphore cleanupDoneSemaphore;
-    // TODO: move this
     private final Map<RenderPipeline, Hg3DRenderPipeline> pipelineCache = new Reference2ReferenceOpenHashMap<>();
-    // TODO: move this
     private final Int2ReferenceMap<@Nullable HgRenderPass> renderPasses = new Int2ReferenceOpenHashMap<>();
-    // TODO: move this
     private final ReferenceArrayList<HgSampler> samplers = new ReferenceArrayList<>();
     private long currentFrame = MagicNumbers.MaximumFramesInFlight;
     private final ReferenceArrayList<ReferenceArrayList<Destroyable>> pendingDestroys = new ReferenceArrayList<>();
@@ -191,7 +190,7 @@ public class Hg3DGpuDevice implements GpuDevice {
     
     @Override
     public String getBackendName() {
-        return "CinnabarVK " + FMLLoader.getLoadingModList().getModFileById("cinnabar").versionString();
+        return backendName;
     }
     
     @Override
