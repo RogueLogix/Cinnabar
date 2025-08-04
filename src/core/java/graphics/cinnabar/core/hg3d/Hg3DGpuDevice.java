@@ -52,6 +52,7 @@ public class Hg3DGpuDevice implements GpuDevice {
     private final ReferenceArrayList<HgSampler> samplers = new ReferenceArrayList<>();
     private long currentFrame = MagicNumbers.MaximumFramesInFlight;
     private final ReferenceArrayList<ReferenceArrayList<Destroyable>> pendingDestroys = new ReferenceArrayList<>();
+    private ReferenceArrayList<Destroyable> activelyDestroying = new ReferenceArrayList<>();
     
     public Hg3DGpuDevice(long windowHandle, int debugLevel, boolean syncDebug, BiFunction<ResourceLocation, ShaderType, String> shaderSourceProvider, boolean debugLabels) {
         CinnabarLibBootstrapper.bootstrap();
@@ -107,15 +108,15 @@ public class Hg3DGpuDevice implements GpuDevice {
         hgDevice.queue(HgQueue.Type.GRAPHICS).submit(HgQueue.Item.signal(interFrameSemaphore, currentFrame, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT));
         hgDevice.markFame();
         currentFrame++;
-        final var toDestroy = pendingDestroys.get((int) (currentFrame % MagicNumbers.MaximumFramesInFlight));
-        while (!toDestroy.isEmpty()) {
-            toDestroy.pop().destroy();
-        }
         WorkQueue.AFTER_END_OF_GPU_FRAME.wait(interFrameSemaphore, currentFrame);
         // wait for the cleanup of the last time this frame index was submitted
         // the semaphore starts at MaximumFramesInFlight, so this returns immediately for the first few frames
         Hg3DGpuBuffer.Management.newFrame(this);
         cleanupDoneSemaphore.waitValue(currentFrame - MagicNumbers.MaximumFramesInFlight, -1L);
+        activelyDestroying = pendingDestroys.set((int) (currentFrame % MagicNumbers.MaximumFramesInFlight), activelyDestroying);
+        while (!activelyDestroying.isEmpty()) {
+            activelyDestroying.pop().destroy();
+        }
         commandEncoder.resetUploadBuffer();
     }
     
