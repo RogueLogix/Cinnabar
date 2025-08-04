@@ -199,19 +199,25 @@ neoForge {
     accessTransformers = project.files('src/mod/resources/META-INF/accesstransformer.cfg')
 
     runs {
-        client {
+        CinnabarRelease {
             client()
-            systemProperty 'neoforge.enabledGameTestNamespaces', project.mod_id
         }
-        clientAssert {
+        CinnabarAssert {
             client()
-            systemProperty 'neoforge.enabledGameTestNamespaces', project.mod_id
-            jvmArguments.addAll("-ea:graphics.cinnabar...")
+            jvmArguments.addAll("-ea:graphics.cinnabar...", "-Dcinnabar.debugLogging=true")
         }
-        clientRenderDoc {
+        CinnabarDebug {
             client()
-            systemProperty 'neoforge.enabledGameTestNamespaces', project.mod_id
+            jvmArguments.addAll("-ea:graphics.cinnabar...", "-Dcinnabar.debugLogging=true", "-Dcinnabar.vulkanValidationLayers=true", "-Dcinnabar.mercuryValidationLayers=true")
+        }
+        CinnabarTraceDebug {
+            client()
+            jvmArguments.addAll("-ea:graphics.cinnabar...", "-Dcinnabar.traceLogging=true", "-Dcinnabar.vulkanValidationLayers=true", "-Dcinnabar.mercuryValidationLayers=true")
+        }
+        CinnabarRenderDoc {
+            client()
             environment.put("ENABLE_VULKAN_RENDERDOC_CAPTURE", "1")
+            jvmArguments.addAll("-ea:graphics.cinnabar...", "-Dcinnabar.traceLogging=true", "-Dcinnabar.vulkanValidationLayers=true", "-Dcinnabar.mercuryValidationLayers=true")
         }
 
         configureEach {
