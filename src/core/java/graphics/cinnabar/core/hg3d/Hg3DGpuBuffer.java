@@ -7,6 +7,8 @@ import it.unimi.dsi.fastutil.objects.ReferenceArrayList;
 import it.unimi.dsi.fastutil.objects.ReferenceList;
 import org.jetbrains.annotations.Nullable;
 
+import static graphics.cinnabar.core.hg3d.Hg3D.*;
+
 public class Hg3DGpuBuffer extends GpuBuffer implements Hg3DObject {
     protected final Hg3DGpuDevice device;
     private final HgBuffer.MemoryType preferredMemoryType;
@@ -62,6 +64,7 @@ public class Hg3DGpuBuffer extends GpuBuffer implements Hg3DObject {
         private static final SpliceableLinkedList<Hg3DGpuBuffer> pendingDemotionBuffers = new SpliceableLinkedList<>();
         private static final SpliceableLinkedList<Hg3DGpuBuffer> usedThisFrameBuffers = new SpliceableLinkedList<>();
         private static final ReferenceList<Hg3DGpuBuffer> pendingPromotion = new ReferenceArrayList<>();
+        private static boolean runningCycle = false;
         
         private static void used(Hg3DGpuBuffer buffer) {
             if (!buffer.buffer.deviceLocal()) {
@@ -86,6 +89,9 @@ public class Hg3DGpuBuffer extends GpuBuffer implements Hg3DObject {
         }
         
         public static void newFrame(Hg3DGpuDevice device) {
+            if (runningCycle) {
+                return;
+            }
             final var memoryStats = device.hgDevice().deviceLocalMemoryStats();
             // demote anything above 93.75% (15/16ths) of VMA's budget
             final var amountToDemote = memoryStats.leftLong() - ((memoryStats.rightLong() >> 4) * 15);
@@ -99,6 +105,9 @@ public class Hg3DGpuBuffer extends GpuBuffer implements Hg3DObject {
                 pendingDemotionBuffers.sliceEnd(usedThisFrameBuffers);
                 return;
             }
+            if (DEBUG_LOGGING) {
+                HG3D_LOG.debug("Running buffer promotion/demotion cycle; currentFrame: {} demoting {}, pendingPromotion {}", device.currentFrame(), amountToDemote, amountPendingPromotion);
+            }
             final var encoder = device.createCommandEncoder();
             final var cb = encoder.earlyCommandBuffer();
             cb.barrier();
@@ -110,6 +119,9 @@ public class Hg3DGpuBuffer extends GpuBuffer implements Hg3DObject {
                     break;
                 }
                 final var toDemote = toDemoteNode.data;
+                if (TRACE_LOGGING) {
+                    HG3D_LOG.debug("Demoting buffer {}; lastUsed: {}, size: {}, preferredMemoryType: {}", toDemote.hashCode(), toDemote.lastUsedFrame, toDemote.size, toDemote.preferredMemoryType);
+                }
                 amountDemoted += toDemote.size;
                 final var oldBuffer = toDemote.buffer;
                 final var newBuffer = device.hgDevice().createBuffer(HgBuffer.MemoryType.MAPPABLE, toDemote.size, Hg3DConst.bufferUsageBits(toDemote.usage()));
@@ -126,6 +138,9 @@ public class Hg3DGpuBuffer extends GpuBuffer implements Hg3DObject {
                 if (amountPromoted + toPromote.size > amountToPromote) {
                     break;
                 }
+                if (TRACE_LOGGING) {
+                    HG3D_LOG.debug("Promoting buffer {}; size: {}, preferredMemoryType: {}", toPromote.hashCode(), toPromote.size, toPromote.preferredMemoryType);
+                }
                 amountPromoted += toPromote.size;
                 final var oldBuffer = toPromote.buffer;
                 final var newBuffer = device.hgDevice().createBuffer(toPromote.preferredMemoryType, toPromote.size, Hg3DConst.bufferUsageBits(toPromote.usage()));
@@ -137,7 +152,12 @@ public class Hg3DGpuBuffer extends GpuBuffer implements Hg3DObject {
             pendingPromotion.clear();
             pendingDemotionBuffers.sliceEnd(usedThisFrameBuffers);
             cb.barrier();
+            runningCycle = true;
             device.endFrame();
+            runningCycle = false;
+            if (DEBUG_LOGGING) {
+                HG3D_LOG.debug("Finished buffer promotion/demotion cycle; demoted {}, promoted {}", amountDemoted, amountPromoted);
+            }
         }
     }
 }

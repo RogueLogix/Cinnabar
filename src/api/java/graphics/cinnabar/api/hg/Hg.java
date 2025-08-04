@@ -28,8 +28,16 @@ public class Hg {
         traceLoggingFieldHandle.set(true);
     }
     
+    public static boolean traceLogging() {
+        return (boolean) traceLoggingFieldHandle.get();
+    }
+    
     public static void enableDebugLogging() {
         debugLoggingFieldHandle.set(true);
+    }
+    
+    public static boolean debugLogging() {
+        return (boolean) debugLoggingFieldHandle.get();
     }
     
     public static HgDevice createDevice(HgDevice.CreateInfo createInfo) {
