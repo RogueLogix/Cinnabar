@@ -39,7 +39,7 @@ public class Hg3DGpuBuffer extends GpuBuffer implements Hg3DObject {
             return;
         }
         isClosed = true;
-        device.destroyEndOfFrame(buffer);
+        device.destroyEndOfFrameAsync(buffer);
         Management.unlink(this);
     }
     
@@ -115,7 +115,7 @@ public class Hg3DGpuBuffer extends GpuBuffer implements Hg3DObject {
                 final var newBuffer = device.hgDevice().createBuffer(HgBuffer.MemoryType.MAPPABLE, toDemote.size, Hg3DConst.bufferUsageBits(toDemote.usage()));
                 cb.copyBufferToBuffer(oldBuffer.slice(), newBuffer.slice());
                 toDemote.buffer = newBuffer;
-                device.destroyEndOfFrame(oldBuffer);
+                device.destroyEndOfFrameAsync(oldBuffer);
                 toDemote.pendingPromotion = true;
             }
             // aka, excess demoted
@@ -131,7 +131,7 @@ public class Hg3DGpuBuffer extends GpuBuffer implements Hg3DObject {
                 final var newBuffer = device.hgDevice().createBuffer(toPromote.preferredMemoryType, toPromote.size, Hg3DConst.bufferUsageBits(toPromote.usage()));
                 cb.copyBufferToBuffer(oldBuffer.slice(), newBuffer.slice());
                 toPromote.buffer = newBuffer;
-                device.destroyEndOfFrame(oldBuffer);
+                device.destroyEndOfFrameAsync(oldBuffer);
                 toPromote.pendingPromotion = false;
             }
             pendingPromotion.clear();

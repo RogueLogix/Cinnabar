@@ -33,7 +33,7 @@ public class Hg3DGpuTexture extends GpuTexture implements Hg3DObject {
         }
         closed = true;
         if (liveViews == 0) {
-            device.destroyEndOfFrame(image);
+            device.destroyEndOfFrameAsync(image);
         }
     }
     
@@ -53,7 +53,7 @@ public class Hg3DGpuTexture extends GpuTexture implements Hg3DObject {
     public void removeView() {
         liveViews--;
         if (closed && liveViews == 0) {
-            device.destroyEndOfFrame(image);
+            device.destroyEndOfFrameAsync(image);
         }
     }
     

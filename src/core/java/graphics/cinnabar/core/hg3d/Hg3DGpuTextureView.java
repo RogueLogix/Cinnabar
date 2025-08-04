@@ -32,7 +32,7 @@ public class Hg3DGpuTextureView extends GpuTextureView implements Hg3DObject {
             return;
         }
         closed = true;
-        texture.device().destroyEndOfFrame(imageView);
+        texture.device().destroyEndOfFrameAsync(imageView);
         texture.removeView();
     }
     

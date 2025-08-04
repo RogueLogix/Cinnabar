@@ -116,7 +116,7 @@ public class Hg3DCommandEncoder implements CommandEncoder, Hg3DObject, Destroyab
     HgBuffer.Slice uploadBufferSlice(long size) {
         if (size > UPLOAD_BUFFER_SIZE) {
             final var tempBuffer = device.hgDevice().createBuffer(HgBuffer.MemoryType.MAPPABLE, size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
-            device.destroyEndOfFrame(tempBuffer);
+            device.destroyEndOfFrameAsync(tempBuffer);
             return tempBuffer.slice();
         }
         if (uploadBuffer == null || uploadBuffer.size() < uploadBufferAllocated + size) {
@@ -554,7 +554,7 @@ public class Hg3DCommandEncoder implements CommandEncoder, Hg3DObject, Destroyab
                         final var hgBuffer = ((Hg3DGpuBuffer) slice.buffer()).buffer();
                         final var view = hgBuffer.view(boundPipeline.texelBufferFormat(binding.name()), slice.offset(), slice.length());
                         writes.add(new HgUniformSet.Write.BufferView(binding, 0, List.of(view)));
-                        device.destroyEndOfFrame(view);
+                        device.destroyEndOfFrameAsync(view);
                     }
                     case UNIFORM_BUFFER, STORAGE_BUFFER -> {
                         @Nullable final var slice = uniforms.get(binding.name());
@@ -681,7 +681,7 @@ public class Hg3DCommandEncoder implements CommandEncoder, Hg3DObject, Destroyab
                         });
                         
                         final var drawsCPUBuffer = device.hgDevice().createBuffer(HgBuffer.MemoryType.MAPPABLE, (long) drawCount * VkDrawIndexedIndirectCommand.SIZEOF, VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT);
-                        device.destroyEndOfFrame(drawsCPUBuffer);
+                        device.destroyEndOfFrameAsync(drawsCPUBuffer);
                         final var ptr = drawsCPUBuffer.map();
                         LibCString.nmemcpy(ptr.pointer(), drawCommands.address(0), (long) drawCount * VkDrawIndexedIndirectCommand.SIZEOF);
                         commandBuffer.drawIndirect(drawsCPUBuffer.slice());

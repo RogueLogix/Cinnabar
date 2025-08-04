@@ -45,6 +45,7 @@ public class Hg3DGpuDevice implements GpuDevice {
     private final BiFunction<ResourceLocation, ShaderType, String> shaderSourceProvider;
     
     private final HgSemaphore interFrameSemaphore;
+    private final HgSemaphore cleanupDoneSemaphore;
     // TODO: move this
     private final Map<RenderPipeline, Hg3DRenderPipeline> pipelineCache = new Reference2ReferenceOpenHashMap<>();
     // TODO: move this
@@ -73,6 +74,7 @@ public class Hg3DGpuDevice implements GpuDevice {
         initSamplers();
         ((Hg3DWindow) Minecraft.getInstance().getWindow()).attachDevice(hgDevice);
         interFrameSemaphore = hgDevice.createSemaphore(0);
+        cleanupDoneSemaphore = hgDevice.createSemaphore(0);
         WorkQueue.AFTER_END_OF_GPU_FRAME.wait(interFrameSemaphore, currentFrame);
         
         for (int i = 0; i < MagicNumbers.MaximumFramesInFlight; i++) {
@@ -109,6 +111,7 @@ public class Hg3DGpuDevice implements GpuDevice {
     }
     
     public void endFrame() {
+        WorkQueue.AFTER_END_OF_GPU_FRAME.signal(cleanupDoneSemaphore, currentFrame);
         commandEncoder.flush();
         hgDevice.queue(HgQueue.Type.GRAPHICS).submit(HgQueue.Item.signal(interFrameSemaphore, currentFrame, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT));
         hgDevice.markFame();
@@ -118,10 +121,10 @@ public class Hg3DGpuDevice implements GpuDevice {
             toDestroy.pop().destroy();
         }
         WorkQueue.AFTER_END_OF_GPU_FRAME.wait(interFrameSemaphore, currentFrame);
-        // wait for the last time this frame index was submitted
+        // wait for the cleanup of the last time this frame index was submitted
         // the semaphore starts at MaximumFramesInFlight, so this returns immediately for the first few frames
         Hg3DGpuBuffer.Management.newFrame(this);
-        interFrameSemaphore.waitValue(currentFrame - MagicNumbers.MaximumFramesInFlight, -1L);
+        cleanupDoneSemaphore.waitValue(currentFrame - MagicNumbers.MaximumFramesInFlight, -1L);
         commandEncoder.resetUploadBuffer();
     }
     
@@ -259,6 +262,10 @@ public class Hg3DGpuDevice implements GpuDevice {
     
     public void destroyEndOfFrame(Destroyable destroyable) {
         pendingDestroys.get((int) (currentFrame % MagicNumbers.MaximumFramesInFlight)).add(destroyable);
+    }
+    
+    public void destroyEndOfFrameAsync(Destroyable destroyable) {
+        WorkQueue.AFTER_END_OF_GPU_FRAME.enqueue(destroyable);
     }
     
     public void destroyEndOfFrame(List<? extends Destroyable> destroyable) {
