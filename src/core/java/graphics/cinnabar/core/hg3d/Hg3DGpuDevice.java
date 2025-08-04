@@ -24,12 +24,11 @@ import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.loading.FMLLoader;
 import net.neoforged.neoforge.client.blaze3d.GpuDeviceFeatures;
 import net.neoforged.neoforge.client.blaze3d.GpuDeviceProperties;
-import net.neoforged.neoforge.client.config.NeoForgeClientConfig;
+import net.neoforged.neoforge.client.event.ConfigureGpuDeviceEvent;
 import net.neoforged.neoforge.client.event.CustomizeGuiOverlayEvent;
 import net.neoforged.neoforge.common.NeoForge;
 import org.jetbrains.annotations.Nullable;
 
-import java.lang.reflect.InvocationTargetException;
 import java.nio.ByteBuffer;
 import java.util.List;
 import java.util.Map;
@@ -56,18 +55,11 @@ public class Hg3DGpuDevice implements GpuDevice {
     
     public Hg3DGpuDevice(long windowHandle, int debugLevel, boolean syncDebug, BiFunction<ResourceLocation, ShaderType, String> shaderSourceProvider, boolean debugLabels) {
         CinnabarLibBootstrapper.bootstrap();
-        try {
-            final var mercuryConfigClass = getClass().getClassLoader().loadClass("graphics.cinnabar.core.mercury.Mercury$Config");
-            final var debugLoggingField = mercuryConfigClass.getDeclaredField("debugLogging");
-            debugLoggingField.setAccessible(true);
-            debugLoggingField.setBoolean(null, debugLoggingField.getBoolean(null) || NeoForgeClientConfig.INSTANCE.enableB3DValidationLayer.getAsBoolean());
-            
-            final var mercuryClass = getClass().getClassLoader().loadClass("graphics.cinnabar.core.mercury.Mercury");
-            final var creationFunc = mercuryClass.getDeclaredMethod("createDevice");
-            hgDevice = (HgDevice) creationFunc.invoke(null);
-        } catch (ClassNotFoundException | NoSuchMethodException | IllegalAccessException | InvocationTargetException | NoSuchFieldException e) {
-            throw new RuntimeException(e);
-        }
+        
+        // no configurable features currently, result ignored
+        NeoForge.EVENT_BUS.post(new ConfigureGpuDeviceEvent(deviceProperties(), enabledFeatures()));
+        
+        hgDevice = Hg.createDevice(new HgDevice.CreateInfo());
         commandEncoder = new Hg3DCommandEncoder(this);
         this.shaderSourceProvider = shaderSourceProvider;
         initSamplers();

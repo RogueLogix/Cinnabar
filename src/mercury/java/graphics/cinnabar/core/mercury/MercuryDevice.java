@@ -36,7 +36,7 @@ public class MercuryDevice implements HgDevice {
         // TODO: the vulkan instance can be statically created
         try (final var stack = MemoryStack.stackPush()) {
             final var debugCreateInfo = VulkanDebug.getCreateInfo(stack, new VulkanDebug.MessageSeverity[]{VulkanDebug.MessageSeverity.ERROR, VulkanDebug.MessageSeverity.WARNING, VulkanDebug.MessageSeverity.INFO}, new VulkanDebug.MessageType[]{VulkanDebug.MessageType.GENERAL, VulkanDebug.MessageType.VALIDATION});
-            final var instanceAndDebugCallback = VulkanStartup.createVkInstance(Mercury.DEBUG_LOGGING, false, debugCreateInfo);
+            final var instanceAndDebugCallback = VulkanStartup.createVkInstance(Mercury.VULKAN_VALIDATION, false, debugCreateInfo);
             vkInstance = instanceAndDebugCallback.instance();
             debugCallback = instanceAndDebugCallback.debugCallback();
             enabledLayersAndInstanceExtensions = instanceAndDebugCallback.enabledInsanceExtensions();

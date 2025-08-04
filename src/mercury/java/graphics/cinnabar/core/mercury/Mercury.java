@@ -5,26 +5,30 @@ import graphics.cinnabar.api.annotations.UsedFromReflection;
 import graphics.cinnabar.api.hg.HgDevice;
 import org.slf4j.Logger;
 
-import static graphics.cinnabar.lib.util.Constants.constant;
-
 public class Mercury {
     public static final Logger MERCURY_LOG = LogUtils.getLogger();
     public static final boolean TRACE_LOGGING = Config.traceLogging;
     public static final boolean DEBUG_LOGGING = Config.debugLogging || TRACE_LOGGING;
-
+    public static final boolean MERCURY_VALIDATION = Config.mercuryValidationLayers;
+    public static final boolean VULKAN_VALIDATION = Config.vulkanValidationLayers;
+    
     static {
         MERCURY_LOG.info("Config loaded");
     }
     
     @UsedFromReflection
-    public static HgDevice createDevice() {
+    public static HgDevice createDevice(HgDevice.CreateInfo createInfo) {
         return new MercuryDevice();
     }
     
     public static class Config {
         @UsedFromReflection
-        private static boolean traceLogging = constant(false);
+        public static boolean traceLogging = Boolean.getBoolean("cinnabar.traceLogging");
         @UsedFromReflection
-        private static boolean debugLogging = constant(false);
+        public static boolean debugLogging = Boolean.getBoolean("cinnabar.debugLogging");
+        @UsedFromReflection
+        public static boolean mercuryValidationLayers = Boolean.getBoolean("cinnabar.mercuryValidationLayers");
+        @UsedFromReflection
+        public static boolean vulkanValidationLayers = Boolean.getBoolean("cinnabar.vulkanValidationLayers");
     }
 }

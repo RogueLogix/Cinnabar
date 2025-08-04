@@ -11,6 +11,9 @@ import java.util.List;
 @ApiStatus.NonExtendable
 public interface HgDevice extends HgObject {
     
+    record CreateInfo() {
+    } 
+    
     @Override
     default HgDevice device() {
         return this;
