@@ -16,7 +16,7 @@ import org.jetbrains.annotations.Nullable;
 @RewriteHierarchy
 public class Hg3DWindow extends Window {
     @Nullable
-    private HgDevice device;
+    private Hg3DGpuDevice device;
     @Nullable
     private HgSurface surface;
     @Nullable
@@ -26,9 +26,9 @@ public class Hg3DWindow extends Window {
     }
     private boolean actuallyVSync = this.vsync;
     
-    public void attachDevice(HgDevice device) {
+    public void attachDevice(Hg3DGpuDevice device) {
         this.device = device;
-        surface = device.createSurface(getWindow());
+        surface = device.hgDevice().createSurface(getWindow());
         swapchain = surface.createSwapchain(this.vsync, null);
         swapchain.acquire();
     }
@@ -60,7 +60,7 @@ public class Hg3DWindow extends Window {
         RenderSystem.pollEvents();
         Tesselator.getInstance().clear();
         
-        ((Hg3DGpuDevice) RenderSystem.getDevice()).endFrame();
+        device.endFrame();
         
         assert swapchain != null;
         boolean shouldRecreateSwapchain = !swapchain.present();

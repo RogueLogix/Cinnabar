@@ -64,7 +64,7 @@ public class Hg3DGpuDevice implements GpuDevice {
         commandEncoder = new Hg3DCommandEncoder(this);
         this.shaderSourceProvider = shaderSourceProvider;
         initSamplers();
-        ((Hg3DWindow) Minecraft.getInstance().getWindow()).attachDevice(hgDevice);
+        ((Hg3DWindow) Minecraft.getInstance().getWindow()).attachDevice(this);
         interFrameSemaphore = hgDevice.createSemaphore(0);
         cleanupDoneSemaphore = hgDevice.createSemaphore(0);
         WorkQueue.AFTER_END_OF_GPU_FRAME.wait(interFrameSemaphore, currentFrame);
