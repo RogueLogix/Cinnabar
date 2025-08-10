@@ -396,6 +396,8 @@ def changelog = """
 if (curseforgeToken != null && this.project == this.rootProject) {
     tasks.register('publishCurseForge', TaskPublishCurseForge) {
 
+        debugMode = true
+
         apiToken = curseforgeToken
         def projectId = "552238"
 
@@ -438,7 +440,7 @@ afterEvaluate {
         publications {
             MainMaven(MavenPublication) {
                 groupId = "graphics.cinnabar"
-                artifactId = "cinnabar-neo"
+                artifactId = "cinnabar-neoforge"
                 version = getGitDescribedVersion()
                 artifact apiJar
                 artifact sourcesJar
