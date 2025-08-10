@@ -316,7 +316,7 @@ publishing {
     publications {
         MainMaven(MavenPublication) {
             groupId = "graphics.cinnabar"
-            artifactId = "cinnabar"
+            artifactId = "cinnabar-fabric"
             version = getGitDescribedVersion()
             artifact jar
             artifact sourcesJar

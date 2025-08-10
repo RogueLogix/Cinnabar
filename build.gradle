@@ -438,7 +438,7 @@ afterEvaluate {
         publications {
             MainMaven(MavenPublication) {
                 groupId = "graphics.cinnabar"
-                artifactId = "cinnabar"
+                artifactId = "cinnabar-neo"
                 version = getGitDescribedVersion()
                 artifact apiJar
                 artifact sourcesJar
