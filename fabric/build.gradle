@@ -1,7 +1,11 @@
+import net.darkhax.curseforgegradle.TaskPublishCurseForge
+
 plugins {
-    id 'fabric-loom' version '1.10-SNAPSHOT'
+    id 'idea'
+    id 'java-library'
     id 'maven-publish'
-    id("net.darkhax.curseforgegradle") version "1.1.26"
+    id 'fabric-loom' version '1.10-SNAPSHOT'
+    id "net.darkhax.curseforgegradle" version "1.1.26"
 }
 
 Properties props = new Properties()
@@ -325,7 +329,7 @@ publishing {
     }
 }
 
-def curseforgeToken = System.getenv("curseforge_token")
+def curseforgeToken = "bullshit-token"
 
 def changelog = """
 [https://github.com/RogueLogix/Cinnabar/blob/$version/changelog.md](https://github.com/RogueLogix/Cinnabar/blob/$version/changelog.md)
