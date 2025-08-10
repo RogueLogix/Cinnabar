@@ -329,7 +329,7 @@ publishing {
     }
 }
 
-def curseforgeToken = "bullshit-token"
+def curseforgeToken = System.getenv("curseforge_token")
 
 def changelog = """
 [https://github.com/RogueLogix/Cinnabar/blob/$version/changelog.md](https://github.com/RogueLogix/Cinnabar/blob/$version/changelog.md)
@@ -346,7 +346,7 @@ if (curseforgeToken != null && this.project == this.rootProject) {
         def mainFile = upload(projectId, remapJar)
         mainFile.changelog = changelog
         mainFile.changelogType = 'markdown'
-        mainFile.releaseType = release_type
+        mainFile.releaseType = props.release_type
         mainFile.gameVersions.clear()
         mainFile.addGameVersion(minecraft_version)
         mainFile.addJavaVersion('Java 21')
