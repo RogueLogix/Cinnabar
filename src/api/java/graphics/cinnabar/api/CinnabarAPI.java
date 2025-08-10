@@ -2,9 +2,7 @@ package graphics.cinnabar.api;
 
 import com.mojang.logging.LogUtils;
 import graphics.cinnabar.api.annotations.API;
-import graphics.cinnabar.api.annotations.CinnabarRedirectIMPL;
 import graphics.cinnabar.api.annotations.Internal;
-import graphics.cinnabar.api.exceptions.RedirectImplemented;
 import org.slf4j.Logger;
 
 @API
@@ -27,14 +25,12 @@ public class CinnabarAPI {
         public static final boolean DEBUG_MARKER_ENABLED = fetchDebugMarkerEnabled();
         public static final Logger CINNABAR_API_LOG = LogUtils.getLogger();
         
-        @CinnabarRedirectIMPL("graphics/cinnabar/core/CinnabarCore/fetchDebugMode")
         private static boolean fetchDebugMode() {
-            throw new RedirectImplemented();
+            return false;
         }
         
-        @CinnabarRedirectIMPL("graphics/cinnabar/core/CinnabarCore/fetchDebugMarkerEnabled")
         private static boolean fetchDebugMarkerEnabled() {
-            throw new RedirectImplemented();
+            return false;
         }
         
     }

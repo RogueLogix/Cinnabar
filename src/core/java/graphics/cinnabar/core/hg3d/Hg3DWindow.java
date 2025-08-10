@@ -7,13 +7,11 @@ import com.mojang.blaze3d.platform.Window;
 import com.mojang.blaze3d.platform.WindowEventHandler;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.Tesselator;
-import graphics.cinnabar.api.annotations.RewriteHierarchy;
 import graphics.cinnabar.api.hg.HgDevice;
 import graphics.cinnabar.api.hg.HgSurface;
 import net.minecraft.client.Minecraft;
 import org.jetbrains.annotations.Nullable;
 
-@RewriteHierarchy
 public class Hg3DWindow extends Window {
     @Nullable
     private Hg3DGpuDevice device;
@@ -21,10 +19,11 @@ public class Hg3DWindow extends Window {
     private HgSurface surface;
     @Nullable
     private HgSurface.Swapchain swapchain;
-    public Hg3DWindow(WindowEventHandler eventHandler, ScreenManager screenManager, DisplayData displayData, String preferredFullscreenVideoMode, String title) {
+    private boolean actuallyVSync = this.vsync;
+    
+    public Hg3DWindow(WindowEventHandler eventHandler, ScreenManager screenManager, DisplayData displayData, @Nullable String preferredFullscreenVideoMode, String title) {
         super(eventHandler, screenManager, displayData, preferredFullscreenVideoMode, title);
     }
-    private boolean actuallyVSync = this.vsync;
     
     public void attachDevice(Hg3DGpuDevice device) {
         this.device = device;

@@ -1,7 +1,15 @@
 package graphics.cinnabar.loader.earlywindow;
 
+// this is one of the first classes compiled, so the error check goes here
+#if !NEO && !FABRIC
+#error "Unknown loader, either NEO or FABRIC should be defined"
+#endif
+#if NEO && FABRIC
+#error "Both NEO and FABRIC cannot be defined at the same time"
+#endif
+
+#if NEO
 import com.mojang.logging.LogUtils;
-import graphics.cinnabar.loader.services.CinnabarGraphicsBootstrapper;
 import it.unimi.dsi.fastutil.Pair;
 import it.unimi.dsi.fastutil.ints.IntArrayList;
 import it.unimi.dsi.fastutil.objects.ObjectArrayList;
@@ -29,106 +37,57 @@ import static org.lwjgl.vulkan.KHRPortabilitySubset.VK_KHR_PORTABILITY_SUBSET_EX
 import static org.lwjgl.vulkan.KHRSwapchain.VK_KHR_SWAPCHAIN_EXTENSION_NAME;
 import static org.lwjgl.vulkan.KHRSynchronization2.VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME;
 import static org.lwjgl.vulkan.VK12.*;
+#endif
+
+#if FABRIC
+
+import com.mojang.logging.LogUtils;
+import it.unimi.dsi.fastutil.Pair;
+import it.unimi.dsi.fastutil.ints.IntArrayList;
+import it.unimi.dsi.fastutil.objects.ObjectArrayList;
+import it.unimi.dsi.fastutil.objects.ObjectObjectImmutablePair;
+import it.unimi.dsi.fastutil.objects.ReferenceArrayList;
+import net.fabricmc.loader.api.FabricLoader;
+import net.minecraft.SharedConstants;
+import org.jetbrains.annotations.Nullable;
+import org.lwjgl.system.Configuration;
+import org.lwjgl.system.MemoryStack;
+import org.lwjgl.system.MemoryUtil;
+import org.lwjgl.system.libc.LibCString;
+import org.lwjgl.util.tinyfd.TinyFileDialogs;
+import org.lwjgl.vulkan.*;
+import org.slf4j.Logger;
+
+import java.util.Collections;
+import java.util.List;
+import java.util.function.Supplier;
+
+import static graphics.cinnabar.loader.earlywindow.GLFWClassloadHelper.glfwExtGetPhysicalDevicePresentationSupport;
+import static org.lwjgl.vulkan.EXTDebugMarker.VK_EXT_DEBUG_MARKER_EXTENSION_NAME;
+import static org.lwjgl.vulkan.EXTDebugReport.VK_EXT_DEBUG_REPORT_EXTENSION_NAME;
+import static org.lwjgl.vulkan.EXTDebugUtils.*;
+import static org.lwjgl.vulkan.KHRPortabilitySubset.VK_KHR_PORTABILITY_SUBSET_EXTENSION_NAME;
+import static org.lwjgl.vulkan.KHRSwapchain.VK_KHR_SWAPCHAIN_EXTENSION_NAME;
+import static org.lwjgl.vulkan.KHRSynchronization2.VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME;
+import static org.lwjgl.vulkan.VK12.*;
+#endif
 
 public class VulkanStartup {
     
-    private static final Logger LOGGER = LogUtils.getLogger();
-    
-    public record Instance(VkInstance instance, long debugCallback, List<String> enabledInsanceExtensions) {
-        public void destroy() {
-            if (debugCallback != -1) {
-                vkDestroyDebugUtilsMessengerEXT(instance, debugCallback, null);
-            }
-            vkDestroyInstance(instance, null);
-        }
-    }
-    
-    public record Queue(int queueFamily, VkQueue queue) {
-    }
-    
-    public record Device(VkDevice device, List<Queue> queues, List<String> enabledDeviceExtensions) {
-        public void destroy() {
-            vkDestroyDevice(device, null);
-        }
-    }
-    
-    private static final List<String> optionalInstanceExtensions = List.of(
-            VK_EXT_DEBUG_REPORT_EXTENSION_NAME
-    );
-    
-    private static final List<String> requiredDeviceExtensions = List.of(
-            VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME,
-            VK_KHR_SWAPCHAIN_EXTENSION_NAME
-    );
-    
-    private static final List<Pair<String, List<String>>> optionalDeviceExtensions = List.of(
-            new ObjectObjectImmutablePair<>(VK_EXT_DEBUG_MARKER_EXTENSION_NAME, List.of(VK_EXT_DEBUG_REPORT_EXTENSION_NAME)),
-            new ObjectObjectImmutablePair<>(VK_KHR_PORTABILITY_SUBSET_EXTENSION_NAME, List.of())
-    );
-    
-    private static final boolean supported = ((Supplier<Boolean>) () -> {
-        LOGGER.info("Querying Vulkan support");
-        try {
-            final var instanceRecord = createVkInstance(false, false, null);
-            try {
-                selectPhysicalDevice(instanceRecord.instance, false, -1, instanceRecord.enabledInsanceExtensions());
-                // if we made it here, there is a supported device, so it will be used
-                LOGGER.info("Compatible card found, using Vulkan");
-                return true;
-            } finally {
-                instanceRecord.destroy();
-            }
-        } catch (RuntimeException ignored) {
-            ignored.printStackTrace();
-        }
-        LOGGER.info("No compatible card found, using OpenGL");
-        return false;
-    }).get();
-    
-    public static boolean isSupported() {
-        return supported;
-    }
-    
-    private static VkAllocationCallbacks callbacks() {
-        final var callbacks = VkAllocationCallbacks.calloc();
-        callbacks.pfnAllocation(new VkAllocationFunction() {
-            @Override
-            public long invoke(long pUserData, long size, long alignment, int allocationScope) {
-                return MemoryUtil.nmemAlignedAlloc(alignment, size);
-            }
-        });
-        callbacks.pfnReallocation(new VkReallocationFunction() {
-            @Override
-            public long invoke(long pUserData, long pOriginal, long size, long alignment, int allocationScope) {
-                final var newAlloc = MemoryUtil.nmemRealloc(pOriginal, size);
-                if ((newAlloc & (alignment - 1)) == 0) {
-                    return newAlloc;
-                }
-                final var alignedAlloc = MemoryUtil.nmemAlignedAlloc(alignment, size);
-                LibCString.nmemcpy(alignedAlloc, newAlloc, size);
-                MemoryUtil.nmemFree(newAlloc);
-                return alignedAlloc;
-            }
-        });
-        callbacks.pfnFree(new VkFreeFunction() {
-            @Override
-            public void invoke(long pUserData, long pMemory) {
-                MemoryUtil.nmemFree(pMemory);
-            }
-        });
-        
-        return callbacks;
-    }
-    
     public static Instance createVkInstance(boolean validationLayers, boolean enableMesaOverlay, @Nullable VkDebugUtilsMessengerCreateInfoEXT debugCreateInfo) {
+        
+        #if FABRIC
+        VulkanStartup.Config.mcVersionString = SharedConstants.getCurrentVersion().name();
+        VulkanStartup.Config.cinnabarVersionString = FabricLoader.getInstance().getModContainer("cinnabar").get().getMetadata().getVersion().getFriendlyString();
+        #endif
+        
         try (var stack = MemoryStack.stackPush()) {
             final var appInfo = VkApplicationInfo.calloc(stack);
             final var appName = stack.UTF8("Minecraft");
             final var engineName = stack.UTF8("Cinnabar");
-            final String mcVersionString = CinnabarGraphicsBootstrapper.config.get("minecraft_version");
-            final var mcVersionChunks = mcVersionString.split("-")[0].split("\\.");
+            final var mcVersionChunks = Config.mcVersionString.split("-")[0].split("\\.");
             final int appVersion = VK_MAKE_VERSION(Integer.parseInt(mcVersionChunks[0]), Integer.parseInt(mcVersionChunks[1]), Integer.parseInt(mcVersionChunks[2]));
-            final String modVersionString = CinnabarGraphicsBootstrapper.config.get("cinnabar_version");
+            final String modVersionString = Config.cinnabarVersionString;
             final var modVersionChunks = modVersionString.split("-")[0].split("\\.");
             final int engineVersion = VK_MAKE_VERSION(Integer.parseInt(modVersionChunks[0]), Integer.parseInt(modVersionChunks[1]), Integer.parseInt(modVersionChunks[2]));
             appInfo.sType(VK_STRUCTURE_TYPE_APPLICATION_INFO);
@@ -144,8 +103,11 @@ public class VulkanStartup {
             
             final var createInfo = VkInstanceCreateInfo.calloc(stack).sType$Default();
             createInfo.pApplicationInfo(appInfo);
-            
+            #if NEO
             if (FMLLoader.isProduction() && validationLayers) {
+            #elif FABRIC
+            if (!FabricLoader.getInstance().isDevelopmentEnvironment() && validationLayers) {
+            #endif
                 TinyFileDialogs.tinyfd_messageBox("Minecraft: Cinnabar", """
                         Debug mode enabled
                         Enabling this option significantly hurts performance, and may result in crashes due to debug checks
@@ -187,7 +149,11 @@ public class VulkanStartup {
                     LOGGER.error("Unable to initialize validation layers, VK_EXT_debug_utils not present");
                     validationLayers = false;
                 } else {
+                    #if NEO
                     if (FMLLoader.isProduction()) {
+                    #elif FABRIC
+                    if (!FabricLoader.getInstance().isDevelopmentEnvironment()) {
+                    #endif
                         TinyFileDialogs.tinyfd_messageBox("Minecraft: Cinnabar", """
                                 Vulkan validation layers enabled
                                 Enabling this options significantly hurts performance
@@ -279,6 +245,99 @@ public class VulkanStartup {
             enabledLayerNames.addAll(enabledInstanceExtensions);
             return new Instance(vkInstance, debugCallback, Collections.unmodifiableList(enabledLayerNames));
         }
+    }
+    
+    private static final Logger LOGGER = LogUtils.getLogger();
+    
+    public record Instance(VkInstance instance, long debugCallback, List<String> enabledInsanceExtensions) {
+        public void destroy() {
+            if (debugCallback != -1) {
+                vkDestroyDebugUtilsMessengerEXT(instance, debugCallback, null);
+            }
+            vkDestroyInstance(instance, null);
+        }
+    }
+    
+    public record Queue(int queueFamily, VkQueue queue) {
+    }
+    
+    public record Device(VkDevice device, List<Queue> queues, List<String> enabledDeviceExtensions) {
+        public void destroy() {
+            vkDestroyDevice(device, null);
+        }
+    }
+    
+    private static final List<String> optionalInstanceExtensions = List.of(
+            VK_EXT_DEBUG_REPORT_EXTENSION_NAME
+    );
+    
+    private static final List<String> requiredDeviceExtensions = List.of(
+            VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME,
+            VK_KHR_SWAPCHAIN_EXTENSION_NAME
+    );
+    
+    private static final List<Pair<String, List<String>>> optionalDeviceExtensions = List.of(
+            new ObjectObjectImmutablePair<>(VK_EXT_DEBUG_MARKER_EXTENSION_NAME, List.of(VK_EXT_DEBUG_REPORT_EXTENSION_NAME)),
+            new ObjectObjectImmutablePair<>(VK_KHR_PORTABILITY_SUBSET_EXTENSION_NAME, List.of())
+    );
+    
+    private static final boolean supported = ((Supplier<Boolean>) () -> {
+        LOGGER.info("Querying Vulkan support");
+        try {
+            final var instanceRecord = createVkInstance(false, false, null);
+            try {
+                selectPhysicalDevice(instanceRecord.instance, false, -1, instanceRecord.enabledInsanceExtensions());
+                // if we made it here, there is a supported device, so it will be used
+                LOGGER.info("Compatible card found, using Vulkan");
+                return true;
+            } finally {
+                instanceRecord.destroy();
+            }
+        } catch (RuntimeException ignored) {
+            ignored.printStackTrace();
+        }
+        LOGGER.info("No compatible card found, using OpenGL");
+        return false;
+    }).get();
+    
+    public static boolean isSupported() {
+        return supported;
+    }
+    
+    private static VkAllocationCallbacks callbacks() {
+        final var callbacks = VkAllocationCallbacks.calloc();
+        callbacks.pfnAllocation(new VkAllocationFunction() {
+            @Override
+            public long invoke(long pUserData, long size, long alignment, int allocationScope) {
+                return MemoryUtil.nmemAlignedAlloc(alignment, size);
+            }
+        });
+        callbacks.pfnReallocation(new VkReallocationFunction() {
+            @Override
+            public long invoke(long pUserData, long pOriginal, long size, long alignment, int allocationScope) {
+                final var newAlloc = MemoryUtil.nmemRealloc(pOriginal, size);
+                if ((newAlloc & (alignment - 1)) == 0) {
+                    return newAlloc;
+                }
+                final var alignedAlloc = MemoryUtil.nmemAlignedAlloc(alignment, size);
+                LibCString.nmemcpy(alignedAlloc, newAlloc, size);
+                MemoryUtil.nmemFree(newAlloc);
+                return alignedAlloc;
+            }
+        });
+        callbacks.pfnFree(new VkFreeFunction() {
+            @Override
+            public void invoke(long pUserData, long pMemory) {
+                MemoryUtil.nmemFree(pMemory);
+            }
+        });
+        
+        return callbacks;
+    }
+    
+    public static class Config {
+        public static String mcVersionString = null;
+        public static String cinnabarVersionString = null;
     }
     
     public static VkPhysicalDevice selectPhysicalDevice(VkInstance vkInstance, boolean manualDeviceSelection, int forcedDeviceIndex, List<String> enabledLayersAndInstanceExtensions) {

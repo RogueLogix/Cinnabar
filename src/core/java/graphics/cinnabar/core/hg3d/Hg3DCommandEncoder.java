@@ -217,7 +217,6 @@ public class Hg3DCommandEncoder implements CommandEncoder, Hg3DObject, Destroyab
         mainCommandBuffer().clearDepthStencilImage(((Hg3DGpuTexture) depthTexture).image().resourceRange(), clearDepth, -1);
     }
     
-    @Override
     public void clearStencilTexture(GpuTexture texture, int value) {
         assert texture instanceof Hg3DGpuTexture;
         mainCommandBuffer().clearDepthStencilImage(((Hg3DGpuTexture) texture).image().resourceRange(), -1, value);
@@ -440,7 +439,6 @@ public class Hg3DCommandEncoder implements CommandEncoder, Hg3DObject, Destroyab
             uniformsDirty = true;
         }
         
-        @Override
         public void setViewport(int x, int y, int width, int height) {
             commandBuffer.setViewport(0, x, y, width, height);
         }

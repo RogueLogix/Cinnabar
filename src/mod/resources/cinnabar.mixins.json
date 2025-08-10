@@ -7,8 +7,13 @@
   "mixins": [
   ],
   "client": [
+    "Std140SizeCalculatorMixin",
+    "Std140BuilderMixin",
+    "FogRendererMixin",
+    "VirtualScreenMixin",
+    "WindowMixin",
     "CachedOrthoProjectionMatrixBufferMixin",
-    "ClientHooksMixin",
+    "DeviceCreationMixin",
     "RenderSystemMixin",
     "GameRendererMixin",
     "TimerQueryMixin",

@@ -1,5 +1,6 @@
 package graphics.cinnabar.core.hg3d;
 
+#if NEO
 import com.mojang.blaze3d.buffers.GpuBuffer;
 import com.mojang.blaze3d.pipeline.CompiledRenderPipeline;
 import com.mojang.blaze3d.pipeline.RenderPipeline;
@@ -36,9 +37,48 @@ import java.util.function.BiFunction;
 import java.util.function.Supplier;
 
 import static org.lwjgl.vulkan.VK10.VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
+#endif
+
+#if FABRIC
+import com.mojang.blaze3d.buffers.GpuBuffer;
+import com.mojang.blaze3d.pipeline.CompiledRenderPipeline;
+import com.mojang.blaze3d.pipeline.RenderPipeline;
+import com.mojang.blaze3d.shaders.ShaderType;
+import com.mojang.blaze3d.systems.GpuDevice;
+import com.mojang.blaze3d.textures.GpuTexture;
+import com.mojang.blaze3d.textures.GpuTextureView;
+import com.mojang.blaze3d.textures.TextureFormat;
+import graphics.cinnabar.api.hg.*;
+import graphics.cinnabar.api.hg.enums.HgFormat;
+import graphics.cinnabar.api.util.Destroyable;
+import graphics.cinnabar.core.util.MagicNumbers;
+import graphics.cinnabar.lib.CinnabarLibBootstrapper;
+import graphics.cinnabar.lib.threading.WorkQueue;
+import it.unimi.dsi.fastutil.ints.Int2ReferenceMap;
+import it.unimi.dsi.fastutil.ints.Int2ReferenceOpenHashMap;
+import it.unimi.dsi.fastutil.objects.Reference2ReferenceOpenHashMap;
+import it.unimi.dsi.fastutil.objects.ReferenceArrayList;
+import net.fabricmc.loader.api.FabricLoader;
+import net.minecraft.client.Minecraft;
+import net.minecraft.resources.ResourceLocation;
+import org.jetbrains.annotations.Nullable;
+
+import java.nio.ByteBuffer;
+import java.util.List;
+import java.util.Map;
+import java.util.function.BiFunction;
+import java.util.function.Supplier;
+
+import static org.lwjgl.vulkan.VK10.VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
+#endif
 
 public class Hg3DGpuDevice implements GpuDevice {
-    private static final String backendName = "CinnabarVK " + FMLLoader.getLoadingModList().getModFileById("cinnabar").versionString();
+    private static final String backendName = "CinnabarVK "
+        #if NEO
+            + FMLLoader.getLoadingModList().getModFileById("cinnabar").versionString();
+        #else
+             + FabricLoader.getInstance().getModContainer("cinnabar").get().getMetadata().getVersion().getFriendlyString();
+        #endif
     
     private final HgDevice hgDevice;
     private final Hg3DCommandEncoder commandEncoder;
@@ -57,8 +97,10 @@ public class Hg3DGpuDevice implements GpuDevice {
     public Hg3DGpuDevice(long windowHandle, int debugLevel, boolean syncDebug, BiFunction<ResourceLocation, ShaderType, String> shaderSourceProvider, boolean debugLabels) {
         CinnabarLibBootstrapper.bootstrap();
         
+        #if NEO
         // no configurable features currently, result ignored
         NeoForge.EVENT_BUS.post(new ConfigureGpuDeviceEvent(deviceProperties(), enabledFeatures()));
+        #endif
         
         hgDevice = Hg.createDevice(new HgDevice.CreateInfo());
         commandEncoder = new Hg3DCommandEncoder(this);
@@ -73,12 +115,16 @@ public class Hg3DGpuDevice implements GpuDevice {
             pendingDestroys.add(new ReferenceArrayList<>());
         }
         
+        #if NEO
         NeoForge.EVENT_BUS.register(this);
+        #endif
     }
     
     @Override
     public void close() {
+        #if NEO
         NeoForge.EVENT_BUS.unregister(this);
+        #endif
         
         // wait for pending GPU work
         interFrameSemaphore.waitValue(currentFrame - 1, -1L);
@@ -230,6 +276,7 @@ public class Hg3DGpuDevice implements GpuDevice {
         return List.of();
     }
     
+    #if NEO
     @Override
     public GpuDeviceProperties deviceProperties() {
         return new GpuDeviceProperties() {
@@ -254,6 +301,7 @@ public class Hg3DGpuDevice implements GpuDevice {
             }
         };
     }
+    #endif
     
     public void destroyEndOfFrame(Destroyable destroyable) {
         pendingDestroys.get((int) (currentFrame % MagicNumbers.MaximumFramesInFlight)).add(destroyable);
@@ -325,10 +373,12 @@ public class Hg3DGpuDevice implements GpuDevice {
         return samplers.get(index);
     }
     
+    #if NEO
     @SubscribeEvent
     private void handleDebugTextEvent(CustomizeGuiOverlayEvent.DebugText event) {
         final var list = event.getRight();
         list.add("");
         hgDevice.addDebugText(list);
     }
+    #endif
 }

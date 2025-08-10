@@ -24,3 +24,7 @@ runs
 run-data
 
 repo
+
+# gradle will auto-create these on project setup
+src/build.properties
+loader/src/build.properties

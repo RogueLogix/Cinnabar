@@ -22,6 +22,16 @@ configurations {
     minimalJar {}
 }
 
+sourceSets {
+    vulkanStartup {
+        compileClasspath += main.compileClasspath
+        annotationProcessorPath += main.annotationProcessorPath
+    }
+    main {
+        compileClasspath += vulkanStartup.output
+    }
+}
+
 dependencies {
     compileOnly("net.neoforged.fancymodloader:loader:$fml_version")
     compileOnly("net.neoforged.fancymodloader:earlydisplay:$fml_version")
@@ -36,13 +46,14 @@ dependencies {
         compileOnly((String) lib)
     }
 
+    annotationProcessor 'systems.manifold:manifold-preprocessor:2025.1.26'
 }
 
 var generateModMetadata = tasks.register("generateModMetadata", ProcessResources) {
     var replaceProperties = [
-            minecraft_version   : minecraft_version,
-            neo_version   : neo_version,
-            cinnabar_version: mod_version,
+            minecraft_version: minecraft_version,
+            neo_version      : neo_version,
+            cinnabar_version : mod_version,
     ]
     inputs.properties replaceProperties
     expand replaceProperties
@@ -50,4 +61,4 @@ var generateModMetadata = tasks.register("generateModMetadata", ProcessResources
     into "build/generated/sources/modMetadata"
 }
 sourceSets.main.resources.srcDir generateModMetadata
-neoForge.ideSyncTask generateModMetadata
+//neoForge.ideSyncTask generateModMetadata

@@ -1,0 +1,356 @@
+plugins {
+    id 'fabric-loom' version '1.10-SNAPSHOT'
+    id 'maven-publish'
+    id("net.darkhax.curseforgegradle") version "1.1.26"
+}
+
+Properties props = new Properties()
+InputStream ins = new FileInputStream("../gradle.properties")
+props.load(ins)
+ins.close()
+
+def getGitDescribedVersion = { ->
+    return providers.exec {
+        commandLine 'git', 'describe', '--tags', '--dirty=-local', '--candidates=100'
+    }.standardOutput.asText.get().trim()
+}
+
+version = getGitDescribedVersion()
+group = props.mod_group_id
+
+if (System.env.BUILD_SERVER_PUBLISH != null) {
+    if (version != props.mod_version + (props.release_type != "release" ? "-$props.release_type" : "")) {
+        throw new VerificationException("Expected described version '${props.mod_version + (props.release_type != "release" ? "-$props.release_type" : "")}' got '$version'")
+    }
+}
+
+base {
+    archivesName = "${props.mod_id}-fabric-${props.minecraft_version}"
+}
+
+configurations {
+    jijLib {}
+}
+
+sourceSets {
+    vulkanStartup {
+        java {
+            srcDirs = ["../loader/src/vulkanStartup/java"]
+        }
+        resources.srcDirs = []
+        compileClasspath += main.compileClasspath.filter { File element ->
+            return true
+        }
+        annotationProcessorPath += main.annotationProcessorPath
+    }
+    // externally accessible API
+    api {
+        java {
+            srcDirs = ["../src/api/java"]
+        }
+        //The API has no resources
+        resources.srcDirs = []
+        compileClasspath += main.compileClasspath.filter { File element ->
+            // API requires javax.annotation for TypeQualifierDefault
+            return true
+        }
+        annotationProcessorPath += main.annotationProcessorPath
+    }
+    // internal library
+    lib {
+        java {
+            srcDirs = ["../src/lib/java"]
+        }
+        compileClasspath += api.output
+        compileClasspath += main.compileClasspath.filter { File element ->
+            // MC and all related classes
+            if (element.name.startsWith("neoforge")) {
+                return false
+            }
+            // javax.annotation
+            if (element.name.startsWith("annotations-3.0.1") || element.name.startsWith("jsr305")) {
+                return false
+            }
+            return true
+        }
+        annotationProcessorPath += main.annotationProcessorPath
+    }
+    // internal library, parts that need access to MC
+    mclib {
+        java {
+            srcDirs = ['../src/libmc/java']
+        }
+        compileClasspath += api.output
+        compileClasspath += lib.output
+        compileClasspath += main.compileClasspath.filter { File element ->
+            // javax.annotation
+            if (element.name.startsWith("annotations-3.0.1") || element.name.startsWith("jsr305")) {
+                return false
+            }
+            return true
+        }
+        annotationProcessorPath += main.annotationProcessorPath
+    }
+    // the main renderer core
+    core {
+        java {
+            srcDirs = ["../src/core/java"]
+        }
+        resources.srcDirs = []
+        compileClasspath += vulkanStartup.output // TODO: dont rely on this in the core?
+        compileClasspath += api.output
+        compileClasspath += lib.output
+        compileClasspath += mclib.output
+        compileClasspath += main.compileClasspath.filter { File element ->
+            // javax.annotation
+            if (element.name.startsWith("annotations-3.0.1") || element.name.startsWith("jsr305")) {
+                return false
+            }
+            return true
+        }
+        annotationProcessorPath += main.annotationProcessorPath
+    }
+    mercury {
+        java {
+            srcDirs = ["../src/mercury/java"]
+        }
+        compileClasspath += vulkanStartup.output
+        compileClasspath += api.output
+        compileClasspath += lib.output
+        compileClasspath += main.compileClasspath.filter { File element ->
+            // MC and all related classes
+            if (element.name.startsWith("neoforge")) {
+                return false
+            }
+            // javax.annotation
+            if (element.name.startsWith("annotations-3.0.1") || element.name.startsWith("jsr305")) {
+                return false
+            }
+            return true
+        }
+        annotationProcessorPath += main.annotationProcessorPath
+    }
+    main {
+        java {
+            srcDirs = ["../src/mod/java"]
+        }
+        resources.srcDirs = ["../src/mod/resources"]
+        compileClasspath += api.output
+        compileClasspath += core.output
+        compileClasspath += lib.output
+        compileClasspath += mclib.output
+        compileClasspath += mercury.output
+    }
+}
+
+def lwjglJavaLibs = [
+        "vulkan",
+]
+
+def lwjglNativeLibs = [
+        "shaderc",
+        "spvc",
+        "vma",
+]
+
+def lwjglNativePlatforms = [
+        "natives-linux",
+        "natives-linux-arm64",
+        "natives-macos",
+        "natives-macos-arm64",
+        "natives-windows",
+        "natives-windows-arm64",
+]
+
+def loaderLibsToPack = []
+def nativeLibsToUse = []
+def vkJavaLibs = []
+
+for (lib in lwjglJavaLibs) {
+    var baseLibName = "org.lwjgl:lwjgl-$lib:$lwjglVersion"
+    loaderLibsToPack.add(baseLibName)
+    vkJavaLibs.add(baseLibName)
+}
+
+for (lib in lwjglNativeLibs) {
+    var baseLibName = "org.lwjgl:lwjgl-$lib:$lwjglVersion"
+    loaderLibsToPack.add(baseLibName)
+    vkJavaLibs.add(baseLibName)
+    for (nativePlatform in lwjglNativePlatforms) {
+        nativeLibsToUse.add(baseLibName + ":$nativePlatform")
+        loaderLibsToPack.add(baseLibName + ":$nativePlatform")
+    }
+}
+
+loaderLibsToPack.add("org.lwjgl:lwjgl-vulkan:$lwjglVersion:natives-macos")
+loaderLibsToPack.add("org.lwjgl:lwjgl-vulkan:$lwjglVersion:natives-macos-arm64")
+
+
+repositories {
+    mavenCentral()
+    maven {
+        name = 'ParchmentMC'
+        url = 'https://maven.parchmentmc.org'
+    }
+}
+
+dependencies {
+    // To change the versions see the gradle.properties file
+    minecraft "com.mojang:minecraft:${project.minecraft_version}"
+    modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
+
+    implementation("org.anarres:jcpp:1.4.14")
+
+    for (lib in vkJavaLibs) {
+        implementation(lib)
+        runtimeOnly(lib)
+    }
+
+    for (lib in nativeLibsToUse) {
+        runtimeOnly(lib)
+    }
+
+    for (lib in loaderLibsToPack) {
+        jijLib((String) lib)
+    }
+
+    for (lib in loaderLibsToPack) {
+        jijLib((String) lib)
+    }
+
+    implementation("com.electronwill.night-config:core:3.8.1")
+    implementation("com.electronwill.night-config:toml:3.8.1")
+
+    runtimeOnly(sourceSets.vulkanStartup.output)
+    runtimeOnly(sourceSets.api.output)
+    runtimeOnly(sourceSets.core.output)
+    runtimeOnly(sourceSets.lib.output)
+    runtimeOnly(sourceSets.mclib.output)
+    runtimeOnly(sourceSets.mercury.output)
+
+    mappings loom.layered() {
+        officialMojangMappings()
+        parchment("org.parchmentmc.data:parchment-1.21.8:2025.07.20@zip")
+    }
+
+    annotationProcessor 'systems.manifold:manifold-preprocessor:2025.1.26'
+}
+
+processResources {
+    inputs.property "version", project.version
+
+    filesMatching("fabric.mod.json") {
+        expand "version": inputs.properties.version
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    it.options.release = 21
+}
+
+java {
+    withSourcesJar()
+
+    sourceCompatibility = JavaVersion.VERSION_21
+    targetCompatibility = JavaVersion.VERSION_21
+}
+
+tasks.named('jar', Jar).configure { Jar jar1 ->
+    jar1.duplicatesStrategy(DuplicatesStrategy.FAIL)
+    jar1.archiveVersion = jar1.archiveVersion.get()
+    jar1.from([
+            sourceSets.vulkanStartup.output,
+            sourceSets.api.output,
+            sourceSets.lib.output,
+            sourceSets.mclib.output,
+            sourceSets.mercury.output,
+            sourceSets.core.output,
+            sourceSets.main.output,
+    ])
+    jar1.from(configurations.jijLib.collect { it.isDirectory() ? it : zipTree(it) }) {
+        exclude("META-INF/**")
+        exclude("org/lwjgl/*")
+        exclude("org/lwjgl/system/**")
+    }
+}
+
+tasks.register("prodClient", net.fabricmc.loom.task.prod.ClientProductionRunTask) {
+}
+
+loom {
+    accessWidenerPath = file("../src/mod/resources/cinnabar.accesswidener")
+}
+
+tasks.withType(JavaCompile) {
+    options.compilerArgs += '-Xplugin:Manifold'
+    options.fork = true
+}
+new File("../src", "build.properties").text = """
+## to switch mode, refresh the gradle project of the respective loader
+FABRIC
+"""
+new File("../loader/src", "build.properties").text = """
+## to switch mode, refresh the gradle project of the respective loader
+FABRIC
+"""
+
+publishing {
+    repositories {
+        maven {
+            name = "logixdevSnapshots"
+            url = "https://maven.logix.dev/snapshots"
+            credentials(PasswordCredentials)
+            authentication {
+                basic(BasicAuthentication)
+            }
+        }
+        maven {
+            name = "logixdevReleases"
+            url = "https://maven.logix.dev/releases"
+            credentials(PasswordCredentials)
+            authentication {
+                basic(BasicAuthentication)
+            }
+        }
+    }
+    publications {
+        MainMaven(MavenPublication) {
+            groupId = "graphics.cinnabar"
+            artifactId = "cinnabar"
+            version = getGitDescribedVersion()
+            artifact jar
+            artifact sourcesJar
+            artifact remapJar
+        }
+    }
+}
+
+def curseforgeToken = System.getenv("curseforge_token")
+
+def changelog = """
+[https://github.com/RogueLogix/Cinnabar/blob/$version/changelog.md](https://github.com/RogueLogix/Cinnabar/blob/$version/changelog.md)
+"""
+
+// only enable this if we are the root project
+// prevents accidentally publishing as submodule project
+if (curseforgeToken != null && this.project == this.rootProject) {
+    tasks.register('publishCurseForge', TaskPublishCurseForge) {
+
+        apiToken = curseforgeToken
+        def projectId = "552238"
+
+        def mainFile = upload(projectId, remapJar)
+        mainFile.changelog = changelog
+        mainFile.changelogType = 'markdown'
+        mainFile.releaseType = release_type
+        mainFile.gameVersions.clear()
+        mainFile.addGameVersion(minecraft_version)
+        mainFile.addJavaVersion('Java 21')
+        mainFile.addModLoader('Fabric')
+
+        mainFile.withAdditionalFile(jar)
+        mainFile.withAdditionalFile(sourcesJar)
+
+        mainFile.curseFileId
+    }
+}

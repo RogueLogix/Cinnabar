@@ -1,5 +1,7 @@
 package graphics.cinnabar.lib.config;
 
+#if NEO
+
 import com.mojang.brigadier.Command;
 import graphics.cinnabar.lib.annotations.OnModLoad;
 import graphics.cinnabar.lib.parsers.ROBN;
@@ -36,6 +38,26 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static graphics.cinnabar.api.CinnabarAPI.MOD_ID;
+#endif
+
+#if FABRIC
+
+import graphics.cinnabar.lib.util.ReflectionUtil;
+import graphics.cinnabar.lib.util.TriConsumer;
+import it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap;
+import it.unimi.dsi.fastutil.objects.ObjectArrayList;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerPlayer;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+import org.jetbrains.annotations.Nullable;
+
+import java.lang.reflect.Method;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+#endif
 
 public class ConfigManager {
     static final Logger LOGGER = LogManager.getLogger("Phosphophyllite/Config");
@@ -49,9 +71,11 @@ public class ConfigManager {
     private static MinecraftServer server;
     private static final ObjectArrayList<ServerPlayer> players = new ObjectArrayList<>();
     
+    #if NEO
     public static void registerConfig(Object rootConfigObject, RegisterConfig annotation) {
         registerConfig(rootConfigObject, ModLoadingContext.get().getActiveNamespace(), annotation);
     }
+    #endif
     
     public static void registerConfig(Object rootConfigObject, String modName, RegisterConfig annotation) {
         TriConsumer<Map<ConfigType, @Nullable List<Runnable>>, Method, ConfigType[]> createCallback = (callbacks, method, applicableTypes) -> {
@@ -135,6 +159,7 @@ public class ConfigManager {
         }
     }
     
+    #if NEO
     public static void reloadCommonAndServerConfigs() {
         if (FMLEnvironment.dist.isDedicatedServer() || server == null || !server.isDedicatedServer()) {
             // dedicated servers, disconnected clients, and integrated servers reload common and server configs too
@@ -296,5 +321,5 @@ public class ConfigManager {
             return new ByteArrayPacketMessage(byteBuf);
         }
     }
-    
+    #endif
 }

@@ -1,9 +1,11 @@
 package graphics.cinnabar.core.hg3d;
 
+import com.google.common.collect.ImmutableMap;
 import com.mojang.blaze3d.pipeline.CompiledRenderPipeline;
 import com.mojang.blaze3d.pipeline.RenderPipeline;
 import com.mojang.blaze3d.preprocessor.GlslPreprocessor;
 import com.mojang.blaze3d.shaders.ShaderType;
+import com.mojang.blaze3d.vertex.VertexFormatElement;
 import graphics.cinnabar.api.hg.HgGraphicsPipeline;
 import graphics.cinnabar.api.hg.HgRenderPass;
 import graphics.cinnabar.api.hg.HgUniformSet;
@@ -91,7 +93,16 @@ public class Hg3DRenderPipeline implements Hg3DObject, CompiledRenderPipeline, D
         
         pipelineLayout = hgDevice.createPipelineLayout(new HgGraphicsPipeline.Layout.CreateInfo(List.of(uniformSetLayout), 0));
         
-        final var vertexFormatElements = pipeline.getVertexFormat().getElementMapping();
+        final ImmutableMap<String, VertexFormatElement> vertexFormatElements;
+        {
+            final var elements = pipeline.getVertexFormat().getElements();
+            final var names = pipeline.getVertexFormat().getElementAttributeNames();
+            ImmutableMap.Builder<String, VertexFormatElement> builder = ImmutableMap.builder();
+            for (int i = 0; i < elements.size(); i++) {
+                builder.put(names.get(i), elements.get(i));
+            }
+            vertexFormatElements = builder.build();
+        }
         final var shaderAttribs = Objects.requireNonNull(shaderSet.attribs());
         final var vertexInputBindings = new ReferenceArrayList<HgGraphicsPipeline.VertexInput.Binding>();
         for (int i = 0; i < shaderAttribs.size(); i++) {
@@ -120,6 +131,7 @@ public class Hg3DRenderPipeline implements Hg3DObject, CompiledRenderPipeline, D
         }
         
         @Nullable final HgGraphicsPipeline.Stencil stencil;
+        #if NEO
         if (pipeline.getStencilTest().isPresent()) {
             final var stencilTest = pipeline.getStencilTest().get();
             final var frontTest = stencilTest.front();
@@ -130,6 +142,9 @@ public class Hg3DRenderPipeline implements Hg3DObject, CompiledRenderPipeline, D
         } else {
             stencil = null;
         }
+        #elif FABRIC
+        stencil = null;
+        #endif
         
         @Nullable final HgGraphicsPipeline.Blend blend;
         if (pipeline.getBlendFunction().isPresent() || !pipeline.isWriteColor() || !pipeline.isWriteAlpha()) {

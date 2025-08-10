@@ -3,6 +3,7 @@ package graphics.cinnabar.loader.services;
 import com.electronwill.nightconfig.core.UnmodifiableConfig;
 import com.electronwill.nightconfig.toml.TomlFormat;
 import com.mojang.logging.LogUtils;
+import graphics.cinnabar.loader.earlywindow.VulkanStartup;
 import net.neoforged.neoforgespi.earlywindow.GraphicsBootstrapper;
 import org.apache.maven.artifact.versioning.ComparableVersion;
 import org.lwjgl.system.Configuration;
@@ -44,8 +45,9 @@ public class CinnabarGraphicsBootstrapper implements GraphicsBootstrapper {
                     // don't init cinnabar's early window with an incompatible neo version, the mod itself will fail the loading later
                     return;
                 }
+                VulkanStartup.Config.mcVersionString = CinnabarGraphicsBootstrapper.config.get("minecraft_version");
+                VulkanStartup.Config.cinnabarVersionString = CinnabarGraphicsBootstrapper.config.get("cinnabar_version");
                 CinnabarEarlyWindowProvider.attemptConfigInit();
-                CinnabarLaunchPlugin.attemptInject();
             }
         }
     }

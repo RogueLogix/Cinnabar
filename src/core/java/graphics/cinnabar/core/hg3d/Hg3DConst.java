@@ -1,5 +1,6 @@
 package graphics.cinnabar.core.hg3d;
 
+#if NEO
 import com.mojang.blaze3d.buffers.GpuBuffer;
 import com.mojang.blaze3d.platform.DestFactor;
 import com.mojang.blaze3d.platform.SourceFactor;
@@ -17,6 +18,25 @@ import net.neoforged.neoforge.client.stencil.StencilOperation;
 import java.util.List;
 
 import static org.lwjgl.vulkan.VK10.*;
+#endif
+
+#if FABRIC
+
+import com.mojang.blaze3d.buffers.GpuBuffer;
+import com.mojang.blaze3d.platform.DestFactor;
+import com.mojang.blaze3d.platform.SourceFactor;
+import com.mojang.blaze3d.textures.AddressMode;
+import com.mojang.blaze3d.textures.GpuTexture;
+import com.mojang.blaze3d.textures.TextureFormat;
+import com.mojang.blaze3d.vertex.VertexFormat;
+import com.mojang.blaze3d.vertex.VertexFormatElement;
+import graphics.cinnabar.api.hg.HgGraphicsPipeline;
+import graphics.cinnabar.api.hg.enums.HgFormat;
+
+import java.util.List;
+
+import static org.lwjgl.vulkan.VK10.*;
+#endif
 
 public class Hg3DConst {
     
@@ -80,6 +100,7 @@ public class Hg3DConst {
         };
     }
     
+#if NEO
     public static HgCompareOp stencil(StencilFunction equation) {
         return switch (equation) {
             case NEVER -> HgCompareOp.NEVER;
@@ -105,6 +126,7 @@ public class Hg3DConst {
             case DECR_WRAP -> HgGraphicsPipeline.Stencil.Op.DECREMENT_AND_WRAP;
         };
     }
+#endif
     
     public static HgFormat format(TextureFormat textureFormat) {
         return switch (textureFormat) {
@@ -112,8 +134,10 @@ public class Hg3DConst {
             case RED8 -> HgFormat.R8_UNORM;
             case RED8I -> HgFormat.R8_SINT;
             case DEPTH32 -> HgFormat.D32_SFLOAT;
+            #if NEO
             case DEPTH24_STENCIL8 -> throw new IllegalArgumentException("D24S8 is unsupported");
             case DEPTH32_STENCIL8 -> HgFormat.D32_SFLOAT_S8_UINT;
+            #endif
         };
     }
     

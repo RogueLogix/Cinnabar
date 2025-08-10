@@ -1,0 +1,17 @@
+accessWidener v2 named
+extendable class com/mojang/blaze3d/platform/Window
+accessible method com/mojang/blaze3d/platform/Window setMode ()V
+accessible method com/mojang/blaze3d/platform/Window refreshFramebufferSize ()V
+accessible field com/mojang/blaze3d/platform/Window vsync Z
+accessible field com/mojang/blaze3d/platform/Window fullscreen Z
+accessible field com/mojang/blaze3d/platform/Window actuallyFullscreen Z
+accessible field com/mojang/blaze3d/platform/Window eventHandler Lcom/mojang/blaze3d/platform/WindowEventHandler;
+accessible field com/mojang/blaze3d/platform/Window LOGGER Lorg/slf4j/Logger;
+
+accessible method  com/mojang/blaze3d/systems/RenderSystem pollEvents ()V
+accessible method  net/minecraft/client/gui/render/GuiRenderer invalidateItemAtlas ()V
+accessible field  net/minecraft/client/renderer/GameRenderer guiRenderer Lnet/minecraft/client/gui/render/GuiRenderer;
+
+accessible method com/mojang/blaze3d/buffers/Std140Builder <init> (Ljava/nio/ByteBuffer;)V
+
+accessible class net/minecraft/client/renderer/ShaderManager$CompilationCache

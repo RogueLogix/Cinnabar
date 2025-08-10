@@ -29,7 +29,7 @@ if (System.env.BUILD_SERVER_PUBLISH != null) {
 mod_version = "${getGitDescribedVersion()}"
 
 base {
-    archivesName = "$mod_id-$minecraft_version"
+    archivesName = "$mod_id-neoforge-$minecraft_version"
 }
 
 def lwjglJavaLibs = [
@@ -100,10 +100,6 @@ repositories {
     }
 }
 
-base {
-    archivesName = mod_id
-}
-
 java.toolchain.languageVersion = JavaLanguageVersion.of(21)
 
 sourceSets {
@@ -115,6 +111,7 @@ sourceSets {
             // API requires javax.annotation for TypeQualifierDefault
             return true
         }
+        annotationProcessorPath += main.annotationProcessorPath
     }
     // internal library
     lib {
@@ -130,6 +127,7 @@ sourceSets {
             }
             return true
         }
+        annotationProcessorPath += main.annotationProcessorPath
     }
     // internal library, parts that need access to MC
     mclib {
@@ -145,6 +143,7 @@ sourceSets {
             }
             return true
         }
+        annotationProcessorPath += main.annotationProcessorPath
     }
     // the main renderer core
     core {
@@ -159,6 +158,7 @@ sourceSets {
             }
             return true
         }
+        annotationProcessorPath += main.annotationProcessorPath
     }
     mercury {
         compileClasspath += api.output
@@ -174,6 +174,7 @@ sourceSets {
             }
             return true
         }
+        annotationProcessorPath += main.annotationProcessorPath
     }
     main {
         java {
@@ -236,6 +237,7 @@ neoForge {
             sourceSet(sourceSets.main)
         }
         "loader" {
+            sourceSet(project(':loader').sourceSets.vulkanStartup)
             sourceSet(project(':loader').sourceSets.main)
         }
     }
@@ -244,9 +246,7 @@ neoForge {
 sourceSets.main.resources { srcDir 'src/generated/resources' }
 
 dependencies {
-
-//    additionalRuntimeClasspath(project(":loader"))
-    compileOnly(project(":loader"))
+    compileOnly(project(":loader").sourceSets.vulkanStartup.output)
 
     for (lib in vkJavaLibs) {
         implementation(lib)
@@ -262,6 +262,8 @@ dependencies {
     }
     jijMod(project(path: ":", configuration: "builtModJar"))
     loader(project(":loader"))
+
+    annotationProcessor 'systems.manifold:manifold-preprocessor:2025.1.26'
 }
 
 var generateModMetadata = tasks.register("generateModMetadata", ProcessResources) {
@@ -316,7 +318,6 @@ tasks.register('apiJar', Jar).configure { Jar jar1 ->
 
 tasks.register('sourcesJar', Jar).configure { Jar jar1 ->
     jar1.duplicatesStrategy(DuplicatesStrategy.FAIL)
-    jar1.archiveBaseName = "$mod_id-$minecraft_version"
     jar1.archiveClassifier = "sources"
     jar1.from([
             sourceSets.api.output,
@@ -325,6 +326,7 @@ tasks.register('sourcesJar', Jar).configure { Jar jar1 ->
             sourceSets.mercury.output,
             sourceSets.core.output,
             sourceSets.main.output,
+            project(':loader').sourceSets.vulkanStartup.output,
             project(':loader').sourceSets.main.output,
             sourceSets.api.allJava,
             sourceSets.lib.allJava,
@@ -332,6 +334,7 @@ tasks.register('sourcesJar', Jar).configure { Jar jar1 ->
             sourceSets.mercury.allJava,
             sourceSets.core.allJava,
             sourceSets.main.allJava,
+            project(':loader').sourceSets.vulkanStartup.allJava,
             project(':loader').sourceSets.main.allJava,
     ])
 }
@@ -339,7 +342,6 @@ tasks.register('sourcesJar', Jar).configure { Jar jar1 ->
 
 tasks.named('jar', Jar).configure { Jar jar1 ->
     jar1.duplicatesStrategy(DuplicatesStrategy.FAIL)
-    jar1.archiveBaseName = "$mod_id-$minecraft_version"
     jar1.archiveVersion = jar1.archiveVersion.get() + "-packed"
     jar1.from([
             sourceSets.api.output,
@@ -357,7 +359,6 @@ afterEvaluate {
     tasks.register('fatJar', Jar).configure { Jar jar1 ->
         dependsOn(project(":loader").tasks.jar)
         jar1.duplicatesStrategy(DuplicatesStrategy.FAIL)
-        jar1.archiveBaseName = "$mod_id-$minecraft_version"
         jar1.archiveClassifier = ""
         jar1.from([
                 configurations.loader.collect { it.isDirectory() ? it : zipTree(it) },
@@ -445,4 +446,22 @@ afterEvaluate {
             }
         }
     }
+
+    project(":loader").compileVulkanStartupJava.options.compilerArgs += '-Xplugin:Manifold'
 }
+
+compileApiJava.options.compilerArgs += '-Xplugin:Manifold'
+compileCoreJava.options.compilerArgs += '-Xplugin:Manifold'
+compileLibJava.options.compilerArgs += '-Xplugin:Manifold'
+compileMclibJava.options.compilerArgs += '-Xplugin:Manifold'
+compileMercuryJava.options.compilerArgs += '-Xplugin:Manifold'
+compileJava.options.compilerArgs += '-Xplugin:Manifold'
+
+new File("src", "build.properties").text = """
+// to switch mode, refresh the gradle project of the respective loader
+NEO
+"""
+new File("loader/src", "build.properties").text = """
+// to switch mode, refresh the gradle project of the respective loader
+NEO
+"""

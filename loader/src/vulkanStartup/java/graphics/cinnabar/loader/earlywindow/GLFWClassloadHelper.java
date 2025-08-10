@@ -1,5 +1,6 @@
 package graphics.cinnabar.loader.earlywindow;
 
+import org.jetbrains.annotations.Nullable;
 import org.lwjgl.PointerBuffer;
 import org.lwjgl.glfw.GLFW;
 import org.lwjgl.glfw.GLFWVulkan;
@@ -9,7 +10,6 @@ import org.lwjgl.vulkan.VkAllocationCallbacks;
 import org.lwjgl.vulkan.VkInstance;
 import org.lwjgl.vulkan.VkPhysicalDevice;
 
-import javax.annotation.Nullable;
 import java.nio.IntBuffer;
 import java.nio.LongBuffer;
 

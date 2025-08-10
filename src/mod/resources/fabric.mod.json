@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "id": "cinnabar",
+  "version": "${version}",
+  "name": "Cinnabar",
+  "description": "VK backend for B3D",
+  "authors": [
+    "RogueLogix"
+  ],
+  "contact": {
+    "sources": "https://github.com/RogueLogix/Cinnabar"
+  },
+  "license": "OSL-3.0",
+  "icon": "cinnabar.png",
+  "environment": "*",
+  "entrypoints": {
+    "main": [
+      "graphics.cinnabar.Cinnabar"
+    ]
+  },
+  "mixins": [
+    "cinnabar.mixins.json"
+  ],
+  "depends": {
+    "fabricloader": ">=0.16.13",
+    "minecraft": "1.21.8",
+    "java": ">=21"
+  },
+  "accessWidener": "cinnabar.accesswidener"
+}
