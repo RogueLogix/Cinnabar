@@ -395,9 +395,7 @@ def changelog = """
 // prevents accidentally publishing as submodule project
 if (curseforgeToken != null && this.project == this.rootProject) {
     tasks.register('publishCurseForge', TaskPublishCurseForge) {
-
-        debugMode = true
-
+        
         apiToken = curseforgeToken
         def projectId = "552238"
 
