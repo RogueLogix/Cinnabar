@@ -438,13 +438,18 @@ afterEvaluate {
             }
         }
         publications {
-            MainMaven(MavenPublication) {
+            NeoPublish(MavenPublication) {
                 groupId = "graphics.cinnabar"
                 artifactId = "cinnabar-neoforge"
                 version = getGitDescribedVersion()
-                artifact apiJar
                 artifact sourcesJar
                 artifact fatJar
+            }
+            ApiPublish(MavenPublication) {
+                groupId = "graphics.cinnabar"
+                artifactId = "cinnabar"
+                version = getGitDescribedVersion()
+                artifact apiJar
             }
         }
     }
