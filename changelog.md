@@ -1,3 +1,9 @@
+# 1.21.8-0.0.7-beta
+
+- Internal "Mercury" abstraction layer, exposed as API
+  - sync2 vk capability required
+- Fabric support
+
 # 1.21.8-0.0.6-beta
 
 - 1.21.8
