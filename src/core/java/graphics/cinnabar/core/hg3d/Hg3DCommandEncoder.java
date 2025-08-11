@@ -55,6 +55,8 @@ public class Hg3DCommandEncoder implements CommandEncoder, Hg3DObject, Destroyab
     private HgBuffer uploadBuffer;
     private long uploadBufferAllocated = 0;
     private final ReferenceArrayList<HgBuffer> availableUploadBuffers = new ReferenceArrayList<>();
+    @Nullable
+    private Hg3DRenderPass continuedRenderPass;
     
     Hg3DCommandEncoder(Hg3DGpuDevice device) {
         this.device = device;
@@ -76,29 +78,42 @@ public class Hg3DCommandEncoder implements CommandEncoder, Hg3DObject, Destroyab
         return device;
     }
     
+    void endRenderPass() {
+        if (continuedRenderPass != null) {
+            continuedRenderPass.end();
+        }
+        continuedRenderPass = null;
+    }
+    
     HgCommandBuffer earlyCommandBuffer() {
         if (earlyCommandBuffer == null) {
             earlyCommandBuffer = commandPool.allocate().begin();
+            earlyCommandBuffer.barrier();
             commandBuffers.add(earlyCommandBuffer);
         }
         return earlyCommandBuffer;
     }
     
     HgCommandBuffer mainCommandBuffer() {
+        endRenderPass();
         earlyCommandBuffer();
         if (mainCommandBuffer == null) {
             mainCommandBuffer = commandPool.allocate().begin();
+            mainCommandBuffer.barrier();
             commandBuffers.add(mainCommandBuffer);
         }
         return mainCommandBuffer;
     }
     
     void endCommandBuffers() {
+        endRenderPass();
         if (earlyCommandBuffer != null) {
+            earlyCommandBuffer.barrier();
             earlyCommandBuffer.end();
         }
         earlyCommandBuffer = null;
         if (mainCommandBuffer != null) {
+            mainCommandBuffer.barrier();
             mainCommandBuffer.end();
         }
         mainCommandBuffer = null;
@@ -182,7 +197,19 @@ public class Hg3DCommandEncoder implements CommandEncoder, Hg3DObject, Destroyab
         final var renderpass = device.getRenderPass(Hg3DConst.format(colorTexture.texture().getFormat()), depthTexture != null ? Hg3DConst.format(depthTexture.texture().getFormat()) : null);
         @Nullable final var depthView = depthTexture != null ? ((Hg3DGpuTextureView) depthTexture).imageView() : null;
         final var framebuffer = ((Hg3DGpuTextureView) colorTexture).getFramebuffer(renderpass, depthView);
-        return new Hg3DRenderPass(renderpass, framebuffer);
+        final Hg3DRenderPass renderPass;
+        if (continuedRenderPass != null && continuedRenderPass.renderPass == renderpass && continuedRenderPass.framebuffer == framebuffer) {
+            // all render params are the same, except maybe clear, which i currently ignore, continue the pass
+            renderPass = continuedRenderPass;
+        } else {
+            renderPass = new Hg3DRenderPass(renderpass, framebuffer);
+        }
+        if (continuedRenderPass != renderPass) {
+            endRenderPass();
+        }
+        renderPass.begin(debugGroup);
+        continuedRenderPass = renderPass;
+        return continuedRenderPass;
     }
     
     @Override
@@ -228,11 +255,16 @@ public class Hg3DCommandEncoder implements CommandEncoder, Hg3DObject, Destroyab
         final var ptr = tempBuffer.map();
         LibCString.nmemcpy(ptr.pointer(), MemoryUtil.memAddress(buffer), ptr.size());
         tempBuffer.unmap();
-        final var cb = mainCommandBuffer();
-        cb.barrier();
+        final var earlyUpload = !((Hg3DGpuBuffer) slice.buffer()).usedThisFrame();
+        final var cb = earlyUpload ? earlyCommandBuffer() : mainCommandBuffer();
+        if (!earlyUpload) {
+            cb.barrier();
+        }
         final var dstSlice = ((Hg3DGpuBuffer) slice.buffer()).buffer().slice(slice.offset(), slice.length());
         cb.copyBufferToBuffer(tempBuffer, dstSlice);
-        cb.barrier();
+        if (!earlyUpload) {
+            cb.barrier();
+        }
     }
     
     @Override
@@ -284,7 +316,12 @@ public class Hg3DCommandEncoder implements CommandEncoder, Hg3DObject, Destroyab
         writeToTexture(texture, image.getPointer() + skipBytes, bufferSize - skipBytes, mipLevel, depthOrLayer, x, y, width, height, image.getWidth(), image.getHeight());
     }
     
-    @Override
+    // 25w32a
+    public void writeToTexture(GpuTexture texture, ByteBuffer buffer, NativeImage.Format format, int mipLevel, int depthOrLayer, int x, int y, int width, int height) {
+        writeToTexture(texture, MemoryUtil.memAddress(buffer), buffer.remaining() * (long) MagicMemorySizes.INT_BYTE_SIZE, mipLevel, depthOrLayer, x, y, width, height, width, height);
+    }
+    
+    // 1.21.8
     public void writeToTexture(GpuTexture texture, IntBuffer buffer, NativeImage.Format format, int mipLevel, int depthOrLayer, int x, int y, int width, int height) {
         writeToTexture(texture, MemoryUtil.memAddress(buffer), buffer.remaining() * (long) MagicMemorySizes.INT_BYTE_SIZE, mipLevel, depthOrLayer, x, y, width, height, width, height);
     }
@@ -393,6 +430,17 @@ public class Hg3DCommandEncoder implements CommandEncoder, Hg3DObject, Destroyab
             
             commandBuffer.barrier();
             commandBuffer.beginRenderPass(renderPass, framebuffer);
+        }
+        
+        private void begin(Supplier<String> debugGroup) {
+            pushDebugGroup(debugGroup);
+            
+            uniforms.clear();
+            samplers.clear();
+            uniformsDirty = true;
+            
+            boundPipeline = null;
+            hgPipeline = null;
             
             commandBuffer.setViewport(0, 0, 0, framebuffer.width(), framebuffer.height());
             commandBuffer.setScissor(0, 0, 0, framebuffer.width(), framebuffer.height());
@@ -400,18 +448,22 @@ public class Hg3DCommandEncoder implements CommandEncoder, Hg3DObject, Destroyab
         
         @Override
         public void close() {
+            popDebugGroup();
+        }
+        
+        private void end() {
             commandBuffer.endRenderPass();
             commandBuffer.barrier();
         }
         
         @Override
         public void pushDebugGroup(Supplier<String> name) {
-            // TODO:
+            commandBuffer.pushDebugGroup(name.get());
         }
         
         @Override
         public void popDebugGroup() {
-            // TODO:
+            commandBuffer.popDebugGroup();
         }
         
         @Override

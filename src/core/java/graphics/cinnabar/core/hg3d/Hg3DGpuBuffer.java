@@ -26,8 +26,6 @@ public class Hg3DGpuBuffer extends GpuBuffer implements Hg3DObject {
         final boolean mappable = (usage & (USAGE_MAP_READ | USAGE_MAP_WRITE)) != 0;
         preferredMemoryType = clientStorageHint ? HgBuffer.MemoryType.MAPPABLE : mappable ? HgBuffer.MemoryType.MAPPABLE_PREF_DEVICE : HgBuffer.MemoryType.AUTO_PREF_DEVICE;
         buffer = device.hgDevice().createBuffer(preferredMemoryType, size, Hg3DConst.bufferUsageBits(usage));
-        Management.used(this);
-        lastUsedFrame = device.currentFrame();
     }
     
     @Override
@@ -48,6 +46,10 @@ public class Hg3DGpuBuffer extends GpuBuffer implements Hg3DObject {
     @Override
     public Hg3DGpuDevice device() {
         return device;
+    }
+    
+    public boolean usedThisFrame() {
+        return lastUsedFrame == device.currentFrame();
     }
     
     public HgBuffer buffer() {
@@ -120,11 +122,11 @@ public class Hg3DGpuBuffer extends GpuBuffer implements Hg3DObject {
                 }
                 final var toDemote = toDemoteNode.data;
                 if (TRACE_LOGGING) {
-                    HG3D_LOG.debug("Demoting buffer {}; lastUsed: {}, size: {}, preferredMemoryType: {}", toDemote.hashCode(), toDemote.lastUsedFrame, toDemote.size, toDemote.preferredMemoryType);
+                    HG3D_LOG.debug("Demoting buffer {}; lastUsed: {}, size: {}, preferredMemoryType: {}", toDemote.hashCode(), toDemote.lastUsedFrame, toDemote.size(), toDemote.preferredMemoryType);
                 }
-                amountDemoted += toDemote.size;
+                amountDemoted += toDemote.size();
                 final var oldBuffer = toDemote.buffer;
-                final var newBuffer = device.hgDevice().createBuffer(HgBuffer.MemoryType.MAPPABLE, toDemote.size, Hg3DConst.bufferUsageBits(toDemote.usage()));
+                final var newBuffer = device.hgDevice().createBuffer(HgBuffer.MemoryType.MAPPABLE, toDemote.size(), Hg3DConst.bufferUsageBits(toDemote.usage()));
                 cb.copyBufferToBuffer(oldBuffer.slice(), newBuffer.slice());
                 toDemote.buffer = newBuffer;
                 device.destroyEndOfFrameAsync(oldBuffer);
@@ -135,15 +137,15 @@ public class Hg3DGpuBuffer extends GpuBuffer implements Hg3DObject {
             long amountPromoted = 0;
             for (int i = 0; i < pendingPromotion.size(); i++) {
                 final var toPromote = pendingPromotion.get(i);
-                if (amountPromoted + toPromote.size > amountToPromote) {
+                if (amountPromoted + toPromote.size() > amountToPromote) {
                     break;
                 }
                 if (TRACE_LOGGING) {
-                    HG3D_LOG.debug("Promoting buffer {}; size: {}, preferredMemoryType: {}", toPromote.hashCode(), toPromote.size, toPromote.preferredMemoryType);
+                    HG3D_LOG.debug("Promoting buffer {}; size: {}, preferredMemoryType: {}", toPromote.hashCode(), toPromote.size(), toPromote.preferredMemoryType);
                 }
-                amountPromoted += toPromote.size;
+                amountPromoted += toPromote.size();
                 final var oldBuffer = toPromote.buffer;
-                final var newBuffer = device.hgDevice().createBuffer(toPromote.preferredMemoryType, toPromote.size, Hg3DConst.bufferUsageBits(toPromote.usage()));
+                final var newBuffer = device.hgDevice().createBuffer(toPromote.preferredMemoryType, toPromote.size(), Hg3DConst.bufferUsageBits(toPromote.usage()));
                 cb.copyBufferToBuffer(oldBuffer.slice(), newBuffer.slice());
                 toPromote.buffer = newBuffer;
                 device.destroyEndOfFrameAsync(oldBuffer);

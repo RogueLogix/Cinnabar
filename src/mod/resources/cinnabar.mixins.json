@@ -7,6 +7,7 @@
   "mixins": [
   ],
   "client": [
+    "GraphicsWorkaroundsMixin",
     "Std140SizeCalculatorMixin",
     "Std140BuilderMixin",
     "FogRendererMixin",
