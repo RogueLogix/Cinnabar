@@ -62,3 +62,12 @@ var generateModMetadata = tasks.register("generateModMetadata", ProcessResources
 }
 sourceSets.main.resources.srcDir generateModMetadata
 //neoForge.ideSyncTask generateModMetadata
+
+tasks.named('jar', Jar).configure { Jar jar1 ->
+    jar1.duplicatesStrategy(DuplicatesStrategy.FAIL)
+    jar1.archiveVersion = jar1.archiveVersion.get() + "-packed"
+    jar1.from([
+            sourceSets.vulkanStartup.output,
+            sourceSets.main.output,
+    ])
+}
