@@ -49,6 +49,7 @@ public interface HgBuffer extends HgObject {
         return view(format, 0, size());
     }
     
+    @ThreadSafety.Many
     View view(HgFormat format, long offset, long size);
     
     enum MemoryType {
@@ -61,7 +62,7 @@ public interface HgBuffer extends HgObject {
         // memory that is on the device, not mapped
         DEVICE,
         // less likely to fail allocation, may fall back to system memory
-        AUTO_PREF_DEVICE
+        AUTO_PREF_DEVICE,
     }
     
     interface View extends HgObject {
@@ -86,6 +87,18 @@ public interface HgBuffer extends HgObject {
         
         public ImageSlice image(int width, int height) {
             return new ImageSlice(buffer, offset, size, width, height);
+        }
+        
+        public ImageSlice imageSlice(int offset, int size, int width, int height) {
+            return new ImageSlice(buffer, this.offset + offset, size, width, height);
+        }
+        
+        public View view(HgFormat format) {
+            return buffer.view(format, this.offset, size);
+        }
+        
+        public View view(HgFormat format, long offset, long size) {
+            return buffer.view(format, this.offset + offset, size);
         }
     }
     

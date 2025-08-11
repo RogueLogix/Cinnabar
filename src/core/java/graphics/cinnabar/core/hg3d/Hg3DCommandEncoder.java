@@ -260,7 +260,7 @@ public class Hg3DCommandEncoder implements CommandEncoder, Hg3DObject, Destroyab
         if (!earlyUpload) {
             cb.barrier();
         }
-        final var dstSlice = ((Hg3DGpuBuffer) slice.buffer()).buffer().slice(slice.offset(), slice.length());
+        final var dstSlice = ((Hg3DGpuBuffer) slice.buffer()).hgSlice().slice(slice.offset(), slice.length());
         cb.copyBufferToBuffer(tempBuffer, dstSlice);
         if (!earlyUpload) {
             cb.barrier();
@@ -275,7 +275,7 @@ public class Hg3DCommandEncoder implements CommandEncoder, Hg3DObject, Destroyab
     @Override
     public GpuBuffer.MappedView mapBuffer(GpuBufferSlice slice, boolean read, boolean write) {
         assert slice.buffer() instanceof Hg3DGpuBuffer;
-        final var hgBufferSlice = ((Hg3DGpuBuffer) slice.buffer()).buffer().slice(slice.offset(), slice.length());
+        final var hgBufferSlice = ((Hg3DGpuBuffer) slice.buffer()).hgSlice().slice(slice.offset(), slice.length());
         return new GpuBuffer.MappedView() {
             final PointerWrapper ptr = hgBufferSlice.map();
             final ByteBuffer data = ptr.byteBuffer();
@@ -296,8 +296,8 @@ public class Hg3DCommandEncoder implements CommandEncoder, Hg3DObject, Destroyab
     public void copyToBuffer(GpuBufferSlice source, GpuBufferSlice target) {
         final var cb = mainCommandBuffer();
         cb.barrier();
-        final var srcSlice = ((Hg3DGpuBuffer) source.buffer()).buffer().slice(source.offset(), source.length());
-        final var dstSlice = ((Hg3DGpuBuffer) target.buffer()).buffer().slice(target.offset(), target.length());
+        final var srcSlice = ((Hg3DGpuBuffer) source.buffer()).hgSlice().slice(source.offset(), source.length());
+        final var dstSlice = ((Hg3DGpuBuffer) target.buffer()).hgSlice().slice(target.offset(), target.length());
         cb.copyBufferToBuffer(srcSlice, dstSlice);
         cb.barrier();
     }
@@ -351,7 +351,7 @@ public class Hg3DCommandEncoder implements CommandEncoder, Hg3DObject, Destroyab
     public void copyTextureToBuffer(GpuTexture texture, GpuBuffer buffer, int offset, Runnable task, int mipLevel, int x, int y, int width, int height) {
         
         final var hgImage = ((Hg3DGpuTexture) texture).image();
-        final var hgBuffer = ((Hg3DGpuBuffer) buffer).buffer();
+        final var hgBuffer = ((Hg3DGpuBuffer) buffer).hgSlice();
         
         final var cb = mainCommandBuffer();
         cb.barrier();
@@ -519,13 +519,13 @@ public class Hg3DCommandEncoder implements CommandEncoder, Hg3DObject, Destroyab
         @Override
         public void setVertexBuffer(int index, GpuBuffer buffer) {
             assert buffer instanceof Hg3DGpuBuffer;
-            commandBuffer.bindVertexBuffer(index, ((Hg3DGpuBuffer) buffer).buffer().slice());
+            commandBuffer.bindVertexBuffer(index, ((Hg3DGpuBuffer) buffer).hgSlice());
         }
         
         @Override
         public void setIndexBuffer(GpuBuffer indexBuffer, VertexFormat.IndexType indexType) {
             assert indexBuffer instanceof Hg3DGpuBuffer;
-            commandBuffer.bindIndexBuffer(((Hg3DGpuBuffer) indexBuffer).buffer().slice(), indexType == VertexFormat.IndexType.INT ? VK_INDEX_TYPE_UINT32 : VK_INDEX_TYPE_UINT16);
+            commandBuffer.bindIndexBuffer(((Hg3DGpuBuffer) indexBuffer).hgSlice(), indexType == VertexFormat.IndexType.INT ? VK_INDEX_TYPE_UINT32 : VK_INDEX_TYPE_UINT16);
             
         }
         
@@ -601,7 +601,7 @@ public class Hg3DCommandEncoder implements CommandEncoder, Hg3DObject, Destroyab
                     case UNIFORM_TEXEL_BUFFER -> {
                         @Nullable final var slice = uniforms.get(binding.name());
                         assert slice != null;
-                        final var hgBuffer = ((Hg3DGpuBuffer) slice.buffer()).buffer();
+                        final var hgBuffer = ((Hg3DGpuBuffer) slice.buffer()).hgSlice();
                         final var view = hgBuffer.view(boundPipeline.texelBufferFormat(binding.name()), slice.offset(), slice.length());
                         writes.add(new HgUniformSet.Write.BufferView(binding, 0, List.of(view)));
                         device.destroyEndOfFrameAsync(view);
@@ -609,7 +609,7 @@ public class Hg3DCommandEncoder implements CommandEncoder, Hg3DObject, Destroyab
                     case UNIFORM_BUFFER, STORAGE_BUFFER -> {
                         @Nullable final var slice = uniforms.get(binding.name());
                         assert slice != null;
-                        writes.add(new HgUniformSet.Write.Buffer(binding, 0, List.of(((Hg3DGpuBuffer) slice.buffer()).buffer().slice(slice.offset(), slice.length()))));
+                        writes.add(new HgUniformSet.Write.Buffer(binding, 0, List.of(((Hg3DGpuBuffer) slice.buffer()).hgSlice().slice(slice.offset(), slice.length()))));
                     }
                 }
             }
@@ -677,9 +677,9 @@ public class Hg3DCommandEncoder implements CommandEncoder, Hg3DObject, Destroyab
                 // they all also must be at a multiple of the array stride
                 final var expectedDynamicUniformGpuBuffer = orderedDynamicUniformValues.getFirst().buffer();
                 final var firstDraw = orderedDraws.getFirst();
-                final var expectedVertexBuffer = ((Hg3DGpuBuffer) firstDraw.vertexBuffer()).buffer();
+                final var expectedVertexBuffer = ((Hg3DGpuBuffer) firstDraw.vertexBuffer()).hgSlice().buffer();
                 @Nullable final var expectedIndexB3DBuffer = firstDraw.indexBuffer() == null ? indexBuffer : firstDraw.indexBuffer();
-                @Nullable final var expectedIndexCinnabarBuffer = expectedIndexB3DBuffer == null ? null : ((Hg3DGpuBuffer) expectedIndexB3DBuffer).buffer();
+                @Nullable final var expectedIndexCinnabarBuffer = expectedIndexB3DBuffer == null ? null : ((Hg3DGpuBuffer) expectedIndexB3DBuffer).hgSlice().buffer();
                 @Nullable final var expectedIndexType = firstDraw.indexType() == null ? indexType : firstDraw.indexType();
                 for (int i = 0; i < drawCount; i++) {
                     drawCommands.position(i);
@@ -693,14 +693,13 @@ public class Hg3DCommandEncoder implements CommandEncoder, Hg3DObject, Destroyab
                     
                     final var draw = orderedDraws.get(i);
                     
-                    final var vertexBufferBacking = ((Hg3DGpuBuffer) draw.vertexBuffer());
+                    final var vertexBufferBacking = ((Hg3DGpuBuffer) draw.vertexBuffer()).hgSlice();
                     canBatchVertexBuffer = canBatchVertexBuffer && expectedVertexBuffer == vertexBufferBacking.buffer();
-                    // TODO: pooled vertex buffer w/ offset
-//                    final var vertexOffset = vertexBufferBacking.range.offset() / vertexSize;
-//                    final var vertexOffsetRemainder = vertexBufferBacking.range.offset() % vertexSize;
-//                    canBatchVertexBuffer = canBatchVertexBuffer && vertexOffsetRemainder == 0;
+                    final var vertexOffset = vertexBufferBacking.offset() / vertexSize;
+                    final var vertexOffsetRemainder = vertexBufferBacking.offset() % vertexSize;
+                    canBatchVertexBuffer = canBatchVertexBuffer && vertexOffsetRemainder == 0;
                     @Nullable final var indexB3DBuffer = draw.indexBuffer() == null ? indexBuffer : draw.indexBuffer();
-                    @Nullable final var indexBufferSlice = indexB3DBuffer == null ? null : ((Hg3DGpuBuffer) indexB3DBuffer);
+                    @Nullable final var indexBufferSlice = indexB3DBuffer == null ? null : ((Hg3DGpuBuffer) indexB3DBuffer).hgSlice();
                     @Nullable final var indexCinnabarBuffer = indexBufferSlice == null ? null : indexBufferSlice.buffer();
                     canBatchIndexBuffer = canBatchIndexBuffer && expectedIndexCinnabarBuffer == indexCinnabarBuffer;
                     canBatchIndexType = canBatchIndexType && expectedIndexType == (draw.indexType() == null ? indexType : draw.indexType());
@@ -709,9 +708,8 @@ public class Hg3DCommandEncoder implements CommandEncoder, Hg3DObject, Destroyab
                     drawCommands.instanceCount(1);
                     assert expectedIndexType != null;
                     assert indexBufferSlice != null;
-                    // TODO: pooled index buffer w/ offset
-//                    drawCommands.firstIndex((int) (indexBufferSlice.range.offset() / expectedIndexType.bytes) + draw.firstIndex());
-//                    drawCommands.vertexOffset((int) vertexOffset);
+                    drawCommands.firstIndex((int) (indexBufferSlice.offset() / expectedIndexType.bytes) + draw.firstIndex());
+                    drawCommands.vertexOffset((int) vertexOffset);
                     drawCommands.firstIndex(draw.firstIndex());
                     drawCommands.vertexOffset(0);
                 }

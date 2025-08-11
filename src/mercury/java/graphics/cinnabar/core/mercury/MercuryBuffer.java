@@ -1,5 +1,6 @@
 package graphics.cinnabar.core.mercury;
 
+import graphics.cinnabar.api.exceptions.NotImplemented;
 import graphics.cinnabar.api.hg.HgBuffer;
 import graphics.cinnabar.api.hg.enums.HgFormat;
 import graphics.cinnabar.api.memory.PointerWrapper;
@@ -62,6 +63,7 @@ public class MercuryBuffer extends MercuryObject implements HgBuffer {
                 case AUTO_PREF_DEVICE -> {
                     allocCreateInfo.usage(VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE);
                 }
+                default -> throw new NotImplemented();
             }
             
             final var vmaAllocationInfo = VmaAllocationInfo.calloc(stack);

@@ -2,21 +2,27 @@ package graphics.cinnabar.core.hg3d;
 
 import com.mojang.blaze3d.buffers.GpuBuffer;
 import graphics.cinnabar.api.hg.HgBuffer;
+import graphics.cinnabar.api.memory.MagicMemorySizes;
+import graphics.cinnabar.api.util.Destroyable;
 import graphics.cinnabar.lib.datastructures.SpliceableLinkedList;
+import it.unimi.dsi.fastutil.longs.LongArrayList;
 import it.unimi.dsi.fastutil.objects.ReferenceArrayList;
 import it.unimi.dsi.fastutil.objects.ReferenceList;
 import org.jetbrains.annotations.Nullable;
 
 import static graphics.cinnabar.core.hg3d.Hg3D.*;
+import static org.lwjgl.util.vma.Vma.vmaAllocateMemory;
 
 public class Hg3DGpuBuffer extends GpuBuffer implements Hg3DObject {
     protected final Hg3DGpuDevice device;
     private final HgBuffer.MemoryType preferredMemoryType;
     private boolean isClosed = false;
     private HgBuffer buffer;
+    private HgBuffer.Slice slice;
     private long lastUsedFrame = -1;
     private final SpliceableLinkedList.Node<Hg3DGpuBuffer> node = new SpliceableLinkedList.Node<>(this);
     private boolean pendingPromotion = false;
+    private boolean pooled = false;
     
     public Hg3DGpuBuffer(Hg3DGpuDevice device, int usage, int size) {
         super(usage, size);
@@ -26,6 +32,7 @@ public class Hg3DGpuBuffer extends GpuBuffer implements Hg3DObject {
         final boolean mappable = (usage & (USAGE_MAP_READ | USAGE_MAP_WRITE)) != 0;
         preferredMemoryType = clientStorageHint ? HgBuffer.MemoryType.MAPPABLE : mappable ? HgBuffer.MemoryType.MAPPABLE_PREF_DEVICE : HgBuffer.MemoryType.AUTO_PREF_DEVICE;
         buffer = device.hgDevice().createBuffer(preferredMemoryType, size, Hg3DConst.bufferUsageBits(usage));
+        slice = buffer.slice();
     }
     
     @Override
@@ -52,15 +59,14 @@ public class Hg3DGpuBuffer extends GpuBuffer implements Hg3DObject {
         return lastUsedFrame == device.currentFrame();
     }
     
-    public HgBuffer buffer() {
+    public HgBuffer.Slice hgSlice() {
         final var currentFrame = device.currentFrame();
         if (currentFrame != lastUsedFrame) {
             Management.used(this);
             lastUsedFrame = currentFrame;
         }
-        return buffer;
+        return slice;
     }
-    
     
     public static class Management {
         private static final SpliceableLinkedList<Hg3DGpuBuffer> pendingDemotionBuffers = new SpliceableLinkedList<>();
@@ -69,6 +75,10 @@ public class Hg3DGpuBuffer extends GpuBuffer implements Hg3DObject {
         private static boolean runningCycle = false;
         
         private static void used(Hg3DGpuBuffer buffer) {
+            if (buffer.pooled) {
+                // the pools manage this themselves
+                return;
+            }
             if (!buffer.buffer.deviceLocal()) {
                 // non-device local buffers not pending a promotion are likely specifically asked to be host buffers
                 // so, just don't care about them
@@ -129,6 +139,7 @@ public class Hg3DGpuBuffer extends GpuBuffer implements Hg3DObject {
                 final var newBuffer = device.hgDevice().createBuffer(HgBuffer.MemoryType.MAPPABLE, toDemote.size(), Hg3DConst.bufferUsageBits(toDemote.usage()));
                 cb.copyBufferToBuffer(oldBuffer.slice(), newBuffer.slice());
                 toDemote.buffer = newBuffer;
+                toDemote.slice = newBuffer.slice();
                 device.destroyEndOfFrameAsync(oldBuffer);
                 toDemote.pendingPromotion = true;
             }
@@ -148,6 +159,7 @@ public class Hg3DGpuBuffer extends GpuBuffer implements Hg3DObject {
                 final var newBuffer = device.hgDevice().createBuffer(toPromote.preferredMemoryType, toPromote.size(), Hg3DConst.bufferUsageBits(toPromote.usage()));
                 cb.copyBufferToBuffer(oldBuffer.slice(), newBuffer.slice());
                 toPromote.buffer = newBuffer;
+                toPromote.slice = newBuffer.slice();
                 device.destroyEndOfFrameAsync(oldBuffer);
                 toPromote.pendingPromotion = false;
             }
