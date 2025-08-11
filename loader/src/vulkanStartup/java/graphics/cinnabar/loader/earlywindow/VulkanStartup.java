@@ -86,10 +86,22 @@ public class VulkanStartup {
             final var appName = stack.UTF8("Minecraft");
             final var engineName = stack.UTF8("Cinnabar");
             final var mcVersionChunks = Config.mcVersionString.split("-")[0].split("\\.");
-            final int appVersion = VK_MAKE_VERSION(Integer.parseInt(mcVersionChunks[0]), Integer.parseInt(mcVersionChunks[1]), Integer.parseInt(mcVersionChunks[2]));
+            final int appVersion;
+            if (mcVersionChunks.length == 1 && mcVersionChunks[0].matches("[0-9][0-9]w[0-9][0-9]a")) {
+                // snapshot version, zero is fine
+                appVersion = 0;
+            } else {
+                appVersion = VK_MAKE_VERSION(Integer.parseInt(mcVersionChunks[0]), Integer.parseInt(mcVersionChunks[1]), Integer.parseInt(mcVersionChunks[2]));
+            }
             final String modVersionString = Config.cinnabarVersionString;
             final var modVersionChunks = modVersionString.split("-")[0].split("\\.");
-            final int engineVersion = VK_MAKE_VERSION(Integer.parseInt(modVersionChunks[0]), Integer.parseInt(modVersionChunks[1]), Integer.parseInt(modVersionChunks[2]));
+            final int engineVersion;
+            if (modVersionChunks.length == 1 && modVersionChunks[0].equals("${version}")) {
+                // fabric dev environment, zero is fine
+                engineVersion = 0;
+            } else {
+                engineVersion = VK_MAKE_VERSION(Integer.parseInt(modVersionChunks[0]), Integer.parseInt(modVersionChunks[1]), Integer.parseInt(modVersionChunks[2]));
+            }
             appInfo.sType(VK_STRUCTURE_TYPE_APPLICATION_INFO);
             appInfo.pApplicationName(appName);
             appInfo.applicationVersion(appVersion);
