@@ -16,9 +16,13 @@ public interface HgCommandBuffer extends HgObject {
     
     HgCommandBuffer end();
     
-    HgCommandBuffer barrier();
-    
     // ---------- Always valid commands ----------
+    
+    HgCommandBuffer pushDebugGroup(String name);
+    
+    HgCommandBuffer popDebugGroup();
+    
+    HgCommandBuffer barrier();
     
     HgCommandBuffer barrier(long srcStage, long srcAccess, long dstStage, long dstAccess);
     
@@ -45,9 +49,9 @@ public interface HgCommandBuffer extends HgObject {
     // must have image acquired
     HgCommandBuffer blitToSwapchain(HgImage.View view, HgSurface.Swapchain swapchain);
     
-    HgCommandBuffer beginRenderPass(HgRenderPass renderPass, HgFramebuffer framebuffer);
-    
     // ---------- Inside RenderPass commands ----------
+    
+    HgCommandBuffer beginRenderPass(HgRenderPass renderPass, HgFramebuffer framebuffer);
     
     HgCommandBuffer endRenderPass();
     

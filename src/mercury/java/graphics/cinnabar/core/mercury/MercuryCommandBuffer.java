@@ -55,6 +55,31 @@ public class MercuryCommandBuffer extends MercuryObject implements HgCommandBuff
     
     // ---------- Always valid commands ----------
     
+    
+    @Override
+    public HgCommandBuffer pushDebugGroup(String name) {
+        if (device.debugMarkerEnabled()) {
+            try (final var stack = memoryStack.push()) {
+                final var markerInfo = VkDebugMarkerMarkerInfoEXT.calloc(stack).sType$Default();
+                markerInfo.pMarkerName(stack.UTF8(name));
+                markerInfo.color(0, 1);
+                markerInfo.color(1, 1);
+                markerInfo.color(2, 1);
+                markerInfo.color(3, 1);
+                EXTDebugMarker.vkCmdDebugMarkerBeginEXT(commandBuffer, markerInfo);
+            }
+        }
+        return this;
+    }
+    
+    @Override
+    public HgCommandBuffer popDebugGroup() {
+        if (device.debugMarkerEnabled()) {
+            EXTDebugMarker.vkCmdDebugMarkerEndEXT(commandBuffer);
+        }
+        return this;
+    }
+    
     @Override
     public HgCommandBuffer barrier() {
         barrier(VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT);

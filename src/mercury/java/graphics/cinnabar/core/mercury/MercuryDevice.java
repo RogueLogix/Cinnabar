@@ -15,6 +15,7 @@ import org.lwjgl.vulkan.*;
 import java.util.List;
 
 import static org.lwjgl.util.vma.Vma.*;
+import static org.lwjgl.vulkan.EXTDebugMarker.VK_EXT_DEBUG_MARKER_EXTENSION_NAME;
 import static org.lwjgl.vulkan.EXTDebugUtils.vkDestroyDebugUtilsMessengerEXT;
 import static org.lwjgl.vulkan.VK12.*;
 
@@ -29,6 +30,7 @@ public class MercuryDevice implements HgDevice {
     private final MercuryDeviceProperties properties;
     private final VkPhysicalDevice vkPhysicalDevice;
     private final VkDevice vkDevice;
+    private final List<String> enabledDeviceExtensions;
     private final long vmaAllocator;
     private int currentVmaFrame = 0;
     
@@ -79,6 +81,7 @@ public class MercuryDevice implements HgDevice {
         } else {
             transferQueue = new MercuryQueue(this, vkTransferQueue.queue(), vkComputeQueue.queueFamily());
         }
+        enabledDeviceExtensions = deviceAndQueues.enabledDeviceExtensions();
         
         properties = MercuryDeviceProperties.create(this);
         
@@ -251,5 +254,9 @@ public class MercuryDevice implements HgDevice {
             stats.position(primaryDeviceLocalheap);
             return new LongLongImmutablePair(stats.statistics().allocationBytes(), stats.budget());
         }
+    }
+    
+    public boolean debugMarkerEnabled() {
+        return enabledDeviceExtensions.contains(VK_EXT_DEBUG_MARKER_EXTENSION_NAME);
     }
 }
