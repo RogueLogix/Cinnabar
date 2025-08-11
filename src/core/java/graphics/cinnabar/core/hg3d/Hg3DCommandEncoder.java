@@ -215,19 +215,24 @@ public class Hg3DCommandEncoder implements CommandEncoder, Hg3DObject, Destroyab
     @Override
     public void clearColorTexture(GpuTexture texture, int color) {
         assert texture instanceof Hg3DGpuTexture;
-        mainCommandBuffer().clearColorImage(((Hg3DGpuTexture) texture).image().resourceRange(), color);
+        final var cb = mainCommandBuffer();
+        cb.barrier();
+        cb.clearColorImage(((Hg3DGpuTexture) texture).image().resourceRange(), color);
     }
     
     @Override
     public void clearColorAndDepthTextures(GpuTexture colorTexture, int clearColor, GpuTexture depthTexture, double clearDepth) {
         assert colorTexture instanceof Hg3DGpuTexture;
         assert depthTexture instanceof Hg3DGpuTexture;
-        mainCommandBuffer().clearColorImage(((Hg3DGpuTexture) colorTexture).image().resourceRange(), clearColor);
-        mainCommandBuffer().clearDepthStencilImage(((Hg3DGpuTexture) depthTexture).image().resourceRange(), clearDepth, -1);
+        final var cb = mainCommandBuffer();
+        cb.barrier();
+        cb.clearColorImage(((Hg3DGpuTexture) colorTexture).image().resourceRange(), clearColor);
+        cb.clearDepthStencilImage(((Hg3DGpuTexture) depthTexture).image().resourceRange(), clearDepth, -1);
     }
     
     @Override
     public void clearColorAndDepthTextures(GpuTexture colorTexture, int clearColor, GpuTexture depthTexture, double clearDepth, int scissorX, int scissorY, int scissorWidth, int scissorHeight) {
+        mainCommandBuffer().barrier();
         try (
                 // creating a renderpass needs texture views, but im only passed textures... amazing
                 final var colorTextureView = device.createTextureView(colorTexture);
@@ -241,12 +246,16 @@ public class Hg3DCommandEncoder implements CommandEncoder, Hg3DObject, Destroyab
     @Override
     public void clearDepthTexture(GpuTexture depthTexture, double clearDepth) {
         assert depthTexture instanceof Hg3DGpuTexture;
-        mainCommandBuffer().clearDepthStencilImage(((Hg3DGpuTexture) depthTexture).image().resourceRange(), clearDepth, -1);
+        final var cb = mainCommandBuffer();
+        cb.barrier();
+        cb.clearDepthStencilImage(((Hg3DGpuTexture) depthTexture).image().resourceRange(), clearDepth, -1);
     }
     
     public void clearStencilTexture(GpuTexture texture, int value) {
         assert texture instanceof Hg3DGpuTexture;
-        mainCommandBuffer().clearDepthStencilImage(((Hg3DGpuTexture) texture).image().resourceRange(), -1, value);
+        final var cb = mainCommandBuffer();
+        cb.barrier();
+        cb.clearDepthStencilImage(((Hg3DGpuTexture) texture).image().resourceRange(), -1, value);
     }
     
     @Override
