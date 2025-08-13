@@ -5,11 +5,12 @@ import com.mojang.blaze3d.buffers.GpuBufferSlice;
 import com.mojang.blaze3d.buffers.GpuFence;
 import com.mojang.blaze3d.pipeline.RenderPipeline;
 import com.mojang.blaze3d.platform.NativeImage;
-import com.mojang.blaze3d.systems.CommandEncoder;
 import com.mojang.blaze3d.systems.RenderPass;
 import com.mojang.blaze3d.textures.GpuTexture;
 import com.mojang.blaze3d.textures.GpuTextureView;
 import com.mojang.blaze3d.vertex.VertexFormat;
+import graphics.cinnabar.api.c3d.C3DCommandEncoder;
+import graphics.cinnabar.api.c3d.C3DRenderPass;
 import graphics.cinnabar.api.hg.*;
 import graphics.cinnabar.api.hg.enums.HgUniformType;
 import graphics.cinnabar.api.memory.MagicMemorySizes;
@@ -36,7 +37,7 @@ import java.util.function.Supplier;
 import static org.lwjgl.vulkan.KHRSynchronization2.VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT_KHR;
 import static org.lwjgl.vulkan.VK10.*;
 
-public class Hg3DCommandEncoder implements CommandEncoder, Hg3DObject, Destroyable {
+public class Hg3DCommandEncoder implements C3DCommandEncoder, Hg3DObject, Destroyable {
     
     private static final long UPLOAD_BUFFER_SIZE = 4 * MagicMemorySizes.MiB;
     private final Hg3DGpuDevice device;
@@ -123,6 +124,7 @@ public class Hg3DCommandEncoder implements CommandEncoder, Hg3DObject, Destroyab
         earlyCommandBuffer().initImages(List.of(texture.image()));
     }
     
+    @Override
     public void insertCommandBuffer(HgCommandBuffer commandBuffer) {
         endCommandBuffers();
         commandBuffers.add(commandBuffer);
@@ -200,6 +202,7 @@ public class Hg3DCommandEncoder implements CommandEncoder, Hg3DObject, Destroyab
         return createRenderPass(debugGroup, renderpass, framebuffer);
     }
     
+    @Override
     public Hg3DRenderPass createRenderPass(Supplier<String> debugGroup, HgRenderPass renderpass, HgFramebuffer framebuffer){
         // if all render params are the same, except maybe clear, which i currently ignore, continue the pass
         if (continuedRenderPass == null || continuedRenderPass.renderPass != renderpass || continuedRenderPass.framebuffer != framebuffer) {
@@ -237,7 +240,7 @@ public class Hg3DCommandEncoder implements CommandEncoder, Hg3DObject, Destroyab
                 final var depthTextureView = device.createTextureView(depthTexture);
                 final var renderpass = createRenderPass(() -> "ClearColorDepthTextures", colorTextureView, OptionalInt.empty(), depthTextureView, OptionalDouble.empty())
         ) {
-            renderpass.clearAttachments(clearColor, clearDepth, scissorX, scissorY, scissorWidth, scissorHeight);
+            renderpass.clearAttachments(IntList.of(clearColor), clearDepth, scissorX, scissorY, scissorWidth, scissorHeight);
         }
     }
     
@@ -417,7 +420,7 @@ public class Hg3DCommandEncoder implements CommandEncoder, Hg3DObject, Destroyab
         };
     }
     
-    public class Hg3DRenderPass implements RenderPass {
+    public class Hg3DRenderPass implements C3DRenderPass {
         
         protected final Map<String, @Nullable GpuBufferSlice> uniforms = new Object2ObjectOpenHashMap<>();
         protected final Map<String, @Nullable GpuTextureView> samplers = new Object2ObjectOpenHashMap<>();
@@ -544,7 +547,8 @@ public class Hg3DCommandEncoder implements CommandEncoder, Hg3DObject, Destroyab
         
         @Override
         public <T> void drawMultipleIndexed(Collection<Draw<T>> draws, @Nullable GpuBuffer indexBuffer, @Nullable VertexFormat.IndexType indexType, Collection<String> dynamicUniforms, T userData) {
-            
+            assert hgPipeline != null;
+            assert hgPipeline != null;
             
             if (dynamicUniforms.size() == 1) {
                 final var dynamicUniformName = dynamicUniforms.stream().findFirst().get();
@@ -627,8 +631,9 @@ public class Hg3DCommandEncoder implements CommandEncoder, Hg3DObject, Destroyab
             commandBuffer.bindUniformSet(0, uniformSet);
         }
         
-        public void clearAttachments(int clearColor, double clearDepth, int x, int y, int width, int height) {
-            commandBuffer.clearAttachments(IntList.of(clearColor), clearDepth, x, y, width, height);
+        @Override
+        public void clearAttachments(IntList clearColors, double clearDepth, int x, int y, int width, int height) {
+            commandBuffer.clearAttachments(clearColors, clearDepth, x, y, width, height);
         }
         
         public <T> void fastDrawMultipleIndexed(Collection<Draw<T>> draws, @Nullable GpuBuffer indexBuffer, @Nullable VertexFormat.IndexType indexType, Collection<String> dynamicUniforms, T userData) {
