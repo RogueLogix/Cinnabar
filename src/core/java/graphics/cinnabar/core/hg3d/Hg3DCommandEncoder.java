@@ -196,15 +196,20 @@ public class Hg3DCommandEncoder implements C3DCommandEncoder, Hg3DObject, Destro
     
     @Override
     public Hg3DRenderPass createRenderPass(Supplier<String> debugGroup, GpuTextureView colorTexture, OptionalInt clearColor, @Nullable GpuTextureView depthTexture, OptionalDouble clearDepth) {
-        final var renderpass = device.getRenderPass(Hg3DConst.format(colorTexture.texture().getFormat()), depthTexture != null ? Hg3DConst.format(depthTexture.texture().getFormat()) : null);
-        @Nullable final var depthView = depthTexture != null ? ((Hg3DGpuTextureView) depthTexture).imageView() : null;
-        final var framebuffer = ((Hg3DGpuTextureView) colorTexture).getFramebuffer(renderpass, depthView);
-        return createRenderPass(debugGroup, renderpass, framebuffer);
+        final var hgRenderPass = device.getRenderPass(Hg3DConst.format(colorTexture.texture().getFormat()), depthTexture != null ? Hg3DConst.format(depthTexture.texture().getFormat()) : null);
+        @Nullable
+        final var depthView = depthTexture != null ? ((Hg3DGpuTextureView) depthTexture).imageView() : null;
+        final var framebuffer = ((Hg3DGpuTextureView) colorTexture).getFramebuffer(hgRenderPass, depthView);
+        final var renderPass = createRenderPass(debugGroup, hgRenderPass, framebuffer);
+        if (clearColor.isPresent()) {
+            renderPass.clearAttachments(IntList.of(clearColor.getAsInt()), clearDepth.orElse(-1), 0, 0, framebuffer.width(), framebuffer.height());
+        }
+        return renderPass;
     }
     
     @Override
-    public Hg3DRenderPass createRenderPass(Supplier<String> debugGroup, HgRenderPass renderpass, HgFramebuffer framebuffer){
-        // if all render params are the same, except maybe clear, which i currently ignore, continue the pass
+    public Hg3DRenderPass createRenderPass(Supplier<String> debugGroup, HgRenderPass renderpass, HgFramebuffer framebuffer) {
+        // if all render params are the same continue the pass
         if (continuedRenderPass == null || continuedRenderPass.renderPass != renderpass || continuedRenderPass.framebuffer != framebuffer) {
             endRenderPass();
             continuedRenderPass = new Hg3DRenderPass(renderpass, framebuffer);
@@ -565,8 +570,10 @@ public class Hg3DCommandEncoder implements C3DCommandEncoder, Hg3DObject, Destro
             @Nullable
             VertexFormat.IndexType lastIndexType = null;
             for (Draw<T> draw : draws) {
-                @Nullable final var indexTypeToUse = draw.indexType() == null ? indexType : draw.indexType();
-                @Nullable final var indexBufferToUse = draw.indexBuffer() == null ? indexBuffer : draw.indexBuffer();
+                @Nullable
+                final var indexTypeToUse = draw.indexType() == null ? indexType : draw.indexType();
+                @Nullable
+                final var indexBufferToUse = draw.indexBuffer() == null ? indexBuffer : draw.indexBuffer();
                 assert indexTypeToUse != null;
                 assert indexBufferToUse != null;
                 if (indexBufferToUse != lastIndexBuffer || indexTypeToUse != lastIndexType) {
@@ -598,19 +605,22 @@ public class Hg3DCommandEncoder implements C3DCommandEncoder, Hg3DObject, Destro
             assert boundPipeline != null;
             
             final var pipelineLayout = hgPipeline.layout();
-            @Nullable final var uniformSetLayout = pipelineLayout.uniformSetLayout(0);
+            @Nullable
+            final var uniformSetLayout = pipelineLayout.uniformSetLayout(0);
             assert uniformSetLayout != null;
             
             final var writes = new ReferenceArrayList<HgUniformSet.Write>();
             for (final var binding : uniformSetLayout.bindings()) {
                 switch (binding.type()) {
                     case COMBINED_IMAGE_SAMPLER -> {
-                        @Nullable final var imageView = (Hg3DGpuTextureView) samplers.get(binding.name());
+                        @Nullable
+                        final var imageView = (Hg3DGpuTextureView) samplers.get(binding.name());
                         assert imageView != null;
                         writes.add(new HgUniformSet.Write.Image(binding, 0, List.of(new Pair<>(imageView.imageView(), imageView.texture().sampler()))));
                     }
                     case UNIFORM_TEXEL_BUFFER -> {
-                        @Nullable final var slice = uniforms.get(binding.name());
+                        @Nullable
+                        final var slice = uniforms.get(binding.name());
                         assert slice != null;
                         final var hgBuffer = ((Hg3DGpuBuffer) slice.buffer()).hgSlice();
                         final var view = hgBuffer.view(boundPipeline.texelBufferFormat(binding.name()), slice.offset(), slice.length());
@@ -618,7 +628,8 @@ public class Hg3DCommandEncoder implements C3DCommandEncoder, Hg3DObject, Destro
                         device.destroyEndOfFrameAsync(view);
                     }
                     case UNIFORM_BUFFER, STORAGE_BUFFER -> {
-                        @Nullable final var slice = uniforms.get(binding.name());
+                        @Nullable
+                        final var slice = uniforms.get(binding.name());
                         assert slice != null;
                         writes.add(new HgUniformSet.Write.Buffer(binding, 0, List.of(((Hg3DGpuBuffer) slice.buffer()).hgSlice().slice(slice.offset(), slice.length()))));
                     }
@@ -690,9 +701,12 @@ public class Hg3DCommandEncoder implements C3DCommandEncoder, Hg3DObject, Destro
                 final var expectedDynamicUniformGpuBuffer = orderedDynamicUniformValues.getFirst().buffer();
                 final var firstDraw = orderedDraws.getFirst();
                 final var expectedVertexBuffer = ((Hg3DGpuBuffer) firstDraw.vertexBuffer()).hgSlice().buffer();
-                @Nullable final var expectedIndexB3DBuffer = firstDraw.indexBuffer() == null ? indexBuffer : firstDraw.indexBuffer();
-                @Nullable final var expectedIndexCinnabarBuffer = expectedIndexB3DBuffer == null ? null : ((Hg3DGpuBuffer) expectedIndexB3DBuffer).hgSlice().buffer();
-                @Nullable final var expectedIndexType = firstDraw.indexType() == null ? indexType : firstDraw.indexType();
+                @Nullable
+                final var expectedIndexB3DBuffer = firstDraw.indexBuffer() == null ? indexBuffer : firstDraw.indexBuffer();
+                @Nullable
+                final var expectedIndexCinnabarBuffer = expectedIndexB3DBuffer == null ? null : ((Hg3DGpuBuffer) expectedIndexB3DBuffer).hgSlice().buffer();
+                @Nullable
+                final var expectedIndexType = firstDraw.indexType() == null ? indexType : firstDraw.indexType();
                 for (int i = 0; i < drawCount; i++) {
                     drawCommands.position(i);
                     final var orderedDynamicUniformValue = orderedDynamicUniformValues.get(i);
@@ -710,9 +724,12 @@ public class Hg3DCommandEncoder implements C3DCommandEncoder, Hg3DObject, Destro
                     final var vertexOffset = vertexBufferBacking.offset() / vertexSize;
                     final var vertexOffsetRemainder = vertexBufferBacking.offset() % vertexSize;
                     canBatchVertexBuffer = canBatchVertexBuffer && vertexOffsetRemainder == 0;
-                    @Nullable final var indexB3DBuffer = draw.indexBuffer() == null ? indexBuffer : draw.indexBuffer();
-                    @Nullable final var indexBufferSlice = indexB3DBuffer == null ? null : ((Hg3DGpuBuffer) indexB3DBuffer).hgSlice();
-                    @Nullable final var indexCinnabarBuffer = indexBufferSlice == null ? null : indexBufferSlice.buffer();
+                    @Nullable
+                    final var indexB3DBuffer = draw.indexBuffer() == null ? indexBuffer : draw.indexBuffer();
+                    @Nullable
+                    final var indexBufferSlice = indexB3DBuffer == null ? null : ((Hg3DGpuBuffer) indexB3DBuffer).hgSlice();
+                    @Nullable
+                    final var indexCinnabarBuffer = indexBufferSlice == null ? null : indexBufferSlice.buffer();
                     canBatchIndexBuffer = canBatchIndexBuffer && expectedIndexCinnabarBuffer == indexCinnabarBuffer;
                     canBatchIndexType = canBatchIndexType && expectedIndexType == (draw.indexType() == null ? indexType : draw.indexType());
                     
@@ -754,8 +771,10 @@ public class Hg3DCommandEncoder implements C3DCommandEncoder, Hg3DObject, Destro
                         VertexFormat.IndexType lastIndexType = null;
                         for (int i = 0; i < drawCount; i++) {
                             final var draw = orderedDraws.get(i);
-                            @Nullable final var indexTypeToUse = draw.indexType() == null ? indexType : draw.indexType();
-                            @Nullable final var indexBufferToUse = draw.indexBuffer() == null ? indexBuffer : draw.indexBuffer();
+                            @Nullable
+                            final var indexTypeToUse = draw.indexType() == null ? indexType : draw.indexType();
+                            @Nullable
+                            final var indexBufferToUse = draw.indexBuffer() == null ? indexBuffer : draw.indexBuffer();
                             assert indexTypeToUse != null;
                             assert indexBufferToUse != null;
                             if (indexBufferToUse != lastIndexBuffer || indexTypeToUse != lastIndexType) {
@@ -778,7 +797,8 @@ public class Hg3DCommandEncoder implements C3DCommandEncoder, Hg3DObject, Destro
                             final var draw = orderedDraws.get(i);
                             setVertexBuffer(draw.slot(), draw.vertexBuffer());
                             final var arrayIndex = orderedDynamicUniformValues.get(i).offset() / ssboArrayStride;
-                            @Nullable final var indexB3DBuffer = draw.indexBuffer() == null ? indexBuffer : draw.indexBuffer();
+                            @Nullable
+                            final var indexB3DBuffer = draw.indexBuffer() == null ? indexBuffer : draw.indexBuffer();
                             assert indexB3DBuffer != null;
 //                            final var firstIndex = (int) (((CinnabarGpuBuffer) indexB3DBuffer).backingSlice().range.offset() / expectedIndexType.bytes);
                             commandBuffer.drawIndexed(draw.indexCount(), 1, draw.firstIndex(), 0, arrayIndex);
@@ -790,8 +810,10 @@ public class Hg3DCommandEncoder implements C3DCommandEncoder, Hg3DObject, Destro
                         VertexFormat.IndexType lastIndexType = null;
                         for (int i = 0; i < drawCount; i++) {
                             final var draw = orderedDraws.get(i);
-                            @Nullable final var indexTypeToUse = draw.indexType() == null ? indexType : draw.indexType();
-                            @Nullable final var indexBufferToUse = draw.indexBuffer() == null ? indexBuffer : draw.indexBuffer();
+                            @Nullable
+                            final var indexTypeToUse = draw.indexType() == null ? indexType : draw.indexType();
+                            @Nullable
+                            final var indexBufferToUse = draw.indexBuffer() == null ? indexBuffer : draw.indexBuffer();
                             assert indexTypeToUse != null;
                             assert indexBufferToUse != null;
                             if (indexBufferToUse != lastIndexBuffer || indexTypeToUse != lastIndexType) {
@@ -812,8 +834,10 @@ public class Hg3DCommandEncoder implements C3DCommandEncoder, Hg3DObject, Destro
                     for (int i = 0; i < drawCount; i++) {
                         final var draw = orderedDraws.get(i);
                         final var uniformValue = orderedDynamicUniformValues.get(i);
-                        @Nullable final var indexTypeToUse = draw.indexType() == null ? indexType : draw.indexType();
-                        @Nullable final var indexBufferToUse = draw.indexBuffer() == null ? indexBuffer : draw.indexBuffer();
+                        @Nullable
+                        final var indexTypeToUse = draw.indexType() == null ? indexType : draw.indexType();
+                        @Nullable
+                        final var indexBufferToUse = draw.indexBuffer() == null ? indexBuffer : draw.indexBuffer();
                         assert indexTypeToUse != null;
                         assert indexBufferToUse != null;
                         if (indexBufferToUse != lastIndexBuffer || indexTypeToUse != lastIndexType) {

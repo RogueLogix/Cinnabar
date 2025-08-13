@@ -419,14 +419,18 @@ public class MercuryCommandBuffer extends MercuryObject implements HgCommandBuff
                 
             }
             
-            final var vkClearValue = VkClearValue.calloc(stack);
-            final var clearValue = vkClearValue.depthStencil();
-            clearValue.depth((float) clearDepth);
-            attachments.position(clearColors.size());
-            attachments.aspectMask(VK_IMAGE_ASPECT_DEPTH_BIT);
-            attachments.clearValue(vkClearValue);
-            attachments.position(0);
+            if(clearDepth != -1) {
+                final var vkClearValue = VkClearValue.calloc(stack);
+                final var clearValue = vkClearValue.depthStencil();
+                clearValue.depth((float) clearDepth);
+                attachments.position(clearColors.size());
+                attachments.aspectMask(VK_IMAGE_ASPECT_DEPTH_BIT);
+                attachments.clearValue(vkClearValue);
+            } else {
+                attachments.limit(clearColors.size());
+            }
             
+            attachments.position(0);
             vkCmdClearAttachments(commandBuffer, attachments, rects);
         }
         return this;
