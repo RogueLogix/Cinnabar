@@ -462,11 +462,11 @@ compileMclibJava.options.compilerArgs += '-Xplugin:Manifold'
 compileMercuryJava.options.compilerArgs += '-Xplugin:Manifold'
 compileJava.options.compilerArgs += '-Xplugin:Manifold'
 
-new File("src", "build.properties").text = """
+file("src/build.properties").text = """
 // to switch mode, refresh the gradle project of the respective loader
 NEO
 """
-new File("loader/src", "build.properties").text = """
+file("loader/src/build.properties").text = """
 // to switch mode, refresh the gradle project of the respective loader
 NEO
 """
