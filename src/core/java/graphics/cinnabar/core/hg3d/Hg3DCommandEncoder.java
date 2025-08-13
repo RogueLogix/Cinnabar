@@ -197,18 +197,16 @@ public class Hg3DCommandEncoder implements CommandEncoder, Hg3DObject, Destroyab
         final var renderpass = device.getRenderPass(Hg3DConst.format(colorTexture.texture().getFormat()), depthTexture != null ? Hg3DConst.format(depthTexture.texture().getFormat()) : null);
         @Nullable final var depthView = depthTexture != null ? ((Hg3DGpuTextureView) depthTexture).imageView() : null;
         final var framebuffer = ((Hg3DGpuTextureView) colorTexture).getFramebuffer(renderpass, depthView);
-        final Hg3DRenderPass renderPass;
-        if (continuedRenderPass != null && continuedRenderPass.renderPass == renderpass && continuedRenderPass.framebuffer == framebuffer) {
-            // all render params are the same, except maybe clear, which i currently ignore, continue the pass
-            renderPass = continuedRenderPass;
-        } else {
-            renderPass = new Hg3DRenderPass(renderpass, framebuffer);
-        }
-        if (continuedRenderPass != renderPass) {
+        return createRenderPass(debugGroup, renderpass, framebuffer);
+    }
+    
+    public Hg3DRenderPass createRenderPass(Supplier<String> debugGroup, HgRenderPass renderpass, HgFramebuffer framebuffer){
+        // if all render params are the same, except maybe clear, which i currently ignore, continue the pass
+        if (continuedRenderPass == null || continuedRenderPass.renderPass != renderpass || continuedRenderPass.framebuffer != framebuffer) {
             endRenderPass();
+            continuedRenderPass = new Hg3DRenderPass(renderpass, framebuffer);
         }
-        renderPass.begin(debugGroup);
-        continuedRenderPass = renderPass;
+        continuedRenderPass.begin(debugGroup);
         return continuedRenderPass;
     }
     
@@ -419,7 +417,7 @@ public class Hg3DCommandEncoder implements CommandEncoder, Hg3DObject, Destroyab
         };
     }
     
-    private class Hg3DRenderPass implements RenderPass {
+    public class Hg3DRenderPass implements RenderPass {
         
         protected final Map<String, @Nullable GpuBufferSlice> uniforms = new Object2ObjectOpenHashMap<>();
         protected final Map<String, @Nullable GpuTextureView> samplers = new Object2ObjectOpenHashMap<>();
