@@ -9,7 +9,7 @@ plugins {
 }
 
 Properties props = new Properties()
-InputStream ins = new FileInputStream("../gradle.properties")
+InputStream ins = new FileInputStream(file("../gradle.properties"))
 props.load(ins)
 ins.close()
 
@@ -289,11 +289,11 @@ tasks.withType(JavaCompile) {
     options.compilerArgs += '-Xplugin:Manifold'
     options.fork = true
 }
-new File("../src", "build.properties").text = """
+file("../src/build.properties").text = """
 ## to switch mode, refresh the gradle project of the respective loader
 FABRIC
 """
-new File("../loader/src", "build.properties").text = """
+file("../loader/src/build.properties").text = """
 ## to switch mode, refresh the gradle project of the respective loader
 FABRIC
 """
