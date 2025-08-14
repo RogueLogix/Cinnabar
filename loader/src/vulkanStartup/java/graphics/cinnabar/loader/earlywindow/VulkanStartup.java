@@ -74,6 +74,99 @@ import static org.lwjgl.vulkan.VK12.*;
 
 public class VulkanStartup {
     
+    private static final Logger LOGGER = LogUtils.getLogger();
+    
+    public static class Config {
+        public static String mcVersionString = null;
+        public static String cinnabarVersionString = null;
+    }
+    
+    public record Instance(VkInstance instance, long debugCallback, List<String> enabledInsanceExtensions) {
+        public void destroy() {
+            if (debugCallback != -1) {
+                vkDestroyDebugUtilsMessengerEXT(instance, debugCallback, null);
+            }
+            vkDestroyInstance(instance, null);
+        }
+    }
+    
+    public record Queue(int queueFamily, VkQueue queue) {
+    }
+    
+    public record Device(VkDevice device, List<Queue> queues, List<String> enabledDeviceExtensions) {
+        public void destroy() {
+            vkDestroyDevice(device, null);
+        }
+    }
+    
+    private static final List<String> optionalInstanceExtensions = List.of(
+            VK_EXT_DEBUG_REPORT_EXTENSION_NAME
+    );
+    
+    private static final List<String> requiredDeviceExtensions = List.of(
+            VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME,
+            VK_KHR_SWAPCHAIN_EXTENSION_NAME
+    );
+    
+    private static final List<Pair<String, List<String>>> optionalDeviceExtensions = List.of(
+            new ObjectObjectImmutablePair<>(VK_EXT_DEBUG_MARKER_EXTENSION_NAME, List.of(VK_EXT_DEBUG_REPORT_EXTENSION_NAME)),
+            new ObjectObjectImmutablePair<>(VK_KHR_PORTABILITY_SUBSET_EXTENSION_NAME, List.of())
+    );
+    
+    private static final boolean supported = ((Supplier<Boolean>) () -> {
+        LOGGER.info("Querying Vulkan support");
+        try {
+            final var instanceRecord = createVkInstance(false, false, null);
+            try {
+                selectPhysicalDevice(instanceRecord.instance, false, -1, instanceRecord.enabledInsanceExtensions());
+                // if we made it here, there is a supported device, so it will be used
+                LOGGER.info("Compatible card found, using Vulkan");
+                return true;
+            } finally {
+                instanceRecord.destroy();
+            }
+        } catch (RuntimeException ignored) {
+            ignored.printStackTrace();
+        }
+        LOGGER.info("No compatible card found, using OpenGL");
+        return false;
+    }).get();
+    
+    public static boolean isSupported() {
+        return supported;
+    }
+    
+    private static VkAllocationCallbacks callbacks() {
+        final var callbacks = VkAllocationCallbacks.calloc();
+        callbacks.pfnAllocation(new VkAllocationFunction() {
+            @Override
+            public long invoke(long pUserData, long size, long alignment, int allocationScope) {
+                return MemoryUtil.nmemAlignedAlloc(alignment, size);
+            }
+        });
+        callbacks.pfnReallocation(new VkReallocationFunction() {
+            @Override
+            public long invoke(long pUserData, long pOriginal, long size, long alignment, int allocationScope) {
+                final var newAlloc = MemoryUtil.nmemRealloc(pOriginal, size);
+                if ((newAlloc & (alignment - 1)) == 0) {
+                    return newAlloc;
+                }
+                final var alignedAlloc = MemoryUtil.nmemAlignedAlloc(alignment, size);
+                LibCString.nmemcpy(alignedAlloc, newAlloc, size);
+                MemoryUtil.nmemFree(newAlloc);
+                return alignedAlloc;
+            }
+        });
+        callbacks.pfnFree(new VkFreeFunction() {
+            @Override
+            public void invoke(long pUserData, long pMemory) {
+                MemoryUtil.nmemFree(pMemory);
+            }
+        });
+        
+        return callbacks;
+    }
+    
     public static Instance createVkInstance(boolean validationLayers, boolean enableMesaOverlay, @Nullable VkDebugUtilsMessengerCreateInfoEXT debugCreateInfo) {
         
         #if FABRIC
@@ -217,7 +310,8 @@ public class VulkanStartup {
             createInfo.ppEnabledLayerNames(layerPointers);
             
             
-            @Nullable final var glfwExtensions = GLFWClassloadHelper.glfwGetRequiredInstanceExtensions();
+            @Nullable
+            final var glfwExtensions = GLFWClassloadHelper.glfwGetRequiredInstanceExtensions();
             if (glfwExtensions == null) {
                 throw new IllegalStateException("GLFW unable to present VK image");
             }
@@ -232,7 +326,8 @@ public class VulkanStartup {
             }
             createInfo.ppEnabledExtensionNames(extensionPointers);
             
-            @Nullable final var allocationCallbacks = Configuration.DEBUG_MEMORY_ALLOCATOR.get(false) ? callbacks() : null;
+            @Nullable
+            final var allocationCallbacks = Configuration.DEBUG_MEMORY_ALLOCATOR.get(false) ? callbacks() : null;
             final var instancePointer = stack.mallocPointer(1);
             final var instanceCreateCode = vkCreateInstance(createInfo, allocationCallbacks, instancePointer);
             if (instanceCreateCode != VK_SUCCESS) {
@@ -257,99 +352,6 @@ public class VulkanStartup {
             enabledLayerNames.addAll(enabledInstanceExtensions);
             return new Instance(vkInstance, debugCallback, Collections.unmodifiableList(enabledLayerNames));
         }
-    }
-    
-    private static final Logger LOGGER = LogUtils.getLogger();
-    
-    public record Instance(VkInstance instance, long debugCallback, List<String> enabledInsanceExtensions) {
-        public void destroy() {
-            if (debugCallback != -1) {
-                vkDestroyDebugUtilsMessengerEXT(instance, debugCallback, null);
-            }
-            vkDestroyInstance(instance, null);
-        }
-    }
-    
-    public record Queue(int queueFamily, VkQueue queue) {
-    }
-    
-    public record Device(VkDevice device, List<Queue> queues, List<String> enabledDeviceExtensions) {
-        public void destroy() {
-            vkDestroyDevice(device, null);
-        }
-    }
-    
-    private static final List<String> optionalInstanceExtensions = List.of(
-            VK_EXT_DEBUG_REPORT_EXTENSION_NAME
-    );
-    
-    private static final List<String> requiredDeviceExtensions = List.of(
-            VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME,
-            VK_KHR_SWAPCHAIN_EXTENSION_NAME
-    );
-    
-    private static final List<Pair<String, List<String>>> optionalDeviceExtensions = List.of(
-            new ObjectObjectImmutablePair<>(VK_EXT_DEBUG_MARKER_EXTENSION_NAME, List.of(VK_EXT_DEBUG_REPORT_EXTENSION_NAME)),
-            new ObjectObjectImmutablePair<>(VK_KHR_PORTABILITY_SUBSET_EXTENSION_NAME, List.of())
-    );
-    
-    private static final boolean supported = ((Supplier<Boolean>) () -> {
-        LOGGER.info("Querying Vulkan support");
-        try {
-            final var instanceRecord = createVkInstance(false, false, null);
-            try {
-                selectPhysicalDevice(instanceRecord.instance, false, -1, instanceRecord.enabledInsanceExtensions());
-                // if we made it here, there is a supported device, so it will be used
-                LOGGER.info("Compatible card found, using Vulkan");
-                return true;
-            } finally {
-                instanceRecord.destroy();
-            }
-        } catch (RuntimeException ignored) {
-            ignored.printStackTrace();
-        }
-        LOGGER.info("No compatible card found, using OpenGL");
-        return false;
-    }).get();
-    
-    public static boolean isSupported() {
-        return supported;
-    }
-    
-    private static VkAllocationCallbacks callbacks() {
-        final var callbacks = VkAllocationCallbacks.calloc();
-        callbacks.pfnAllocation(new VkAllocationFunction() {
-            @Override
-            public long invoke(long pUserData, long size, long alignment, int allocationScope) {
-                return MemoryUtil.nmemAlignedAlloc(alignment, size);
-            }
-        });
-        callbacks.pfnReallocation(new VkReallocationFunction() {
-            @Override
-            public long invoke(long pUserData, long pOriginal, long size, long alignment, int allocationScope) {
-                final var newAlloc = MemoryUtil.nmemRealloc(pOriginal, size);
-                if ((newAlloc & (alignment - 1)) == 0) {
-                    return newAlloc;
-                }
-                final var alignedAlloc = MemoryUtil.nmemAlignedAlloc(alignment, size);
-                LibCString.nmemcpy(alignedAlloc, newAlloc, size);
-                MemoryUtil.nmemFree(newAlloc);
-                return alignedAlloc;
-            }
-        });
-        callbacks.pfnFree(new VkFreeFunction() {
-            @Override
-            public void invoke(long pUserData, long pMemory) {
-                MemoryUtil.nmemFree(pMemory);
-            }
-        });
-        
-        return callbacks;
-    }
-    
-    public static class Config {
-        public static String mcVersionString = null;
-        public static String cinnabarVersionString = null;
     }
     
     public static VkPhysicalDevice selectPhysicalDevice(VkInstance vkInstance, boolean manualDeviceSelection, int forcedDeviceIndex, List<String> enabledLayersAndInstanceExtensions) {
@@ -498,7 +500,8 @@ public class VulkanStartup {
                         case VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU -> "Discrete GPU";
                         case VK_PHYSICAL_DEVICE_TYPE_VIRTUAL_GPU -> "Virtual GPU";
                         case VK_PHYSICAL_DEVICE_TYPE_CPU -> "CPU (Software)";
-                        default -> throw new IllegalStateException("Unexpected value: " + deviceProperties.deviceType());
+                        default ->
+                                throw new IllegalStateException("Unexpected value: " + deviceProperties.deviceType());
                     };
                     final var APIVersionEncoded = deviceProperties.apiVersion();
                     final var driverVersionEncoded = deviceProperties.driverVersion();
