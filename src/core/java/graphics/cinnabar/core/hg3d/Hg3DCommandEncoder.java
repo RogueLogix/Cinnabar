@@ -412,7 +412,8 @@ public class Hg3DCommandEncoder implements C3DCommandEncoder, Hg3DObject, Destro
             
             @Override
             public void close() {
-                
+                awaitCompletion(Long.MAX_VALUE);
+                semaphore.destroy();
             }
             
             @Override
