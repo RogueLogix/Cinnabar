@@ -1,11 +1,14 @@
 package graphics.cinnabar.core.mercury;
 
+import graphics.cinnabar.api.exceptions.VkOutOfDeviceMemory;
 import graphics.cinnabar.api.hg.*;
 import graphics.cinnabar.api.hg.enums.HgFormat;
+import graphics.cinnabar.api.memory.MagicMemorySizes;
 import graphics.cinnabar.lib.util.MathUtil;
 import graphics.cinnabar.loader.earlywindow.VulkanStartup;
 import graphics.cinnabar.loader.earlywindow.vulkan.VulkanDebug;
 import it.unimi.dsi.fastutil.longs.LongLongImmutablePair;
+import org.jetbrains.annotations.Nullable;
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.util.vma.VmaAllocatorCreateInfo;
 import org.lwjgl.util.vma.VmaBudget;
@@ -33,6 +36,13 @@ public class MercuryDevice implements HgDevice {
     private final List<String> enabledDeviceExtensions;
     private final long vmaAllocator;
     private int currentVmaFrame = 0;
+    
+    public final boolean UMA;
+    public final int allowedHostBufferMemoryBits;
+    public final int allowedDeviceBufferMemoryBits;
+    
+    @Nullable
+    private AllocFailedCallback allocFailedCallback;
     
     public MercuryDevice() {
         // TODO: the vulkan instance can be statically created
@@ -102,6 +112,77 @@ public class MercuryDevice implements HgDevice {
             vmaCreateAllocator(allocatorCreateInfo, handlePtr);
             vmaAllocator = handlePtr.get(0);
         }
+        
+        final int hostVisibleCoherentDeviceLocal = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+        final int hostVisibleCoherent = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+        
+        try (final var stack = MemoryStack.stackPush()) {
+            final var handlePtr = stack.pointers(0);
+            vmaGetMemoryProperties(vmaAllocator, handlePtr);
+            final var memoryProperties = VkPhysicalDeviceMemoryProperties.create(handlePtr.get(0));
+            final var heapCount = memoryProperties.memoryHeapCount();
+            if (heapCount == 1) {
+                // UMA path
+                UMA = true;
+                int mappableTypes = 0;
+                for (int i = 0; i < memoryProperties.memoryTypeCount(); i++) {
+                    final var type = memoryProperties.memoryTypes(i);
+                    // this must exist by spec
+                    if ((type.propertyFlags() & (VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)) == (VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)) {
+                        mappableTypes |= 1 << i;
+                    }
+                }
+                allowedHostBufferMemoryBits = mappableTypes;
+                allowedDeviceBufferMemoryBits = mappableTypes;
+            } else {
+                // non-UMA, probably
+                UMA = false;
+                
+                // fist, pick primary heaps
+                // w/o ReBAR, there is usually a device-local host-visible chunk that is significantly smaller than the main vram pool
+                // if that is the case, ignore it and use the big one
+                int hostHeap = -1;
+                int deviceHeap = -1;
+                for (int i = 0; i < heapCount; i++) {
+                    final var heap = memoryProperties.memoryHeaps(i);
+                    if ((heap.flags() & VK_MEMORY_HEAP_DEVICE_LOCAL_BIT) != 0) {
+                        // device heap, is it bigger than the current one?
+                        // the w/o ReBAR heap is (almost) always 256MB, while the main pool is bigger
+                        if (deviceHeap == -1 || heap.size() > memoryProperties.memoryHeaps(deviceHeap).size()) {
+                            deviceHeap = i;
+                        }
+                    } else {
+                        // host heap, is it bigger than the current one?
+                        // usually there is only one, but just in case
+                        if (hostHeap == -1 || heap.size() > memoryProperties.memoryHeaps(hostHeap).size()) {
+                            hostHeap = i;
+                        }
+                    }
+                }
+                
+                
+                int mappableDeviceTypes = 0;
+                int deviceTypes = 0;
+                int hostTypes = 0;
+                for (int i = 0; i < memoryProperties.memoryTypeCount(); i++) {
+                    final var type = memoryProperties.memoryTypes(i);
+                    if (type.heapIndex() == deviceHeap && (type.propertyFlags() & (hostVisibleCoherentDeviceLocal)) == hostVisibleCoherentDeviceLocal) {
+                        mappableDeviceTypes |= 1 << i;
+                    }
+                    if (type.heapIndex() == deviceHeap && (type.propertyFlags() & (VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)) == VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) {
+                        deviceTypes |= 1 << i;
+                    }
+                    
+                    if (type.heapIndex() == hostHeap && (type.propertyFlags() & (hostVisibleCoherent)) == hostVisibleCoherent) {
+                        hostTypes |= 1 << i;
+                    }
+                }
+                // if there are mappable types, use those. not all GPUs will have them for the selected heap
+                allowedDeviceBufferMemoryBits = mappableDeviceTypes == 0 ? deviceTypes : mappableDeviceTypes;
+                allowedHostBufferMemoryBits = hostTypes;
+            }
+            
+        }
     }
     
     @Override
@@ -128,6 +209,15 @@ public class MercuryDevice implements HgDevice {
     }
     
     @Override
+    public void setAllocFailedCallback(@Nullable AllocFailedCallback callback) {
+        this.allocFailedCallback = callback;
+    }
+    
+    public boolean allocFailed(HgBuffer.MemoryRequest request, long size) {
+        return allocFailedCallback != null && allocFailedCallback.allocFailed(request == HgBuffer.MemoryRequest.GPU || UMA, size);
+    }
+    
+    @Override
     public void waitIdle() {
         vkDeviceWaitIdle(vkDevice);
     }
@@ -142,8 +232,23 @@ public class MercuryDevice implements HgDevice {
     }
     
     @Override
-    public MercuryBuffer createBuffer(HgBuffer.MemoryType memoryType, long size, long usage) {
-        return new MercuryBuffer(this, memoryType, size, usage);
+    public MercuryBuffer createBuffer(HgBuffer.MemoryRequest memoryRequest, long size, long usage) {
+        while (true) {
+            @Nullable
+            final var buffer = tryCreateBuffer(memoryRequest, size, usage);
+            if (buffer != null) {
+                return buffer;
+            }
+            if (!allocFailed(memoryRequest, size)) {
+                throw new VkOutOfDeviceMemory();
+            }
+        }
+    }
+    
+    @Nullable
+    @Override
+    public MercuryBuffer tryCreateBuffer(HgBuffer.MemoryRequest memoryType, long size, long usage) {
+        return MercuryBuffer.attemptCreate(this, memoryType, size, usage);
     }
     
     @Override
@@ -234,6 +339,31 @@ public class MercuryDevice implements HgDevice {
     @Override
     public void markFame() {
         vmaSetCurrentFrameIndex(vmaAllocator, currentVmaFrame++);
+    }
+    
+    @Override
+    public LongLongImmutablePair hostLocalMemoryStats() {
+        try (final var stack = MemoryStack.stackPush()) {
+            final var propsPtr = stack.pointers(0);
+            vmaGetMemoryProperties(vmaAllocator, propsPtr);
+            final var props = VkPhysicalDeviceMemoryProperties.createSafe(propsPtr.get(0));
+            int primaryDeviceLocalheap = 0;
+            for (int i = 0; i < props.memoryHeapCount(); i++) {
+                if ((props.memoryHeaps().position(i).flags() & VK_MEMORY_HEAP_DEVICE_LOCAL_BIT) == 0) {
+                    primaryDeviceLocalheap = i;
+                    break;
+                }
+            }
+            final var stats = VmaBudget.calloc(VK_MAX_MEMORY_HEAPS, stack);
+            vmaGetHeapBudgets(vmaAllocator, stats);
+            stats.position(primaryDeviceLocalheap);
+            return new LongLongImmutablePair(stats.statistics().allocationBytes(), stats.budget());
+        }
+    }
+    
+    @Override
+    public boolean UMA() {
+        return UMA;
     }
     
     @Override

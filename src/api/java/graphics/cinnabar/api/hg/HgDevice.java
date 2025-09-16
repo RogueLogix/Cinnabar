@@ -5,6 +5,7 @@ import graphics.cinnabar.api.annotations.ThreadSafety;
 import graphics.cinnabar.api.hg.enums.HgFormat;
 import it.unimi.dsi.fastutil.longs.LongLongImmutablePair;
 import org.jetbrains.annotations.ApiStatus;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
 
@@ -18,16 +19,28 @@ public interface HgDevice extends HgObject {
     default HgDevice device() {
         return this;
     }
+
+    interface AllocFailedCallback {
+        @ThreadSafety.Many
+        boolean allocFailed(boolean deviceLocal, long allocSize);
+    }
+
+    @ThreadSafety.Any(lockGroups = "bufferCreate")
+    void setAllocFailedCallback(@Nullable AllocFailedCallback callback);
     
     @ThreadSafety.VulkanObjectHandle(note = "must sync with all queues")
     void waitIdle();
     
     @ThreadSafety.Many
     HgQueue queue(HgQueue.Type queueType);
-    
-    @ThreadSafety.Many
-    HgBuffer createBuffer(HgBuffer.MemoryType memoryType, long size, long usage);
-    
+
+    @ThreadSafety.Many(lockGroups = "bufferCreate")
+    HgBuffer createBuffer(HgBuffer.MemoryRequest request, long size, long usage);
+
+    @Nullable
+    @ThreadSafety.Many(lockGroups = "bufferCreate")
+    HgBuffer tryCreateBuffer(HgBuffer.MemoryRequest request, long size, long usage);
+
     @ThreadSafety.Many
     HgImage createImage(HgImage.Type type, HgFormat format, int width, int height, int depth, int layers, int mipLevels, long usage, int flags, boolean hostMemory);
     
@@ -86,7 +99,14 @@ public interface HgDevice extends HgObject {
     
     @ThreadSafety.Any
     void markFame();
-    
-    @ThreadSafety.Any
+
+    @ThreadSafety.Many
+    LongLongImmutablePair hostLocalMemoryStats();
+
+    @ThreadSafety.Many
     LongLongImmutablePair deviceLocalMemoryStats();
+
+    @Constant
+    @ThreadSafety.Many
+    boolean UMA();
 }

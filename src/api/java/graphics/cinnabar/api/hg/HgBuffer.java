@@ -4,7 +4,15 @@ import graphics.cinnabar.api.annotations.Constant;
 import graphics.cinnabar.api.annotations.ThreadSafety;
 import graphics.cinnabar.api.hg.enums.HgFormat;
 import graphics.cinnabar.api.memory.PointerWrapper;
+import graphics.cinnabar.api.util.Destroyable;
 import org.jetbrains.annotations.ApiStatus;
+import org.jetbrains.annotations.Nullable;
+import org.lwjgl.system.MemoryStack;
+import org.lwjgl.util.vma.VmaAllocationInfo;
+import org.lwjgl.util.vma.VmaVirtualAllocationCreateInfo;
+import org.lwjgl.util.vma.VmaVirtualBlockCreateInfo;
+
+import static org.lwjgl.util.vma.Vma.*;
 
 @ApiStatus.NonExtendable
 @ThreadSafety.VulkanObjectHandle
@@ -15,11 +23,7 @@ public interface HgBuffer extends HgObject {
     
     @Constant
     @ThreadSafety.Many
-    boolean deviceLocal();
-    
-    @Constant
-    @ThreadSafety.Many
-    boolean mappable();
+    MemoryType memoryType();
     
     @ThreadSafety.Many
     @ThreadSafety.VulkanObjectHandle
@@ -52,17 +56,33 @@ public interface HgBuffer extends HgObject {
     @ThreadSafety.Many
     View view(HgFormat format, long offset, long size);
     
+    enum MemoryRequest {
+        // CPU memory, quickly accessible by CPU
+        CPU,
+        // CPU write only
+        // may be in CPU or GPU memory
+        MAPPABLE_PREF_GPU,
+        // GPU memory, mappable if possible
+        GPU,
+    }
+    
     enum MemoryType {
-        // mappable memory, always host memory
-        MAPPABLE,
-        // mappable memory, preferably on the device
-        MAPPABLE_PREF_DEVICE,
-        // memory that is on the device, mappable if possible
-        DEVICE_PREF_MAPPABLE,
-        // memory that is on the device, not mapped
-        DEVICE,
-        // less likely to fail allocation, may fall back to system memory
-        AUTO_PREF_DEVICE,
+        UMA(true, true, true),
+        CPU(true, false, true),
+        // only one device type will be used at runtime
+        GPU(false, true, false),
+        GPU_MAPPABLE(false, true, true),
+        ;
+        
+        public final boolean cpuLocal;
+        public final boolean gpuLocal;
+        public final boolean mappable;
+        
+        MemoryType(boolean cpuLocal, boolean gpuLocal, boolean mappable) {
+            this.cpuLocal = cpuLocal;
+            this.gpuLocal = gpuLocal;
+            this.mappable = mappable;
+        }
     }
     
     interface View extends HgObject {
@@ -103,5 +123,67 @@ public interface HgBuffer extends HgObject {
     }
     
     record ImageSlice(HgBuffer buffer, long offset, long size, int width, int height) {
+    }
+    
+    class Suballocator implements Destroyable {
+        private final HgBuffer buffer;
+        private final long vmaBlock;
+        
+        public Suballocator(HgBuffer buffer) {
+            this.buffer = buffer;
+            try (final var stack = MemoryStack.stackPush()) {
+                final var createInfo = VmaVirtualBlockCreateInfo.calloc(stack);
+                final var blockReturn = stack.callocPointer(1);
+                vmaCreateVirtualBlock(createInfo, blockReturn);
+                vmaBlock = blockReturn.get(0);
+            }
+        }
+        
+        @Override
+        public void destroy() {
+            vmaDestroyVirtualBlock(vmaBlock);
+        }
+        
+        public HgBuffer sourceBuffer() {
+            return buffer;
+        }
+        
+        @Nullable
+        public Alloc alloc(long size, long align) {
+            try (final var stack = MemoryStack.stackPush()) {
+                final var createInfo = VmaVirtualAllocationCreateInfo.calloc(stack);
+                createInfo.size(size);
+                createInfo.alignment(align);
+                final var allocReturn = stack.callocPointer(1);
+                vmaVirtualAllocate(vmaBlock, createInfo, allocReturn, null);
+                if (allocReturn.get(0) == 0) {
+                    // alloc failed
+                    return null;
+                }
+                final var vmaAlloc = VmaAllocationInfo.create(allocReturn.get(0));
+                final var slice = buffer.slice(vmaAlloc.offset(), size);
+                return new Alloc(vmaAlloc, slice);
+            }
+        }
+        
+        public class Alloc implements Destroyable {
+            
+            private final VmaAllocationInfo vmaAlloc;
+            private final Slice slice;
+            
+            Alloc(VmaAllocationInfo vmaAlloc, final Slice slice) {
+                this.vmaAlloc = vmaAlloc;
+                this.slice = slice;
+            }
+            
+            @Override
+            public void destroy() {
+                vmaVirtualFree(vmaBlock, vmaAlloc.address());
+            }
+            
+            public Slice slice() {
+                return slice;
+            }
+        }
     }
 }

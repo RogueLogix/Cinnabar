@@ -43,6 +43,7 @@ public class Hg3DCommandEncoder implements C3DCommandEncoder, Hg3DObject, Destro
     private final Hg3DGpuDevice device;
     private final HgQueue queue;
     private final HgCommandBuffer.Pool commandPool;
+    private final ReferenceArrayList<Runnable> flushCallbacks = new ReferenceArrayList<>();
     private final ReferenceArrayList<HgCommandBuffer> commandBuffers = new ReferenceArrayList<>();
     @Nullable
     private HgCommandBuffer earlyCommandBuffer;
@@ -86,9 +87,14 @@ public class Hg3DCommandEncoder implements C3DCommandEncoder, Hg3DObject, Destro
         continuedRenderPass = null;
     }
     
+    HgCommandBuffer allocateCommandBuffer() {
+        return commandPool.allocate().begin();
+    }
+    
     HgCommandBuffer earlyCommandBuffer() {
         if (earlyCommandBuffer == null) {
-            earlyCommandBuffer = commandPool.allocate().begin();
+            earlyCommandBuffer = allocateCommandBuffer();
+            earlyCommandBuffer.setName("Early Command Buffer");
             earlyCommandBuffer.barrier();
             commandBuffers.add(earlyCommandBuffer);
         }
@@ -99,7 +105,8 @@ public class Hg3DCommandEncoder implements C3DCommandEncoder, Hg3DObject, Destro
         endRenderPass();
         earlyCommandBuffer();
         if (mainCommandBuffer == null) {
-            mainCommandBuffer = commandPool.allocate().begin();
+            mainCommandBuffer = allocateCommandBuffer();
+            mainCommandBuffer.setName("Main Command Buffer");
             mainCommandBuffer.barrier();
             commandBuffers.add(mainCommandBuffer);
         }
@@ -124,6 +131,14 @@ public class Hg3DCommandEncoder implements C3DCommandEncoder, Hg3DObject, Destro
         earlyCommandBuffer().initImages(List.of(texture.image()));
     }
     
+    void addFlushCallback(Runnable runnable) {
+        flushCallbacks.add(runnable);
+    }
+    
+    void insertCommandBufferFirst(HgCommandBuffer commandBuffer) {
+        commandBuffers.add(0, commandBuffer);
+    }
+    
     @Override
     public void insertCommandBuffer(HgCommandBuffer commandBuffer) {
         endCommandBuffers();
@@ -132,7 +147,7 @@ public class Hg3DCommandEncoder implements C3DCommandEncoder, Hg3DObject, Destro
     
     HgBuffer.Slice uploadBufferSlice(long size) {
         if (size > UPLOAD_BUFFER_SIZE) {
-            final var tempBuffer = device.hgDevice().createBuffer(HgBuffer.MemoryType.MAPPABLE, size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
+            final var tempBuffer = device.hgDevice().createBuffer(HgBuffer.MemoryRequest.CPU, size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
             device.destroyEndOfFrameAsync(tempBuffer);
             return tempBuffer.slice();
         }
@@ -144,7 +159,7 @@ public class Hg3DCommandEncoder implements C3DCommandEncoder, Hg3DObject, Destro
                 uploadBuffer = null;
             }
             if (availableUploadBuffers.isEmpty()) {
-                uploadBuffer = device.hgDevice().createBuffer(HgBuffer.MemoryType.MAPPABLE, UPLOAD_BUFFER_SIZE, VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
+                uploadBuffer = device.hgDevice().createBuffer(HgBuffer.MemoryRequest.CPU, UPLOAD_BUFFER_SIZE, VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
             } else {
                 uploadBuffer = availableUploadBuffers.pop();
             }
@@ -158,6 +173,8 @@ public class Hg3DCommandEncoder implements C3DCommandEncoder, Hg3DObject, Destro
     
     public void flush() {
         endCommandBuffers();
+        flushCallbacks.forEach(Runnable::run);
+        flushCallbacks.clear();
         try (final var submission = queue.submit()) {
             submission.execute(commandBuffers);
             if (presentCommandBuffer != null) {
@@ -266,19 +283,28 @@ public class Hg3DCommandEncoder implements C3DCommandEncoder, Hg3DObject, Destro
     
     @Override
     public void writeToBuffer(GpuBufferSlice slice, ByteBuffer buffer) {
-        final var tempBuffer = uploadBufferSlice(buffer.remaining());
-        final var ptr = tempBuffer.map();
-        LibCString.nmemcpy(ptr.pointer(), MemoryUtil.memAddress(buffer), ptr.size());
-        tempBuffer.unmap();
-        final var earlyUpload = !((Hg3DGpuBuffer) slice.buffer()).usedThisFrame();
-        final var cb = earlyUpload ? earlyCommandBuffer() : mainCommandBuffer();
-        if (!earlyUpload) {
-            cb.barrier();
-        }
-        final var dstSlice = ((Hg3DGpuBuffer) slice.buffer()).hgSlice().slice(slice.offset(), slice.length());
-        cb.copyBufferToBuffer(tempBuffer, dstSlice);
-        if (!earlyUpload) {
-            cb.barrier();
+        final var targetBuffer = ((Hg3DGpuBuffer) slice.buffer());
+        
+        if (!targetBuffer.isInFlight() && targetBuffer.hgSlice().buffer().memoryType().mappable) {
+            // buffer isn't in flight, and is mappable, write directly to it
+            final var bufferPtr = targetBuffer.hgSlice().map();
+            LibCString.nmemcpy(bufferPtr.pointer(), MemoryUtil.memAddress(buffer), buffer.remaining());
+            targetBuffer.hgSlice().unmap();
+        } else {
+            final var tempBuffer = uploadBufferSlice(buffer.remaining());
+            final var ptr = tempBuffer.map();
+            LibCString.nmemcpy(ptr.pointer(), MemoryUtil.memAddress(buffer), ptr.size());
+            tempBuffer.unmap();
+            final var earlyUpload = !targetBuffer.usedThisFrame();
+            final var cb = earlyUpload ? earlyCommandBuffer() : mainCommandBuffer();
+            if (!earlyUpload) {
+                cb.barrier();
+            }
+            final var dstSlice = targetBuffer.hgSlice().slice(slice.offset(), slice.length());
+            cb.copyBufferToBuffer(tempBuffer, dstSlice);
+            if (!earlyUpload) {
+                cb.barrier();
+            }
         }
     }
     
@@ -752,13 +778,13 @@ public class Hg3DCommandEncoder implements C3DCommandEncoder, Hg3DObject, Destro
                         
                         commandBuffer.bindVertexBuffer(0, expectedVertexBuffer.slice());
                         assert expectedIndexCinnabarBuffer != null;
-                        assert indexType != null;
+                        assert expectedIndexType != null;
                         commandBuffer.bindIndexBuffer(expectedIndexCinnabarBuffer.slice(), switch (expectedIndexType) {
                             case SHORT -> VK_INDEX_TYPE_UINT16;
                             case INT -> VK_INDEX_TYPE_UINT32;
                         });
                         
-                        final var drawsCPUBuffer = device.hgDevice().createBuffer(HgBuffer.MemoryType.MAPPABLE, (long) drawCount * VkDrawIndexedIndirectCommand.SIZEOF, VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT);
+                        final var drawsCPUBuffer = device.hgDevice().createBuffer(HgBuffer.MemoryRequest.CPU, (long) drawCount * VkDrawIndexedIndirectCommand.SIZEOF, VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT);
                         device.destroyEndOfFrameAsync(drawsCPUBuffer);
                         final var ptr = drawsCPUBuffer.map();
                         LibCString.nmemcpy(ptr.pointer(), drawCommands.address(0), (long) drawCount * VkDrawIndexedIndirectCommand.SIZEOF);
@@ -788,7 +814,7 @@ public class Hg3DCommandEncoder implements C3DCommandEncoder, Hg3DObject, Destro
                         }
                     } else if (canBatchIndexBuffer && canBatchIndexType) {
                         assert expectedIndexCinnabarBuffer != null;
-                        assert indexType != null;
+                        assert expectedIndexType != null;
                         commandBuffer.bindIndexBuffer(expectedIndexCinnabarBuffer.slice(), switch (expectedIndexType) {
                             case SHORT -> VK_INDEX_TYPE_UINT16;
                             case INT -> VK_INDEX_TYPE_UINT32;

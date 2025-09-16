@@ -1,6 +1,7 @@
 package graphics.cinnabar.core.hg3d;
 
 #if NEO
+
 import com.mojang.blaze3d.buffers.GpuBuffer;
 import com.mojang.blaze3d.pipeline.CompiledRenderPipeline;
 import com.mojang.blaze3d.pipeline.RenderPipeline;
@@ -93,9 +94,11 @@ public class Hg3DGpuDevice implements GpuDevice {
     private long currentFrame = MagicNumbers.MaximumFramesInFlight;
     private final ReferenceArrayList<ReferenceArrayList<Destroyable>> pendingDestroys = new ReferenceArrayList<>();
     private ReferenceArrayList<Destroyable> activelyDestroying = new ReferenceArrayList<>();
+    private final Hg3DGpuBuffer.Manager bufferManager;
     
     public Hg3DGpuDevice(long windowHandle, int debugLevel, boolean syncDebug, BiFunction<ResourceLocation, ShaderType, String> shaderSourceProvider, boolean debugLabels) {
         CinnabarLibBootstrapper.bootstrap();
+        this.shaderSourceProvider = shaderSourceProvider;
         
         #if NEO
         // no configurable features currently, result ignored
@@ -104,7 +107,7 @@ public class Hg3DGpuDevice implements GpuDevice {
         
         hgDevice = Hg.createDevice(new HgDevice.CreateInfo());
         commandEncoder = new Hg3DCommandEncoder(this);
-        this.shaderSourceProvider = shaderSourceProvider;
+        bufferManager = new Hg3DGpuBuffer.Manager(this);
         initSamplers();
         ((Hg3DWindow) Minecraft.getInstance().getWindow()).attachDevice(this);
         interFrameSemaphore = hgDevice.createSemaphore(0);
@@ -114,7 +117,7 @@ public class Hg3DGpuDevice implements GpuDevice {
         for (int i = 0; i < MagicNumbers.MaximumFramesInFlight; i++) {
             pendingDestroys.add(new ReferenceArrayList<>());
         }
-        
+
         #if NEO
         NeoForge.EVENT_BUS.register(this);
         #endif
@@ -134,6 +137,8 @@ public class Hg3DGpuDevice implements GpuDevice {
         WorkQueue.AFTER_END_OF_GPU_FRAME.signal(interFrameSemaphore, currentFrame + 1);
         interFrameSemaphore.waitValue(currentFrame + 1, -1L);
         interFrameSemaphore.destroy();
+        
+        bufferManager.destroy();
         commandEncoder.destroy();
         ((Hg3DWindow) Minecraft.getInstance().getWindow()).detachDevice();
         samplers.forEach(Destroyable::destroy);
@@ -149,6 +154,7 @@ public class Hg3DGpuDevice implements GpuDevice {
     }
     
     public void endFrame() {
+        bufferManager.endOfFrame();
         WorkQueue.AFTER_END_OF_GPU_FRAME.signal(cleanupDoneSemaphore, currentFrame);
         commandEncoder.flush();
         hgDevice.queue(HgQueue.Type.GRAPHICS).submit(HgQueue.Item.signal(interFrameSemaphore, currentFrame, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT));
@@ -166,7 +172,6 @@ public class Hg3DGpuDevice implements GpuDevice {
         }
         activelyDestroying.clear();
         commandEncoder.resetUploadBuffer();
-        Hg3DGpuBuffer.Management.newFrame(this);
     }
     
     @Override
@@ -200,14 +205,12 @@ public class Hg3DGpuDevice implements GpuDevice {
     
     @Override
     public GpuBuffer createBuffer(@Nullable Supplier<String> label, int usage, int size) {
-        return new Hg3DGpuBuffer(this, usage, size);
+        return bufferManager.create(usage, size, 32, null);
     }
     
     @Override
     public GpuBuffer createBuffer(@Nullable Supplier<String> label, int usage, ByteBuffer data) {
-        final var buffer = new Hg3DGpuBuffer(this, usage, data.remaining());
-        createCommandEncoder().writeToBuffer(buffer.slice(), data);
-        return buffer;
+        return bufferManager.create(usage, data.remaining(), 32, data);
     }
     
     @Override
@@ -329,7 +332,8 @@ public class Hg3DGpuDevice implements GpuDevice {
     
     public HgRenderPass getRenderPass(HgFormat colorFormat, @Nullable HgFormat depthStencilFormat) {
         final int formatsId = colorFormat.ordinal() << 16 | (depthStencilFormat != null ? depthStencilFormat.ordinal() : 0);
-        @Nullable final var renderpass = renderPasses.get(formatsId);
+        @Nullable
+        final var renderpass = renderPasses.get(formatsId);
         if (renderpass != null) {
             return renderpass;
         }
@@ -381,4 +385,12 @@ public class Hg3DGpuDevice implements GpuDevice {
         hgDevice.addDebugText(list);
     }
     #endif
+    
+    public void advanceFramesForEviction() {
+        // advances enough frames that nothing can be in-flight on the GPU anymore
+        // this is only hit in extreme memory pressure circumstances
+        for (int i = 0; i < MagicNumbers.MaximumFramesInFlight; i++) {
+            endFrame();
+        }
+    }
 }

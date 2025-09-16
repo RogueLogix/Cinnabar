@@ -56,10 +56,10 @@ public class Hg3DWindow extends Window {
             return;
         }
         
+        device.endFrame();
+        
         RenderSystem.pollEvents();
         Tesselator.getInstance().clear();
-        
-        device.endFrame();
         
         assert swapchain != null;
         boolean shouldRecreateSwapchain = !swapchain.present();

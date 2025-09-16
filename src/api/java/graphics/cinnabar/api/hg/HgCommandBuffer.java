@@ -11,7 +11,9 @@ import java.util.List;
 @ApiStatus.NonExtendable
 @ThreadSafety.VulkanObjectHandle(note = "must sync with pool")
 public interface HgCommandBuffer extends HgObject {
-    
+
+    HgCommandBuffer setName(String name);
+
     HgCommandBuffer begin();
     
     HgCommandBuffer end();

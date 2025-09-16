@@ -41,6 +41,20 @@ public class MercuryCommandBuffer extends MercuryObject implements HgCommandBuff
     }
     
     @Override
+    public HgCommandBuffer setName(String name) {
+        if (device.debugMarkerEnabled()) {
+            try (final var stack = memoryStack.push()) {
+                final var nameInfo = VkDebugMarkerObjectNameInfoEXT.calloc(stack).sType$Default();
+                nameInfo.pObjectName(stack.UTF8(name));
+                nameInfo.object(commandBuffer.address());
+                nameInfo.objectType(VK_OBJECT_TYPE_COMMAND_BUFFER);
+                EXTDebugMarker.vkDebugMarkerSetObjectNameEXT(device.vkDevice(), nameInfo);
+            }
+        }
+        return this;
+    }
+    
+    @Override
     public HgCommandBuffer begin() {
         vkBeginCommandBuffer(commandBuffer, beginInfo);
         return this;
@@ -419,7 +433,7 @@ public class MercuryCommandBuffer extends MercuryObject implements HgCommandBuff
                 
             }
             
-            if(clearDepth != -1) {
+            if (clearDepth != -1) {
                 final var vkClearValue = VkClearValue.calloc(stack);
                 final var clearValue = vkClearValue.depthStencil();
                 clearValue.depth((float) clearDepth);

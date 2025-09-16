@@ -1,10 +1,13 @@
 package graphics.cinnabar.core.mercury;
 
+import graphics.cinnabar.api.exceptions.VkOutOfDeviceMemory;
+import graphics.cinnabar.api.hg.HgBuffer;
 import graphics.cinnabar.api.hg.HgImage;
 import graphics.cinnabar.api.hg.enums.HgFormat;
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.util.vma.VmaAllocationCreateInfo;
 import org.lwjgl.vulkan.VkImageCreateInfo;
+import org.lwjgl.vulkan.VkMemoryRequirements;
 
 import static graphics.cinnabar.api.exceptions.VkException.checkVkCode;
 import static org.lwjgl.util.vma.Vma.*;
@@ -47,18 +50,42 @@ public class MercuryImage extends MercuryObject implements HgImage {
             imageCreateInfo.flags(flags);
             
             final var allocCreateInfo = VmaAllocationCreateInfo.calloc(stack);
+            // these flags aren't valid for the allocate function, but i can direct the alloc function with this
             allocCreateInfo.usage(hostMemory ? VMA_MEMORY_USAGE_AUTO_PREFER_HOST : VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE);
+            final var memoryType = stack.callocInt(1);
+            vmaFindMemoryTypeIndexForImageInfo(device.vmaAllocator(), imageCreateInfo, allocCreateInfo, memoryType);
+            allocCreateInfo.memoryTypeBits(1 << memoryType.get(0));
+            allocCreateInfo.usage(0);
+            
             final var imagePtr = stack.callocLong(1);
-            final var allocationPtr = stack.callocPointer(1);
-            checkVkCode(vmaCreateImage(device.vmaAllocator(), imageCreateInfo, allocCreateInfo, imagePtr, allocationPtr, null));
+            checkVkCode(vkCreateImage(device.vkDevice(), imageCreateInfo, null, imagePtr));
             imageHandle = imagePtr.get(0);
+            
+            final var memoryRequirements = VkMemoryRequirements.calloc(stack);
+            vkGetImageMemoryRequirements(device.vkDevice(), imageHandle, memoryRequirements);
+            
+            final var allocationPtr = stack.callocPointer(1);
+            while (true) {
+                int allocCode = vmaAllocateMemoryForImage(device.vmaAllocator(), imageHandle, allocCreateInfo, allocationPtr, null);
+                if (allocCode == VK_ERROR_OUT_OF_DEVICE_MEMORY) {
+                    if (device.allocFailed(HgBuffer.MemoryRequest.GPU, memoryRequirements.size())) {
+                        continue;
+                    }
+                    vkDestroyImage(device.vkDevice(), imageHandle, null);
+                    throw new VkOutOfDeviceMemory();
+                }
+                checkVkCode(allocCode);
+                break;
+            }
             vmaAllocation = allocationPtr.get(0);
+            vmaBindImageMemory(device.vmaAllocator(), vmaAllocation, imageHandle);
         }
     }
     
     @Override
     public void destroy() {
-        vmaDestroyImage(device.vmaAllocator(), imageHandle, vmaAllocation);
+        vkDestroyImage(device.vkDevice(), imageHandle, null);
+        vmaFreeMemory(device.vmaAllocator(), vmaAllocation);
     }
     
     public Type type() {
