@@ -76,7 +76,7 @@ import static org.lwjgl.vulkan.VK10.VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
 public class Hg3DGpuDevice implements GpuDevice {
     private static final String backendName = "CinnabarVK "
         #if NEO
-            + FMLLoader.getLoadingModList().getModFileById("cinnabar").versionString();
+            + FMLLoader.getCurrent().getLoadingModList().getModFileById("cinnabar").versionString();
         #else
              + FabricLoader.getInstance().getModContainer("cinnabar").get().getMetadata().getVersion().getFriendlyString();
         #endif

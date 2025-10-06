@@ -4,7 +4,7 @@ plugins {
     id 'idea'
     id 'java-library'
     id 'maven-publish'
-    id 'net.neoforged.moddev' version '2.0.99'
+    id 'net.neoforged.moddev' version '2.0.110'
     id("net.darkhax.curseforgegradle") version "1.1.26"
 }
 
@@ -236,25 +236,25 @@ neoForge {
             sourceSet(sourceSets.mercury)
             sourceSet(sourceSets.main)
         }
-        "loader" {
-            sourceSet(project(':loader').sourceSets.vulkanStartup)
-            sourceSet(project(':loader').sourceSets.main)
-        }
     }
 }
 
 sourceSets.main.resources { srcDir 'src/generated/resources' }
+
+configurations {
+    runtimeClasspath.extendsFrom localRuntime
+}
 
 dependencies {
     compileOnly(project(":loader").sourceSets.vulkanStartup.output)
 
     for (lib in vkJavaLibs) {
         implementation(lib)
-        additionalRuntimeClasspath(lib)
+        localRuntime(lib)
     }
 
     for (lib in nativeLibsToUse) {
-        additionalRuntimeClasspath(lib)
+        localRuntime(lib)
     }
 
     for (lib in loaderLibsToPack) {
@@ -262,6 +262,7 @@ dependencies {
     }
     jijMod(project(path: ":", configuration: "builtModJar"))
     loader(project(":loader"))
+    localRuntime(project(':loader'))
 
     annotationProcessor 'systems.manifold:manifold-preprocessor:2025.1.26'
 }

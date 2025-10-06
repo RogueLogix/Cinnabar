@@ -495,9 +495,9 @@ public class Hg3DGpuBuffer extends GpuBuffer implements Hg3DObject, Destroyable 
                         // must shuffle this to system memory
                         // mappable memory, can evict to CPU memory and then follow immediate eviction path
                         // UMA (iGPUs) will also end up here
-                        currentBuffer.evictedData = MemoryUtil.memAlloc(currentBuffer.size);
+                        currentBuffer.evictedData = MemoryUtil.memAlloc(currentBuffer.size());
                         final var ptr = currentBuffer.buffer.slice().map();
-                        LibCString.nmemcpy(MemoryUtil.memAddress(currentBuffer.evictedData), ptr.pointer(), currentBuffer.size);
+                        LibCString.nmemcpy(MemoryUtil.memAddress(currentBuffer.evictedData), ptr.pointer(), currentBuffer.size());
                         currentBuffer.buffer.slice().unmap();
                         
                         currentBuffer.buffer.destroy();

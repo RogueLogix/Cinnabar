@@ -7,8 +7,10 @@ import graphics.cinnabar.loader.earlywindow.VulkanStartup;
 import graphics.cinnabar.loader.earlywindow.vulkan.BasicSwapchain;
 import graphics.cinnabar.loader.earlywindow.vulkan.VulkanDebug;
 import joptsimple.OptionParser;
+import net.neoforged.fml.ModLoadingIssue;
 import net.neoforged.fml.loading.FMLConfig;
 import net.neoforged.fml.loading.FMLLoader;
+import net.neoforged.fml.loading.ProgramArgs;
 import net.neoforged.fml.loading.progress.StartupNotificationManager;
 import net.neoforged.neoforgespi.earlywindow.ImmediateWindowProvider;
 import org.lwjgl.system.MemoryStack;
@@ -19,6 +21,8 @@ import org.slf4j.Logger;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import java.nio.file.Path;
+import java.util.List;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
@@ -115,10 +119,19 @@ public class CinnabarEarlyWindowProvider implements ImmediateWindowProvider {
     }
     
     @Override
-    public Runnable initialize(String[] arguments) {
+    public void setMinecraftVersion(String version) {
+    
+    }
+    
+    @Override
+    public void setNeoForgeVersion(String version) {
+    
+    }
+    
+    @Override
+    public void initialize(ProgramArgs args) {
         if (!configInjected) {
-            return () -> {
-            };
+            return;
         }
         final OptionParser parser = new OptionParser();
         var mcversionopt = parser.accepts("fml.mcVersion").withRequiredArg().ofType(String.class);
@@ -131,7 +144,7 @@ public class CinnabarEarlyWindowProvider implements ImmediateWindowProvider {
                 .defaultsTo(FMLConfig.getIntConfigValue(FMLConfig.ConfigValue.EARLY_WINDOW_HEIGHT));
         var maximizedopt = parser.accepts("earlywindow.maximized");
         parser.allowsUnrecognizedOptions();
-        var parsed = parser.parse(arguments);
+        var parsed = parser.parse(args.getArguments());
         winWidth = parsed.valueOf(widthopt);
         winHeight = parsed.valueOf(heightopt);
         FMLConfig.updateConfig(FMLConfig.ConfigValue.EARLY_WINDOW_WIDTH, winWidth);
@@ -160,7 +173,7 @@ public class CinnabarEarlyWindowProvider implements ImmediateWindowProvider {
         try (final var stack = MemoryStack.stackPush()) {
             
             final var debugCreateInfo = VulkanDebug.getCreateInfo(stack, new VulkanDebug.MessageSeverity[]{VulkanDebug.MessageSeverity.ERROR, VulkanDebug.MessageSeverity.WARNING, VulkanDebug.MessageSeverity.INFO}, new VulkanDebug.MessageType[]{VulkanDebug.MessageType.GENERAL, VulkanDebug.MessageType.VALIDATION});
-            instance = VulkanStartup.createVkInstance(!FMLLoader.isProduction(), false, debugCreateInfo);
+            instance = VulkanStartup.createVkInstance(!FMLLoader.getCurrent().isProduction(), false, debugCreateInfo);
             device = VulkanStartup.createLogicalDeviceAndQueues(instance.instance(), VulkanStartup.selectPhysicalDevice(instance.instance(), false, -1, instance.enabledInsanceExtensions()), instance.enabledInsanceExtensions());
             
             try (final var __ = stack.push()) {
@@ -193,7 +206,6 @@ public class CinnabarEarlyWindowProvider implements ImmediateWindowProvider {
             return thread;
         });
         windowTick = renderScheduler.scheduleAtFixedRate(this::drawLoop, 50, 50, TimeUnit.MILLISECONDS);
-        return org.lwjgl.glfw.GLFW::glfwPollEvents;
     }
     
     void recreateSwapchain() {
@@ -286,5 +298,10 @@ public class CinnabarEarlyWindowProvider implements ImmediateWindowProvider {
         glfwDestroyWindow(window);
         glfwTerminate();
         System.exit(1);
+    }
+    
+    @Override
+    public void displayFatalErrorAndExit(List<ModLoadingIssue> issues, Path modsFolder, Path logFile, Path crashReportFile) {
+    
     }
 }

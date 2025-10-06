@@ -27,7 +27,7 @@ public class Hg3DWindow extends Window {
     
     public void attachDevice(Hg3DGpuDevice device) {
         this.device = device;
-        surface = device.hgDevice().createSurface(getWindow());
+        surface = device.hgDevice().createSurface(handle());
         swapchain = surface.createSwapchain(this.vsync, null);
         swapchain.acquire();
     }

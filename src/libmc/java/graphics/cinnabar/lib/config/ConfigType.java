@@ -25,7 +25,7 @@ public enum ConfigType {
     private static boolean isFMLClient() {
         try {
             #if NEO
-            return FMLEnvironment.dist == null || FMLEnvironment.dist.isClient();
+            return FMLEnvironment.getDist() == null || FMLEnvironment.getDist().isClient();
             #elif FABRIC
             return FabricLoader.getInstance().getEnvironmentType() == EnvType.CLIENT;
             #endif

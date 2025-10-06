@@ -3,6 +3,7 @@ package graphics.cinnabar.loader.services;
 import com.mojang.logging.LogUtils;
 import cpw.mods.jarhandling.JarContents;
 import net.neoforged.fml.loading.FMLEnvironment;
+import net.neoforged.fml.loading.FMLLoader;
 import net.neoforged.neoforgespi.ILaunchContext;
 import net.neoforged.neoforgespi.locating.*;
 import org.slf4j.Logger;
@@ -20,14 +21,14 @@ public class CinnabarLocator implements IModFileCandidateLocator {
     
     @Override
     public void findCandidates(ILaunchContext context, IDiscoveryPipeline pipeline) {
-        if (!FMLEnvironment.dist.isClient()) {
+        if (!FMLEnvironment.getDist().isClient()) {
             LOGGER.info("Skipping locating Cinnabar and libs on non-client environment");
             return;
         }
         try {
             final var resource = CinnabarLocator.class.getResource("/META-INF/modjar/");
             if (resource == null) {
-                if (!FMLEnvironment.production) {
+                if (!FMLLoader.getCurrent().isProduction()) {
                     // this is fine, probably means in my own dev environment
                     return;
                 } else {

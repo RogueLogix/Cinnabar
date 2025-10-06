@@ -77,8 +77,8 @@ public class VulkanStartup {
     private static final Logger LOGGER = LogUtils.getLogger();
     
     public static class Config {
-        public static String mcVersionString = null;
-        public static String cinnabarVersionString = null;
+        public static String mcVersionString = "1.21.99";
+        public static String cinnabarVersionString = "0.0.0";
     }
     
     public record Instance(VkInstance instance, long debugCallback, List<String> enabledInsanceExtensions) {
@@ -209,7 +209,7 @@ public class VulkanStartup {
             final var createInfo = VkInstanceCreateInfo.calloc(stack).sType$Default();
             createInfo.pApplicationInfo(appInfo);
             #if NEO
-            if (FMLLoader.isProduction() && validationLayers) {
+            if (FMLLoader.getCurrent().isProduction() && validationLayers) {
             #elif FABRIC
             if (!FabricLoader.getInstance().isDevelopmentEnvironment() && validationLayers) {
             #endif
@@ -255,7 +255,7 @@ public class VulkanStartup {
                     validationLayers = false;
                 } else {
                     #if NEO
-                    if (FMLLoader.isProduction()) {
+                    if (FMLLoader.getCurrent().isProduction()) {
                     #elif FABRIC
                     if (!FabricLoader.getInstance().isDevelopmentEnvironment()) {
                     #endif

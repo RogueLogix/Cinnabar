@@ -15,6 +15,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.commands.Commands;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerEntity;
 import net.minecraft.server.level.ServerPlayer;
 import net.neoforged.fml.ModLoadingContext;
 import net.neoforged.fml.loading.FMLEnvironment;
@@ -159,9 +160,9 @@ public class ConfigManager {
         }
     }
     
-    #if NEO
+    #if DISABLED
     public static void reloadCommonAndServerConfigs() {
-        if (FMLEnvironment.dist.isDedicatedServer() || server == null || !server.isDedicatedServer()) {
+        if (FMLEnvironment.getDist().isDedicatedServer() || server == null || !server.isDedicatedServer()) {
             // dedicated servers, disconnected clients, and integrated servers reload common and server configs too
             for (final var value : commonConfigs.values()) {
                 value.loadLocalConfigFile(true);
@@ -193,7 +194,7 @@ public class ConfigManager {
         NeoForge.EVENT_BUS.addListener(ConfigManager::onServerAboutToStart);
         NeoForge.EVENT_BUS.addListener(ConfigManager::onServerStopped);
         NeoForge.EVENT_BUS.addListener(ConfigManager::registerServerCommands);
-        if (FMLEnvironment.dist.isClient()) {
+        if (FMLEnvironment.getDist().isClient()) {
             NeoForge.EVENT_BUS.addListener(ConfigManager::onLoggingIn);
             NeoForge.EVENT_BUS.addListener(ConfigManager::onLoggingOut);
             NeoForge.EVENT_BUS.addListener(ConfigManager::registerClientCommands);
@@ -207,7 +208,7 @@ public class ConfigManager {
             return Command.SINGLE_SUCCESS;
         }))));
         // register this on the dedicated server, as alias for above
-        if (FMLEnvironment.dist.isDedicatedServer()) {
+        if (FMLEnvironment.getDist().isDedicatedServer()) {
             event.getDispatcher().register(Commands.literal(MOD_ID).then(Commands.literal("config").then(Commands.literal("reloadAllConfigs").requires(sourceStack -> sourceStack.hasPermission(Commands.LEVEL_OWNERS)).executes(ctx -> {
                 reloadCommonAndServerConfigs();
                 return Command.SINGLE_SUCCESS;
@@ -246,7 +247,7 @@ public class ConfigManager {
     }
     
     private static void onPlayerLogin(PlayerEvent.PlayerLoggedInEvent e) {
-        var server = e.getEntity().getServer();
+        var server = ((ServerPlayer)e.getEntity());
         assert server != null;
         if (!server.isDedicatedServer()) {
             var serverUUID = e.getEntity().getUUID();

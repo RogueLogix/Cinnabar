@@ -31,7 +31,7 @@ public class Cinnabar #if FABRIC implements ModInitializer #endif {
     
     static {
         #if NEO
-        if (FMLEnvironment.dist == Dist.DEDICATED_SERVER) {
+        if (FMLEnvironment.getDist() == Dist.DEDICATED_SERVER) {
         #elif FABRIC
         if (FabricLoader.getInstance().getEnvironmentType() == EnvType.SERVER) {
         #endif

@@ -73,9 +73,6 @@ public class DeviceCreationMixin {
     @Shadow
     @Nullable
     private static DynamicUniforms dynamicUniforms;
-    @Shadow
-    @Nullable
-    private static GpuBuffer QUAD_VERTEX_BUFFER;
     
     @Overwrite(remap = false)
     public static void initRenderer(long l, int i, boolean bl, BiFunction<ResourceLocation, ShaderType, String> biFunction, boolean bl2) {
@@ -86,18 +83,6 @@ public class DeviceCreationMixin {
         }
         apiDescription = DEVICE.getImplementationInformation();
         dynamicUniforms = new DynamicUniforms();
-        
-        try (ByteBufferBuilder byteBufferBuilder = ByteBufferBuilder.exactlySized(DefaultVertexFormat.POSITION.getVertexSize() * 4)) {
-            BufferBuilder bufferBuilder = new BufferBuilder(byteBufferBuilder, VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION);
-            bufferBuilder.addVertex(0.0F, 0.0F, 0.0F);
-            bufferBuilder.addVertex(1.0F, 0.0F, 0.0F);
-            bufferBuilder.addVertex(1.0F, 1.0F, 0.0F);
-            bufferBuilder.addVertex(0.0F, 1.0F, 0.0F);
-            
-            try (MeshData meshData = bufferBuilder.buildOrThrow()) {
-                QUAD_VERTEX_BUFFER = DEVICE.createBuffer(() -> "Quad", 32, meshData.vertexBuffer());
-            }
-        }
         
     }
     #endif
