@@ -14,6 +14,10 @@ def getGitDescribedVersion = { ->
     }.standardOutput.asText.get().trim()
 }
 
+def getGitDescribedVersionWithMcVersion = { ->
+    return "$minecraft_version-${getGitDescribedVersion()}"
+}
+
 allprojects {
     version = getGitDescribedVersion()
     group = mod_group_id
@@ -440,14 +444,14 @@ afterEvaluate {
             NeoPublish(MavenPublication) {
                 groupId = "graphics.cinnabar"
                 artifactId = "cinnabar-neoforge"
-                version = getGitDescribedVersion()
+                version = getGitDescribedVersionWithMcVersion()
                 artifact sourcesJar
                 artifact fatJar
             }
             ApiPublish(MavenPublication) {
                 groupId = "graphics.cinnabar"
                 artifactId = "cinnabar"
-                version = getGitDescribedVersion()
+                version = getGitDescribedVersionWithMcVersion()
                 artifact apiJar
             }
         }

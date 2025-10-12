@@ -321,7 +321,7 @@ publishing {
         FabricPublish(MavenPublication) {
             groupId = "graphics.cinnabar"
             artifactId = "cinnabar-fabric"
-            version = getGitDescribedVersion()
+            version = getGitDescribedVersionWithMcVersion()
             artifact jar
             artifact sourcesJar
             artifact remapJar
