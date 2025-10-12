@@ -1,13 +1,14 @@
 package graphics.cinnabar.loader.services;
 
 import com.mojang.logging.LogUtils;
-import cpw.mods.jarhandling.JarContents;
+import net.neoforged.fml.jarcontents.JarContents;
 import net.neoforged.fml.loading.FMLEnvironment;
 import net.neoforged.fml.loading.FMLLoader;
 import net.neoforged.neoforgespi.ILaunchContext;
 import net.neoforged.neoforgespi.locating.*;
 import org.slf4j.Logger;
 
+import java.io.IOException;
 import java.nio.file.Path;
 
 import static java.nio.file.Files.walk;
@@ -41,7 +42,11 @@ public class CinnabarLocator implements IModFileCandidateLocator {
                     return;
                 }
                 LOGGER.debug("Loading mod {}", filename);
-                pipeline.addJarContent(JarContents.of(path), ModFileDiscoveryAttributes.DEFAULT, IncompatibleFileReporting.WARN_ALWAYS);
+                try {
+                    pipeline.addJarContent(JarContents.ofPath(path), ModFileDiscoveryAttributes.DEFAULT, IncompatibleFileReporting.WARN_ALWAYS);
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
             });
         } catch (Exception e) {
             LOGGER.error("Fatal error encountered locating Cinnabar jars", e);
