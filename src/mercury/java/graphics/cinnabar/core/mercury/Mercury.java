@@ -25,7 +25,7 @@ public class Mercury {
         @UsedFromReflection
         public static boolean traceLogging = Boolean.getBoolean("cinnabar.traceLogging");
         @UsedFromReflection
-        public static boolean debugLogging = Boolean.getBoolean("cinnabar.debugLogging");
+        public static boolean debugLogging = Boolean.getBoolean("cinnabar.debugLogging") || traceLogging;
         @UsedFromReflection
         public static boolean mercuryValidationLayers = Boolean.getBoolean("cinnabar.mercuryValidationLayers");
         @UsedFromReflection
