@@ -766,8 +766,6 @@ public class Hg3DCommandEncoder implements C3DCommandEncoder, Hg3DObject, Destro
                     assert indexBufferSlice != null;
                     drawCommands.firstIndex((int) (indexBufferSlice.offset() / expectedIndexType.bytes) + draw.firstIndex());
                     drawCommands.vertexOffset((int) vertexOffset);
-                    drawCommands.firstIndex(draw.firstIndex());
-                    drawCommands.vertexOffset(0);
                 }
                 
                 if (canBatchDynamicUniform) {
@@ -788,7 +786,7 @@ public class Hg3DCommandEncoder implements C3DCommandEncoder, Hg3DObject, Destro
                         device.destroyEndOfFrameAsync(drawsCPUBuffer);
                         final var ptr = drawsCPUBuffer.map();
                         LibCString.nmemcpy(ptr.pointer(), drawCommands.address(0), (long) drawCount * VkDrawIndexedIndirectCommand.SIZEOF);
-                        commandBuffer.drawIndirect(drawsCPUBuffer.slice());
+                        commandBuffer.drawIndexedIndirect(drawsCPUBuffer.slice());
                     } else if (canBatchVertexBuffer) {
                         commandBuffer.bindVertexBuffer(0, expectedVertexBuffer.slice());
                         
@@ -810,7 +808,8 @@ public class Hg3DCommandEncoder implements C3DCommandEncoder, Hg3DObject, Destro
                                 setIndexBuffer(indexBufferToUse, indexTypeToUse);
                             }
                             final var arrayIndex = orderedDynamicUniformValues.get(i).offset() / ssboArrayStride;
-                            commandBuffer.drawIndexed(draw.indexCount(), 1, draw.firstIndex(), 0, arrayIndex);
+                            final var vertexOffset = (int)((Hg3DGpuBuffer)draw.vertexBuffer()).hgSlice().offset() / vertexSize;
+                            commandBuffer.drawIndexed(draw.indexCount(), 1, draw.firstIndex(), vertexOffset, arrayIndex);
                         }
                     } else if (canBatchIndexBuffer && canBatchIndexType) {
                         assert expectedIndexCinnabarBuffer != null;
@@ -827,8 +826,8 @@ public class Hg3DCommandEncoder implements C3DCommandEncoder, Hg3DObject, Destro
                             @Nullable
                             final var indexB3DBuffer = draw.indexBuffer() == null ? indexBuffer : draw.indexBuffer();
                             assert indexB3DBuffer != null;
-//                            final var firstIndex = (int) (((CinnabarGpuBuffer) indexB3DBuffer).backingSlice().range.offset() / expectedIndexType.bytes);
-                            commandBuffer.drawIndexed(draw.indexCount(), 1, draw.firstIndex(), 0, arrayIndex);
+                            final var firstIndex = (int) (((Hg3DGpuBuffer) indexB3DBuffer).hgSlice().offset() / expectedIndexType.bytes);
+                            commandBuffer.drawIndexed(draw.indexCount(), 1, firstIndex + draw.firstIndex(), 0, arrayIndex);
                         }
                     } else {
                         @Nullable

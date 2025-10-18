@@ -37,6 +37,7 @@ import java.util.Map;
 import java.util.function.BiFunction;
 import java.util.function.Supplier;
 
+import static com.mojang.blaze3d.buffers.GpuBuffer.USAGE_COPY_DST;
 import static org.lwjgl.vulkan.VK10.VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
 #endif
 
@@ -70,6 +71,7 @@ import java.util.Map;
 import java.util.function.BiFunction;
 import java.util.function.Supplier;
 
+import static com.mojang.blaze3d.buffers.GpuBuffer.USAGE_COPY_DST;
 import static org.lwjgl.vulkan.VK10.VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
 #endif
 
@@ -210,6 +212,17 @@ public class Hg3DGpuDevice implements GpuDevice {
     
     @Override
     public GpuBuffer createBuffer(@Nullable Supplier<String> label, int usage, ByteBuffer data) {
+        if (label != null) {
+            final var labelStr = label.get();
+            if (labelStr.startsWith("Section vertex buffer")) {
+                // this bit is added, but not needed, and prevent some of my optimizations from working right
+                usage &= ~USAGE_COPY_DST;
+            } else if (labelStr.startsWith("Immediate vertex buffer")) {
+                // this is an immediate buffer, it'll be used _exactly once_
+                // to prevent unneeded memcpys, im going to pull bullshit for uploading it
+                return bufferManager.createImmediate(usage, data.remaining(), data);
+            }
+        }
         return bufferManager.create(usage, data.remaining(), 32, data);
     }
     

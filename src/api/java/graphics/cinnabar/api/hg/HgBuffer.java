@@ -8,11 +8,12 @@ import graphics.cinnabar.api.util.Destroyable;
 import org.jetbrains.annotations.ApiStatus;
 import org.jetbrains.annotations.Nullable;
 import org.lwjgl.system.MemoryStack;
-import org.lwjgl.util.vma.VmaAllocationInfo;
 import org.lwjgl.util.vma.VmaVirtualAllocationCreateInfo;
+import org.lwjgl.util.vma.VmaVirtualAllocationInfo;
 import org.lwjgl.util.vma.VmaVirtualBlockCreateInfo;
 
 import static org.lwjgl.util.vma.Vma.*;
+import static org.lwjgl.vulkan.VK10.VK_SUCCESS;
 
 @ApiStatus.NonExtendable
 @ThreadSafety.VulkanObjectHandle
@@ -133,6 +134,7 @@ public interface HgBuffer extends HgObject {
             this.buffer = buffer;
             try (final var stack = MemoryStack.stackPush()) {
                 final var createInfo = VmaVirtualBlockCreateInfo.calloc(stack);
+                createInfo.size(buffer.size());
                 final var blockReturn = stack.callocPointer(1);
                 vmaCreateVirtualBlock(createInfo, blockReturn);
                 vmaBlock = blockReturn.get(0);
@@ -152,26 +154,27 @@ public interface HgBuffer extends HgObject {
         public Alloc alloc(long size, long align) {
             try (final var stack = MemoryStack.stackPush()) {
                 final var createInfo = VmaVirtualAllocationCreateInfo.calloc(stack);
+                createInfo.flags(VMA_VIRTUAL_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT);
                 createInfo.size(size);
                 createInfo.alignment(align);
                 final var allocReturn = stack.callocPointer(1);
-                vmaVirtualAllocate(vmaBlock, createInfo, allocReturn, null);
-                if (allocReturn.get(0) == 0) {
+                int allocError = vmaVirtualAllocate(vmaBlock, createInfo, allocReturn, null);
+                if (allocError != VK_SUCCESS || allocReturn.get(0) == 0) {
                     // alloc failed
                     return null;
                 }
-                final var vmaAlloc = VmaAllocationInfo.create(allocReturn.get(0));
-                final var slice = buffer.slice(vmaAlloc.offset(), size);
+                final var vmaAlloc = VmaVirtualAllocationInfo.create(allocReturn.get(0));
+                final var slice = buffer.slice(vmaAlloc.offset(), vmaAlloc.size());
                 return new Alloc(vmaAlloc, slice);
             }
         }
         
         public class Alloc implements Destroyable {
             
-            private final VmaAllocationInfo vmaAlloc;
+            private final VmaVirtualAllocationInfo vmaAlloc;
             private final Slice slice;
             
-            Alloc(VmaAllocationInfo vmaAlloc, final Slice slice) {
+            Alloc(VmaVirtualAllocationInfo vmaAlloc, final Slice slice) {
                 this.vmaAlloc = vmaAlloc;
                 this.slice = slice;
             }
