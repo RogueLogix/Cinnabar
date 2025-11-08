@@ -118,7 +118,7 @@ public class MercuryShaderSet extends MercuryObject implements HgGraphicsPipelin
             
             // fragment attachments
             {
-                spvc_resources_get_resource_list_for_type(fragResources, SPVC_BUILTIN_RESOURCE_TYPE_STAGE_OUTPUT, resourcePtr, ptrReturn);
+                spvc_resources_get_resource_list_for_type(fragResources, SPVC_RESOURCE_TYPE_STAGE_OUTPUT, resourcePtr, ptrReturn);
                 final var fraAttachments = SpvcReflectedResource.create(resourcePtr.get(0), (int) ptrReturn.get(0));
                 // don't really care about the details, that's on you to make sure are correct, just need to know the count
                 attachmentCount = fraAttachments.remaining();
