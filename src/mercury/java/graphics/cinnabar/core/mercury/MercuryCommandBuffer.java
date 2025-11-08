@@ -249,9 +249,9 @@ public class MercuryCommandBuffer extends MercuryObject implements HgCommandBuff
             vkClearColor.float32(3, (float) ((clearARGB >> 24) & 0xFF) / 255.0f);
             
             final var subresourceRange = VkImageSubresourceRange.calloc(stack);
-            subresourceRange.baseMipLevel(0);
+            subresourceRange.baseMipLevel(range.baseMipLevel());
             subresourceRange.levelCount(range.mipLevels());
-            subresourceRange.baseArrayLayer(0);
+            subresourceRange.baseArrayLayer(range.baseArrayLayer());
             subresourceRange.layerCount(range.layerCount());
             subresourceRange.aspectMask(VK_IMAGE_ASPECT_COLOR_BIT);
             vkCmdClearColorImage(commandBuffer, ((MercuryImage) range.image()).vkImage(), VK_IMAGE_LAYOUT_GENERAL, vkClearColor, subresourceRange);
@@ -268,9 +268,9 @@ public class MercuryCommandBuffer extends MercuryObject implements HgCommandBuff
             clearValue.stencil(clearStencil);
             
             final var subresourceRange = VkImageSubresourceRange.calloc(stack);
-            subresourceRange.baseMipLevel(0);
+            subresourceRange.baseMipLevel(range.baseMipLevel());
             subresourceRange.levelCount(range.mipLevels());
-            subresourceRange.baseArrayLayer(0);
+            subresourceRange.baseArrayLayer(range.baseArrayLayer());
             subresourceRange.layerCount(range.layerCount());
             if (clearDepth != -1.0) {
                 subresourceRange.aspectMask(subresourceRange.aspectMask() | VK_IMAGE_ASPECT_DEPTH_BIT);
