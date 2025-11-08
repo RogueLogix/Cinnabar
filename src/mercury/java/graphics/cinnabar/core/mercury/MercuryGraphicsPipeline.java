@@ -121,11 +121,15 @@ public class MercuryGraphicsPipeline extends MercuryObject implements HgGraphics
                 depthStencilState.depthCompareOp(depthTest.compareOp().ordinal());
             }
             
+            final var blendState = VkPipelineColorBlendStateCreateInfo.calloc(stack).sType$Default();
             
             final var blendAttachment = VkPipelineColorBlendAttachmentState.calloc(createInfo.renderpass().colorAttachmentCount(), stack);
+            blendState.pAttachments(blendAttachment);
+            
             @Nullable final var blend = pipelineState.blend();
             if (blend != null) {
                 for (int i = 0; i < createInfo.renderpass().colorAttachmentCount(); i++) {
+                    blendAttachment.position(i);
                     final var attachment = blend.attachments().get(i);
                     @Nullable final var equations = attachment.equations();
                     if (equations != null) {
@@ -143,12 +147,10 @@ public class MercuryGraphicsPipeline extends MercuryObject implements HgGraphics
                 }
             } else {
                 for (int i = 0; i < createInfo.renderpass().colorAttachmentCount(); i++) {
+                    blendAttachment.position(i);
                     blendAttachment.colorWriteMask((VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT));
                 }
             }
-            
-            final var blendState = VkPipelineColorBlendStateCreateInfo.calloc(stack).sType$Default();
-            blendState.pAttachments(blendAttachment);
             
             final var vkCreateInfo = VkGraphicsPipelineCreateInfo.calloc(1, stack);
             vkCreateInfo.sType$Default();
