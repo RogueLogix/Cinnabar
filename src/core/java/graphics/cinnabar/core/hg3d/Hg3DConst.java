@@ -56,8 +56,8 @@ public class Hg3DConst {
             case BYTE -> formatValues.get((normalized ? HgFormat.R8_SNORM : HgFormat.R8_SINT).ordinal() + count - 1);
             case USHORT -> formatValues.get((normalized ? HgFormat.R16_UNORM : HgFormat.R16_UINT).ordinal() + count - 1);
             case SHORT -> formatValues.get((normalized ? HgFormat.R16_SNORM : HgFormat.R16_SINT).ordinal() + count - 1);
-            case UINT -> formatValues.get(HgFormat.R32_SINT.ordinal() + count - 1);
-            case INT -> formatValues.get(HgFormat.R32_UINT.ordinal() + count - 1);
+            case UINT -> formatValues.get(HgFormat.R32_UINT.ordinal() + count - 1);
+            case INT -> formatValues.get(HgFormat.R32_SINT.ordinal() + count - 1);
         };
     }
     
