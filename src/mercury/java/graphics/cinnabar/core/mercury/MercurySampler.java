@@ -1,6 +1,7 @@
 package graphics.cinnabar.core.mercury;
 
 import graphics.cinnabar.api.hg.HgSampler;
+import graphics.cinnabar.api.hg.enums.HgCompareOp;
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.vulkan.VkSamplerCreateInfo;
 
@@ -28,8 +29,8 @@ public class MercurySampler extends MercuryObject implements HgSampler {
             vkCreateInfo.mipLodBias(0.0f);
             vkCreateInfo.anisotropyEnable(false);
             vkCreateInfo.maxAnisotropy(0.0f);
-            vkCreateInfo.compareEnable(false);
-            vkCreateInfo.compareOp(VK_COMPARE_OP_ALWAYS);
+            vkCreateInfo.compareEnable(createInfo.compareOp() != HgCompareOp.ALWAYS);
+            vkCreateInfo.compareOp(createInfo.compareOp().ordinal());
             vkCreateInfo.minLod(0);
             vkCreateInfo.maxLod(createInfo.mip() ? VK_LOD_CLAMP_NONE : 0.0f);
             vkCreateInfo.borderColor(VK_BORDER_COLOR_INT_TRANSPARENT_BLACK);
