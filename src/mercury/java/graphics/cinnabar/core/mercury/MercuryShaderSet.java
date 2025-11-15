@@ -29,8 +29,9 @@ import static org.lwjgl.vulkan.VK10.*;
 
 public class MercuryShaderSet extends MercuryObject implements HgGraphicsPipeline.ShaderSet {
     
-    private static final ByteBuffer mainUTF8 = MemoryUtil.memUTF8("main");
     private final VkPipelineShaderStageCreateInfo.Buffer shaderStages;
+    private final ByteBuffer vertexEntryUTF8;
+    private final ByteBuffer fragmentEntryUTF8;
     private final long[] shaders = new long[3];
     private final List<VertexAttrib> attribs;
     private final int attachmentCount;
@@ -53,14 +54,14 @@ public class MercuryShaderSet extends MercuryObject implements HgGraphicsPipelin
         final var vertexGLSL = createInfo.vertexStage().right().get().vertex();
         
         final var compilerOptions = createInfo.rebind() ? globals.ShaderCCompilerGLOptions : globals.ShaderCCompilerVKOptions;
-        final var vertexCompileResult = shaderc_compile_into_spv(globals.ShaderCCompiler, vertexGLSL, shaderc_vertex_shader, "vertex", "main", compilerOptions);
+        final var vertexCompileResult = shaderc_compile_into_spv(globals.ShaderCCompiler, vertexGLSL, shaderc_vertex_shader, "vertex", createInfo.vertexStage().right().get().entryPoint(), compilerOptions);
         final var vertexCompileStatus = shaderc_result_get_compilation_status(vertexCompileResult);
         if (vertexCompileStatus != shaderc_compilation_status_success) {
             @Nullable final var errorMessage = shaderc_result_get_error_message(vertexCompileResult);
             shaderc_result_release(vertexCompileResult);
             throw new RuntimeException(errorMessage);
         }
-        final var fragmentCompileResult = shaderc_compile_into_spv(globals.ShaderCCompiler, fragmentGLSL, shaderc_fragment_shader, "fragment", "main", compilerOptions);
+        final var fragmentCompileResult = shaderc_compile_into_spv(globals.ShaderCCompiler, fragmentGLSL, shaderc_fragment_shader, "fragment", createInfo.fragmentStage().entryPoint(), compilerOptions);
         final var fragmentCompileStatus = shaderc_result_get_compilation_status(fragmentCompileResult);
         if (fragmentCompileStatus != shaderc_compilation_status_success) {
             @Nullable final var errorMessage = shaderc_result_get_error_message(fragmentCompileResult);
@@ -377,18 +378,20 @@ public class MercuryShaderSet extends MercuryObject implements HgGraphicsPipelin
         shaderc_result_release(fragmentCompileResult);
         
         shaderStages = VkPipelineShaderStageCreateInfo.calloc(2);
+        vertexEntryUTF8 = MemoryUtil.memUTF8(createInfo.vertexStage().right().get().entryPoint());
+        fragmentEntryUTF8 = MemoryUtil.memUTF8(createInfo.fragmentStage().entryPoint());
         
-        shaderStages.position(0).sType$Default();
+        shaderStages.position(0);
+        shaderStages.sType$Default();
         shaderStages.stage(VK_SHADER_STAGE_FRAGMENT_BIT);
         shaderStages.module(fragmentShader);
-        shaderStages.pName(mainUTF8);
-        shaderStages.position(0);
+        shaderStages.pName(fragmentEntryUTF8);
         
         shaderStages.position(1);
         shaderStages.sType$Default();
         shaderStages.stage(VK_SHADER_STAGE_VERTEX_BIT);
         shaderStages.module(vertexShader);
-        shaderStages.pName(mainUTF8);
+        shaderStages.pName(vertexEntryUTF8);
         
         shaderStages.position(0);
     }
@@ -396,6 +399,8 @@ public class MercuryShaderSet extends MercuryObject implements HgGraphicsPipelin
     @Override
     public void destroy() {
         shaderStages.free();
+        MemoryUtil.memFree(vertexEntryUTF8);
+        MemoryUtil.memFree(fragmentEntryUTF8);
         for (int i = 0; i < shaders.length; i++) {
             if (shaders[i] != 0) {
                 vkDestroyShaderModule(device.vkDevice(), shaders[i], null);

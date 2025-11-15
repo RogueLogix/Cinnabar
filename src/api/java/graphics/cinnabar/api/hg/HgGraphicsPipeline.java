@@ -61,6 +61,10 @@ public interface HgGraphicsPipeline extends HgObject {
                 return new CreateInfo(Either.right(new Vertex(vertex)), new Fragment(fragment), false);
             }
             
+            public static CreateInfo vk(String vertex, String vertexEntryPoint, String fragment, String fragmentEntryPoint) {
+                return new CreateInfo(Either.right(new Vertex(vertex, vertexEntryPoint)), new Fragment(fragment, fragmentEntryPoint), false);
+            }
+            
             public static CreateInfo mesh(@Nullable String task, String mesh, String fragment) {
                 return new CreateInfo(Either.left(new Mesh(task, mesh)), new Fragment(fragment), false);
             }
@@ -68,10 +72,16 @@ public interface HgGraphicsPipeline extends HgObject {
             record Mesh(@Nullable String task, String mesh) {
             }
             
-            public record Vertex(String vertex) {
+            public record Vertex(String vertex, String entryPoint) {
+                public Vertex(String vertex){
+                    this(vertex, "main");
+                }
             }
             
-            public record Fragment(String fragment) {
+            public record Fragment(String fragment, String entryPoint) {
+                public Fragment(String fragment){
+                    this(fragment, "main");
+                }
             }
         }
         
