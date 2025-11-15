@@ -52,6 +52,7 @@ public class Hg3DGpuTexture extends GpuTexture implements Hg3DObject {
     
     public void removeView() {
         liveViews--;
+        assert liveViews >= 0;
         if (closed && liveViews == 0) {
             device.destroyEndOfFrameAsync(image);
         }

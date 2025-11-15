@@ -24,6 +24,7 @@ public class Hg3DGpuTextureView extends GpuTextureView implements Hg3DObject {
         this.texture = texture;
         boolean cubemap = (texture.usage() & GpuTexture.USAGE_CUBEMAP_COMPATIBLE) != 0;
         imageView = texture.image().createView(cubemap ? HgImage.View.Type.TYPE_CUBE : HgImage.View.Type.TYPE_2D, Hg3DConst.format(texture.getFormat()), baseMipLevel, mipLevels, 0, cubemap ? 6 : 1);
+        texture.addView();
     }
     
     @Override
