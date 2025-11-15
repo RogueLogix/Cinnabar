@@ -61,9 +61,9 @@ public class MercuryShaderSet extends MercuryObject implements HgGraphicsPipelin
             throw new RuntimeException(errorMessage);
         }
         final var fragmentCompileResult = shaderc_compile_into_spv(globals.ShaderCCompiler, fragmentGLSL, shaderc_fragment_shader, "fragment", "main", compilerOptions);
-        final var fragmentCompileStatus = shaderc_result_get_compilation_status(vertexCompileResult);
+        final var fragmentCompileStatus = shaderc_result_get_compilation_status(fragmentCompileResult);
         if (fragmentCompileStatus != shaderc_compilation_status_success) {
-            @Nullable final var errorMessage = shaderc_result_get_error_message(vertexCompileResult);
+            @Nullable final var errorMessage = shaderc_result_get_error_message(fragmentCompileResult);
             shaderc_result_release(vertexCompileResult);
             shaderc_result_release(fragmentCompileResult);
             throw new RuntimeException(errorMessage);
