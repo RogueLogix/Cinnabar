@@ -37,6 +37,9 @@ public enum HgFormat {
     RG16_UNORM,
     RGB16_UNORM,
     RGBA16_UNORM,
+    R16_SFLOAT,
+    RG16_SFLOAT,
+    RGBA16_SFLOAT,
     
     R32_SINT,
     RG32_SINT,
@@ -50,6 +53,8 @@ public enum HgFormat {
     RG32_SFLOAT,
     RGB32_SFLOAT,
     RGBA32_SFLOAT,
+    
+    B10G11R11_UFLOAT_PACK,
     
     D32_SFLOAT,
     D32_SFLOAT_S8_UINT,

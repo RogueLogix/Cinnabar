@@ -41,6 +41,9 @@ public class MercuryConst {
             case RG16_UNORM -> VK_FORMAT_R16G16_UNORM;
             case RGB16_UNORM -> VK_FORMAT_R16G16B16_UNORM;
             case RGBA16_UNORM -> VK_FORMAT_R16G16B16A16_UNORM;
+            case R16_SFLOAT -> VK_FORMAT_R16_SFLOAT;
+            case RG16_SFLOAT -> VK_FORMAT_R16G16_SFLOAT;
+            case RGBA16_SFLOAT -> VK_FORMAT_R16G16B16A16_SFLOAT;
             case R32_SINT -> VK_FORMAT_R32_SINT;
             case RG32_SINT -> VK_FORMAT_R32G32_SINT;
             case RGB32_SINT -> VK_FORMAT_R32G32B32_SINT;
@@ -53,6 +56,7 @@ public class MercuryConst {
             case RG32_SFLOAT -> VK_FORMAT_R32G32_SFLOAT;
             case RGB32_SFLOAT -> VK_FORMAT_R32G32B32_SFLOAT;
             case RGBA32_SFLOAT -> VK_FORMAT_R32G32B32A32_SFLOAT;
+            case B10G11R11_UFLOAT_PACK -> VK_FORMAT_B10G11R11_UFLOAT_PACK32;
             case D32_SFLOAT -> VK_FORMAT_D32_SFLOAT;
             case D32_SFLOAT_S8_UINT -> VK_FORMAT_D32_SFLOAT_S8_UINT;
         };
