@@ -65,30 +65,4 @@ public class DeviceCreationMixin {
         }
     }
     #endif
-    
-    #if FABRIC
-    @Shadow
-    @Nullable
-    private static GpuDevice DEVICE;
-    @Shadow
-    private static String apiDescription;
-    @Shadow
-    @Nullable
-    private static DynamicUniforms dynamicUniforms;
-    @Shadow
-    private static SamplerCache samplerCache;
-    
-    @Overwrite(remap = false)
-    public static void initRenderer(long l, int i, boolean bl, ShaderSource shaderSource, boolean bl2) {
-        if (VulkanStartup.isSupported()) {
-            DEVICE = new Hg3DGpuDevice(l, i, bl, shaderSource, bl2);
-        } else {
-            DEVICE = new GlDevice(l, i, bl, shaderSource, bl2);
-        }
-        apiDescription = DEVICE.getImplementationInformation();
-        dynamicUniforms = new DynamicUniforms();
-        samplerCache.initialize();
-        
-    }
-    #endif
 }

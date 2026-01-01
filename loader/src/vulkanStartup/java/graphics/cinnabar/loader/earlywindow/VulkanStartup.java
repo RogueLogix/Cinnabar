@@ -178,12 +178,16 @@ public class VulkanStartup {
             final var appInfo = VkApplicationInfo.calloc(stack);
             final var appName = stack.UTF8("Minecraft");
             final var engineName = stack.UTF8("Cinnabar");
-            final var mcVersionChunks = Config.mcVersionString.split("-")[0].split("\\.");
+            var mcVersionChunks = Config.mcVersionString.split(" ")[0].split("\\.");
             final int appVersion;
             if (mcVersionChunks.length == 1 && mcVersionChunks[0].matches("[0-9][0-9]w[0-9][0-9]a")) {
                 // snapshot version, zero is fine
                 appVersion = 0;
             } else {
+                if(mcVersionChunks.length == 2){
+                    // something like 26.1, rather than 26.1.0
+                    mcVersionChunks = new String[]{mcVersionChunks[0], mcVersionChunks[1], "0"};
+                }
                 appVersion = VK_MAKE_VERSION(Integer.parseInt(mcVersionChunks[0]), Integer.parseInt(mcVersionChunks[1]), Integer.parseInt(mcVersionChunks[2]));
             }
             final String modVersionString = Config.cinnabarVersionString;

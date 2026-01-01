@@ -410,8 +410,7 @@ public class Hg3DCommandEncoder implements C3DCommandEncoder, Hg3DObject, Destro
     
     @Override
     public void presentTexture(GpuTextureView texture) {
-        final var window = (Hg3DWindow) Minecraft.getInstance().getWindow();
-        final var swapchain = window.swapchain();
+        final var swapchain = device.swapchain();
         
         final var commandBuffer = commandPool.allocate();
         commandBuffer.begin();

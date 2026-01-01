@@ -8,8 +8,9 @@ import static graphics.cinnabar.lib.CinnabarLib.CINNABAR_LIB_LOG;
 public class CinnabarLibBootstrapper {
     public static void bootstrap() {
         CINNABAR_LIB_LOG.info("Initializing CinnabarLib");
-        if (Thread.currentThread().threadId() != 1) {
-            throw new IllegalStateException("Cinnabar can only be bootstrapped from the main thread");
+        final var threadName = Thread.currentThread().getName();
+        if (!"Render thread".equals(threadName)) {
+            throw new IllegalStateException("Cinnabar can only be bootstrapped from the render thread");
         }
         final var index = ThreadIndexRegistry.registerThisThread();
         if (index.index() != 0) {

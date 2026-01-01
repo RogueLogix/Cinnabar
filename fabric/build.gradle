@@ -4,7 +4,7 @@ plugins {
     id 'idea'
     id 'java-library'
     id 'maven-publish'
-    id 'fabric-loom' version '1.10-SNAPSHOT'
+    id 'net.fabricmc.fabric-loom' version '1.14-SNAPSHOT'
     id "net.darkhax.curseforgegradle" version "1.1.26"
 }
 
@@ -196,18 +196,15 @@ loaderLibsToPack.add("org.lwjgl:lwjgl-vulkan:$lwjglVersion:natives-macos-arm64")
 
 repositories {
     mavenCentral()
-    maven {
-        name = 'ParchmentMC'
-        url = 'https://maven.parchmentmc.org'
-    }
 }
 
 dependencies {
     // To change the versions see the gradle.properties file
     minecraft "com.mojang:minecraft:${project.minecraft_version}"
-    modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
+    implementation "net.fabricmc:fabric-loader:${project.loader_version}"
 
     implementation("org.anarres:jcpp:1.4.14")
+    compileOnly("org.jetbrains:annotations:26.0.2-1")
 
     for (lib in vkJavaLibs) {
         implementation(lib)
@@ -236,11 +233,6 @@ dependencies {
     runtimeOnly(sourceSets.mclib.output)
     runtimeOnly(sourceSets.mercury.output)
 
-    mappings loom.layered() {
-        officialMojangMappings()
-        parchment("org.parchmentmc.data:parchment-1.21.8:2025.07.20@zip")
-    }
-
     annotationProcessor 'systems.manifold:manifold-preprocessor:2025.1.26'
 }
 
@@ -253,14 +245,14 @@ processResources {
 }
 
 tasks.withType(JavaCompile).configureEach {
-    it.options.release = 21
+    it.options.release = 25
 }
 
 java {
     withSourcesJar()
 
-    sourceCompatibility = JavaVersion.VERSION_21
-    targetCompatibility = JavaVersion.VERSION_21
+    sourceCompatibility = JavaVersion.VERSION_25
+    targetCompatibility = JavaVersion.VERSION_25
 }
 
 tasks.named('jar', Jar).configure { Jar jar1 ->
@@ -287,6 +279,16 @@ tasks.register("prodClient", net.fabricmc.loom.task.prod.ClientProductionRunTask
 
 loom {
     accessWidenerPath = file("../src/mod/resources/cinnabar.accesswidener")
+//    mods {
+//        "cinnabar" {
+//            sourceSet sourceSets.vulkanStartup.output
+//            sourceSet sourceSets.api.output
+//            sourceSet sourceSets.core.output
+//            sourceSet sourceSets.lib.output
+//            sourceSet sourceSets.mclib.output
+//            sourceSet sourceSets.mercury.output
+//        }
+//    }
 }
 
 tasks.withType(JavaCompile) {
@@ -328,7 +330,6 @@ publishing {
             version = getGitDescribedVersionWithMcVersion()
             artifact jar
             artifact sourcesJar
-            artifact remapJar
         }
     }
 }
@@ -347,13 +348,13 @@ if (curseforgeToken != null && this.project == this.rootProject) {
         apiToken = curseforgeToken
         def projectId = "552238"
 
-        def mainFile = upload(projectId, remapJar)
+        def mainFile = upload(projectId, jar)
         mainFile.changelog = changelog
         mainFile.changelogType = 'markdown'
         mainFile.releaseType = props.release_type
         mainFile.gameVersions.clear()
         mainFile.addGameVersion(minecraft_version)
-        mainFile.addJavaVersion('Java 21')
+        mainFile.addJavaVersion('Java 25')
         mainFile.addModLoader('Fabric')
 
         mainFile.withAdditionalFile(jar)

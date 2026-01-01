@@ -46,6 +46,7 @@ import static org.lwjgl.vulkan.VK10.VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
 import com.mojang.blaze3d.buffers.GpuBuffer;
 import com.mojang.blaze3d.pipeline.CompiledRenderPipeline;
 import com.mojang.blaze3d.pipeline.RenderPipeline;
+import com.mojang.blaze3d.shaders.GpuDebugOptions;
 import com.mojang.blaze3d.shaders.ShaderSource;
 import com.mojang.blaze3d.systems.GpuDevice;
 import com.mojang.blaze3d.textures.*;
@@ -96,7 +97,7 @@ public class Hg3DGpuDevice implements GpuDevice {
     private ReferenceArrayList<Destroyable> activelyDestroying = new ReferenceArrayList<>();
     private final Hg3DGpuBuffer.Manager bufferManager;
     
-    public Hg3DGpuDevice(long windowHandle, int debugLevel, boolean syncDebug, ShaderSource shaderSourceProvider, boolean debugLabels) {
+    public Hg3DGpuDevice(ShaderSource shaderSourceProvider, GpuDebugOptions debugOptions) {
         CinnabarLibBootstrapper.bootstrap();
         this.shaderSourceProvider = shaderSourceProvider;
         
@@ -108,7 +109,6 @@ public class Hg3DGpuDevice implements GpuDevice {
         hgDevice = Hg.createDevice(new HgDevice.CreateInfo());
         commandEncoder = new Hg3DCommandEncoder(this);
         bufferManager = new Hg3DGpuBuffer.Manager(this);
-        ((Hg3DWindow) Minecraft.getInstance().getWindow()).attachDevice(this);
         interFrameSemaphore = hgDevice.createSemaphore(0);
         cleanupDoneSemaphore = hgDevice.createSemaphore(0);
         WorkQueue.AFTER_END_OF_GPU_FRAME.wait(interFrameSemaphore, currentFrame);
@@ -139,7 +139,8 @@ public class Hg3DGpuDevice implements GpuDevice {
         
         bufferManager.destroy();
         commandEncoder.destroy();
-        ((Hg3DWindow) Minecraft.getInstance().getWindow()).detachDevice();
+        swapchain.destroy();
+        surface.destroy();
         samplers.forEach(Destroyable::destroy);
         hgDevice.destroy();
     }
@@ -362,5 +363,65 @@ public class Hg3DGpuDevice implements GpuDevice {
         final var newRenderPass = hgDevice.createRenderPass(new HgRenderPass.CreateInfo(List.of(colorFormat), depthStencilFormat));
         renderPasses.put(formatsId, newRenderPass);
         return newRenderPass;
+    }
+    
+    private HgSurface surface;
+    private HgSurface.Swapchain swapchain;
+    private boolean shouldVsync = false;
+    private boolean isVsync = false;
+    
+    public void attachWindow(long window) {
+        surface = hgDevice.createSurface(window);
+        swapchain = surface.createSwapchain(isVsync, null);
+        swapchain.acquire();
+    }
+    
+    HgSurface.Swapchain swapchain() {
+        return swapchain;
+    }
+    
+    @Override
+    public void setVsync(boolean enabled) {
+        shouldVsync = enabled;
+    }
+    
+    @Override
+    public void presentFrame() {
+        endFrame();
+        
+        final var window = Minecraft.getInstance().getWindow();
+        
+        assert swapchain != null;
+        boolean shouldRecreateSwapchain = !swapchain.present();
+        shouldRecreateSwapchain = shouldRecreateSwapchain || window.getWidth() != swapchain.width();
+        shouldRecreateSwapchain = shouldRecreateSwapchain || window.getHeight() != swapchain.height();
+        
+        if (shouldVsync != isVsync) {
+            isVsync = shouldVsync;
+            shouldRecreateSwapchain = true;
+        }
+        
+        if (shouldRecreateSwapchain) {
+            window.refreshFramebufferSize();
+            recreateSwapchain();
+            window.eventHandler.resizeDisplay();
+        }
+        
+        while (!swapchain.acquire()) {
+            // if the swapchain failed to acquire here,
+            window.refreshFramebufferSize();
+            recreateSwapchain();
+            window.eventHandler.resizeDisplay();
+        }
+    }
+    
+    private void recreateSwapchain() {
+        assert surface != null;
+        swapchain = surface.createSwapchain(isVsync, swapchain);
+    }
+    
+    @Override
+    public boolean isZZeroToOne() {
+        return true;
     }
 }

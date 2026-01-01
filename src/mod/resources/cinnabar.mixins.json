@@ -12,12 +12,9 @@
     "Std140SizeCalculatorMixin",
     "Std140BuilderMixin",
     "FogRendererMixin",
-    "VirtualScreenMixin",
     "WindowMixin",
-    "CachedOrthoProjectionMatrixBufferMixin",
     "DeviceCreationMixin",
     "RenderSystemMixin",
-    "GameRendererMixin",
     "ShaderManagerMixin"
   ],
   "injectors": {
