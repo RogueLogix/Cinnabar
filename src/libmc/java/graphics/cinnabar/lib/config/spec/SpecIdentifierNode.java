@@ -1,17 +1,17 @@
 package graphics.cinnabar.lib.config.spec;
 
 import graphics.cinnabar.lib.parsers.Element;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import org.jetbrains.annotations.Nullable;
 
 import java.lang.reflect.Field;
 
-public class SpecResourceLocationNode extends SpecValueNode {
-    public final ResourceLocation defaultValue;
+public class SpecIdentifierNode extends SpecValueNode {
+    public final Identifier defaultValue;
     
-    SpecResourceLocationNode(SpecObjectNode parent, Field field, ConfigOptionsDefaults defaults) {
+    SpecIdentifierNode(SpecObjectNode parent, Field field, ConfigOptionsDefaults defaults) {
         super(parent, field, defaults);
-        this.defaultValue = (ResourceLocation) currentValueObject();
+        this.defaultValue = (Identifier) currentValueObject();
     }
     
     @Override
@@ -26,12 +26,12 @@ public class SpecResourceLocationNode extends SpecValueNode {
     
     @Override
     public void writeFromString(String string) {
-        writeObject(string.equalsIgnoreCase("null") ? null : ResourceLocation.parse(string));
+        writeObject(string.equalsIgnoreCase("null") ? null : Identifier.parse(string));
     }
     
     @Override
     public boolean isValueValid(String valueString) {
-        return ResourceLocation.tryParse(valueString) != null;
+        return Identifier.tryParse(valueString) != null;
     }
     
     @Override

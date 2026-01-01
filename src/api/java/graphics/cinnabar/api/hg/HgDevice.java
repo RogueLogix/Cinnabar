@@ -92,6 +92,10 @@ public interface HgDevice extends HgObject {
         long uboAlignment();
         
         int maxTexture2dSize();
+        
+        long maxMemoryAllocSize();
+        
+        float maxAnisotropy();
     }
     
     @ThreadSafety.Any

@@ -4,7 +4,7 @@ import graphics.cinnabar.lib.config.ConfigType;
 import graphics.cinnabar.lib.config.ConfigValue;
 import graphics.cinnabar.lib.parsers.Element;
 import it.unimi.dsi.fastutil.objects.ObjectArrayList;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import org.jetbrains.annotations.Nullable;
 
 import java.lang.reflect.Field;
@@ -23,12 +23,12 @@ public class SpecObjectNode extends SpecNode {
     public final Map<String, SpecNode> subNodes;
     public final List<SpecNode> subNodeList;
     
-    private static final Class<ResourceLocation> RESOURCE_LOCATION_CLASS;
+    private static final Class<Identifier> RESOURCE_LOCATION_CLASS;
     
     static {
-        Class<ResourceLocation> foundClass = null;
+        Class<Identifier> foundClass = null;
         try {
-            foundClass = ResourceLocation.class;
+            foundClass = Identifier.class;
         } catch (NoClassDefFoundError ignored) {
         }
         RESOURCE_LOCATION_CLASS = foundClass;
@@ -173,7 +173,7 @@ public class SpecObjectNode extends SpecNode {
             if (fieldClazz == String.class) {
                 subNode = new SpecStringNode(this, objectField, defaults);
             } else if (fieldClazz == RESOURCE_LOCATION_CLASS) {
-                subNode = new SpecResourceLocationNode(this, objectField, defaults);
+                subNode = new SpecIdentifierNode(this, objectField, defaults);
             } else if (fieldClazz.isPrimitive() || Boolean.class.isAssignableFrom(fieldClazz) || Number.class.isAssignableFrom(fieldClazz)) {
                 if (fieldClazz == boolean.class || fieldClazz == Boolean.class) {
                     subNode = new SpecBoolNode(this, objectField, defaults);

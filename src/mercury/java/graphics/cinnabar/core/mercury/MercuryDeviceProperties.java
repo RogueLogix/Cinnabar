@@ -2,21 +2,24 @@ package graphics.cinnabar.core.mercury;
 
 import graphics.cinnabar.api.hg.HgDevice;
 import org.lwjgl.system.MemoryStack;
-import org.lwjgl.vulkan.VkPhysicalDeviceLimits;
-import org.lwjgl.vulkan.VkPhysicalDeviceProperties;
 import org.lwjgl.vulkan.VkPhysicalDeviceProperties2;
+import org.lwjgl.vulkan.VkPhysicalDeviceVulkan11Properties;
 
 import static org.lwjgl.vulkan.VK12.*;
 
 public record MercuryDeviceProperties(
         String apiVersion, String driverVersion, String renderer, String vendor,
-        long uboAlignment, int maxTexture2dSize
+        long uboAlignment, int maxTexture2dSize,
+        long maxMemoryAllocSize,
+        float maxAnisotropy
 ) implements HgDevice.Properties {
     public static MercuryDeviceProperties create(MercuryDevice device) {
         try (final var stack = MemoryStack.stackPush()) {
-            VkPhysicalDeviceProperties2 physicalDeviceProperties2 = VkPhysicalDeviceProperties2.calloc(stack).sType$Default();
-            VkPhysicalDeviceProperties physicalDeviceProperties = physicalDeviceProperties2.properties();
-            VkPhysicalDeviceLimits limits = physicalDeviceProperties.limits();
+            var physicalDeviceProperties2 = VkPhysicalDeviceProperties2.calloc(stack).sType$Default();
+            var physicalDeviceProperties = physicalDeviceProperties2.properties();
+            var limits = physicalDeviceProperties.limits();
+            var vk11Props = VkPhysicalDeviceVulkan11Properties.calloc(stack).sType$Default();
+            physicalDeviceProperties2.pNext(vk11Props);
             
             vkGetPhysicalDeviceProperties2(device.vkDevice().getPhysicalDevice(), physicalDeviceProperties2);
             
@@ -34,7 +37,9 @@ public record MercuryDeviceProperties(
             final var renderer = String.format("%s", physicalDeviceProperties.deviceNameString());
             return new MercuryDeviceProperties(
                     apiVersionUsed, driverVersion, renderer, vendorString,
-                    limits.minUniformBufferOffsetAlignment(), limits.maxImageDimension2D()
+                    limits.minUniformBufferOffsetAlignment(), limits.maxImageDimension2D(),
+                    vk11Props.maxMemoryAllocationSize(),
+                    limits.maxSamplerAnisotropy()
             );
         }
     }

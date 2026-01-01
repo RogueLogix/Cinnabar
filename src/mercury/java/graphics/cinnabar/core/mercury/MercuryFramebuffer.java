@@ -26,9 +26,11 @@ public class MercuryFramebuffer extends MercuryObject implements HgFramebuffer {
                 attachments.put(createInfo.colorAttachments().size(), ((MercuryImageView) createInfo.depthAttachment()).vkImageView());
             }
             vkCreateInfo.pAttachments(attachments);
-            final var firstColorAttachment = createInfo.colorAttachments().getFirst().image();
-            width = firstColorAttachment.width();
-            height = firstColorAttachment.height();
+            final var firstColorAttachment = createInfo.colorAttachments().getFirst();
+            final var firstColorAttachmentImage = firstColorAttachment.image();
+            assert firstColorAttachment.levelCount() == 1;
+            width = firstColorAttachmentImage.width() >> firstColorAttachment.baseMipLevel();
+            height = firstColorAttachmentImage.height() >> firstColorAttachment.baseMipLevel();
             vkCreateInfo.width(width);
             vkCreateInfo.height(height);
             vkCreateInfo.layers(1);

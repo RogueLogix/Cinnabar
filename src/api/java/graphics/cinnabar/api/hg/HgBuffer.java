@@ -110,7 +110,7 @@ public interface HgBuffer extends HgObject {
             return new ImageSlice(buffer, offset, size, width, height);
         }
         
-        public ImageSlice imageSlice(int offset, int size, int width, int height) {
+        public ImageSlice imageSlice(long offset, long size, int width, int height) {
             return new ImageSlice(buffer, this.offset + offset, size, width, height);
         }
         

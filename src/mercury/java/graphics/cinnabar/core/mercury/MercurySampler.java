@@ -27,12 +27,12 @@ public class MercurySampler extends MercuryObject implements HgSampler {
             vkCreateInfo.addressModeV(createInfo.addressV());
             vkCreateInfo.addressModeW(createInfo.addressW());
             vkCreateInfo.mipLodBias(0.0f);
-            vkCreateInfo.anisotropyEnable(false);
-            vkCreateInfo.maxAnisotropy(0.0f);
+            vkCreateInfo.anisotropyEnable(createInfo.maxAnisotropy() > 1.0);
+            vkCreateInfo.maxAnisotropy(createInfo.maxAnisotropy());
             vkCreateInfo.compareEnable(createInfo.compareOp() != HgCompareOp.ALWAYS);
             vkCreateInfo.compareOp(createInfo.compareOp().ordinal());
             vkCreateInfo.minLod(0);
-            vkCreateInfo.maxLod(createInfo.mip() ? VK_LOD_CLAMP_NONE : 0.0f);
+            vkCreateInfo.maxLod(createInfo.mip() ? VK_LOD_CLAMP_NONE : 0.25f);
             vkCreateInfo.borderColor(VK_BORDER_COLOR_INT_TRANSPARENT_BLACK);
             vkCreateInfo.unnormalizedCoordinates(false);
             final var longPtr = stack.longs(0);

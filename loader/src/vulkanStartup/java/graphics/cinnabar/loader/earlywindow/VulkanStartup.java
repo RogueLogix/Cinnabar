@@ -554,6 +554,13 @@ public class VulkanStartup {
                     if (selectedPhysicalDevice != null) {
                         vkGetPhysicalDeviceProperties2(selectedPhysicalDevice, selectedPhysicalDeviceProperties);
                         final var selectedDeviceType = selectedPhysicalDeviceProperties.properties().deviceType();
+                        // TODO: min image transfer granularity matters, VKonD3D12 doesnt like what MC does
+                        //       but the actual device is first, so, this fixes it
+                        //       properly check for that
+                        if (currentDeviceType == selectedDeviceType) {
+                            // if the type is identical, prefer the device reported first
+                            continue;
+                        }
                         if (currentDeviceType == VK_PHYSICAL_DEVICE_TYPE_OTHER) {
                             // if we have any other device selected, skip other devices
                             continue;

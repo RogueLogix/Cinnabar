@@ -1,10 +1,8 @@
 package graphics.cinnabar.core.hg3d;
 
-import com.mojang.blaze3d.textures.FilterMode;
 import com.mojang.blaze3d.textures.GpuTexture;
 import com.mojang.blaze3d.textures.TextureFormat;
 import graphics.cinnabar.api.hg.HgImage;
-import graphics.cinnabar.api.hg.HgSampler;
 
 import static org.lwjgl.vulkan.VK10.VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
 
@@ -56,9 +54,5 @@ public class Hg3DGpuTexture extends GpuTexture implements Hg3DObject {
         if (closed && liveViews == 0) {
             device.destroyEndOfFrameAsync(image);
         }
-    }
-    
-    public HgSampler sampler() {
-        return device.getSampler(minFilter == FilterMode.LINEAR, magFilter == FilterMode.LINEAR, Hg3DConst.addressMode(addressModeU), Hg3DConst.addressMode(addressModeV), 0, useMipmaps);
     }
 }

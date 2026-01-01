@@ -6,7 +6,7 @@ import com.mojang.blaze3d.shaders.ShaderType;
 import com.mojang.blaze3d.systems.GpuDevice;
 import graphics.cinnabar.core.hg3d.Hg3DGpuDevice;
 import graphics.cinnabar.loader.earlywindow.VulkanStartup;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.neoforged.neoforge.client.ClientHooks;
 import net.neoforged.neoforge.client.blaze3d.validation.ValidationGpuDevice;
 import net.neoforged.neoforge.client.config.NeoForgeClientConfig;
@@ -22,14 +22,16 @@ import java.util.function.BiFunction;
 
 import com.mojang.blaze3d.buffers.GpuBuffer;
 import com.mojang.blaze3d.opengl.GlDevice;
+import com.mojang.blaze3d.shaders.ShaderSource;
 import com.mojang.blaze3d.shaders.ShaderType;
 import com.mojang.blaze3d.systems.GpuDevice;
 import com.mojang.blaze3d.systems.RenderSystem;
+import com.mojang.blaze3d.systems.SamplerCache;
 import com.mojang.blaze3d.vertex.*;
 import graphics.cinnabar.core.hg3d.Hg3DGpuDevice;
 import graphics.cinnabar.loader.earlywindow.VulkanStartup;
 import net.minecraft.client.renderer.DynamicUniforms;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import org.jetbrains.annotations.Nullable;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Overwrite;
@@ -46,7 +48,7 @@ import java.util.function.BiFunction;
 public class DeviceCreationMixin {
     #if NEO
     @Inject(at = @At("HEAD"), method = "createGpuDevice", cancellable = true)
-    private static void init(long window, int debugLevel, boolean syncDebug, BiFunction<ResourceLocation, ShaderType, String> defaultShaderSource, boolean enableDebugLabels, CallbackInfoReturnable<GpuDevice> info) {
+    private static void init(long window, int debugLevel, boolean syncDebug, BiFunction<Identifier, ShaderType, String> defaultShaderSource, boolean enableDebugLabels, CallbackInfoReturnable<GpuDevice> info) {
         if (VulkanStartup.isSupported()) {
             info.setReturnValue(new Hg3DGpuDevice(window, debugLevel, syncDebug, defaultShaderSource, enableDebugLabels));
             boolean enableValidation;
@@ -73,16 +75,19 @@ public class DeviceCreationMixin {
     @Shadow
     @Nullable
     private static DynamicUniforms dynamicUniforms;
+    @Shadow
+    private static SamplerCache samplerCache;
     
     @Overwrite(remap = false)
-    public static void initRenderer(long l, int i, boolean bl, BiFunction<ResourceLocation, ShaderType, String> biFunction, boolean bl2) {
+    public static void initRenderer(long l, int i, boolean bl, ShaderSource shaderSource, boolean bl2) {
         if (VulkanStartup.isSupported()) {
-            DEVICE = new Hg3DGpuDevice(l, i, bl, biFunction, bl2);
+            DEVICE = new Hg3DGpuDevice(l, i, bl, shaderSource, bl2);
         } else {
-            DEVICE = new GlDevice(l, i, bl, biFunction, bl2);
+            DEVICE = new GlDevice(l, i, bl, shaderSource, bl2);
         }
         apiDescription = DEVICE.getImplementationInformation();
         dynamicUniforms = new DynamicUniforms();
+        samplerCache.initialize();
         
     }
     #endif

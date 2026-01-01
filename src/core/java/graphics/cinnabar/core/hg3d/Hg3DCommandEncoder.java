@@ -5,7 +5,9 @@ import com.mojang.blaze3d.buffers.GpuBufferSlice;
 import com.mojang.blaze3d.buffers.GpuFence;
 import com.mojang.blaze3d.pipeline.RenderPipeline;
 import com.mojang.blaze3d.platform.NativeImage;
+import com.mojang.blaze3d.systems.GpuQuery;
 import com.mojang.blaze3d.systems.RenderPass;
+import com.mojang.blaze3d.textures.GpuSampler;
 import com.mojang.blaze3d.textures.GpuTexture;
 import com.mojang.blaze3d.textures.GpuTextureView;
 import com.mojang.blaze3d.vertex.VertexFormat;
@@ -29,7 +31,6 @@ import org.lwjgl.system.libc.LibCString;
 import org.lwjgl.vulkan.VkDrawIndexedIndirectCommand;
 
 import java.nio.ByteBuffer;
-import java.nio.IntBuffer;
 import java.util.*;
 import java.util.function.BiConsumer;
 import java.util.function.Supplier;
@@ -274,6 +275,7 @@ public class Hg3DCommandEncoder implements C3DCommandEncoder, Hg3DObject, Destro
         cb.clearDepthStencilImage(((Hg3DGpuTexture) depthTexture).image().resourceRange(), clearDepth, -1);
     }
     
+    // Neo
     public void clearStencilTexture(GpuTexture texture, int value) {
         assert texture instanceof Hg3DGpuTexture;
         final var cb = mainCommandBuffer();
@@ -357,14 +359,9 @@ public class Hg3DCommandEncoder implements C3DCommandEncoder, Hg3DObject, Destro
         writeToTexture(texture, image.getPointer() + skipBytes, bufferSize - skipBytes, mipLevel, depthOrLayer, x, y, width, height, image.getWidth(), image.getHeight());
     }
     
-    // 25w32a
+    @Override
     public void writeToTexture(GpuTexture texture, ByteBuffer buffer, NativeImage.Format format, int mipLevel, int depthOrLayer, int x, int y, int width, int height) {
-        writeToTexture(texture, MemoryUtil.memAddress(buffer), buffer.remaining() * (long) MagicMemorySizes.INT_BYTE_SIZE, mipLevel, depthOrLayer, x, y, width, height, width, height);
-    }
-    
-    // 1.21.8
-    public void writeToTexture(GpuTexture texture, IntBuffer buffer, NativeImage.Format format, int mipLevel, int depthOrLayer, int x, int y, int width, int height) {
-        writeToTexture(texture, MemoryUtil.memAddress(buffer), buffer.remaining() * (long) MagicMemorySizes.INT_BYTE_SIZE, mipLevel, depthOrLayer, x, y, width, height, width, height);
+        writeToTexture(texture, MemoryUtil.memAddress(buffer), buffer.remaining(), mipLevel, depthOrLayer, x, y, width, height, width, height);
     }
     
     private void writeToTexture(GpuTexture texture, long buffer, long bufferSize, int mipLevel, int depthOrLayer, int x, int y, int width, int height, int srcWidth, int srcHeight) {
@@ -384,12 +381,12 @@ public class Hg3DCommandEncoder implements C3DCommandEncoder, Hg3DObject, Destro
     }
     
     @Override
-    public void copyTextureToBuffer(GpuTexture texture, GpuBuffer buffer, int offset, Runnable task, int mipLevel) {
+    public void copyTextureToBuffer(GpuTexture texture, GpuBuffer buffer, long offset, Runnable task, int mipLevel) {
         this.copyTextureToBuffer(texture, buffer, offset, task, mipLevel, 0, 0, texture.getWidth(mipLevel), texture.getHeight(mipLevel));
     }
     
     @Override
-    public void copyTextureToBuffer(GpuTexture texture, GpuBuffer buffer, int offset, Runnable task, int mipLevel, int x, int y, int width, int height) {
+    public void copyTextureToBuffer(GpuTexture texture, GpuBuffer buffer, long offset, Runnable task, int mipLevel, int x, int y, int width, int height) {
         
         final var hgImage = ((Hg3DGpuTexture) texture).image();
         final var hgBuffer = ((Hg3DGpuBuffer) buffer).hgSlice();
@@ -452,10 +449,20 @@ public class Hg3DCommandEncoder implements C3DCommandEncoder, Hg3DObject, Destro
         };
     }
     
+    @Override
+    public GpuQuery timerQueryBegin() {
+        return new Hg3DGpuQuery(device);
+    }
+    
+    @Override
+    public void timerQueryEnd(GpuQuery gpuQuery) {
+    
+    }
+    
     public class Hg3DRenderPass implements C3DRenderPass {
         
         protected final Map<String, @Nullable GpuBufferSlice> uniforms = new Object2ObjectOpenHashMap<>();
-        protected final Map<String, @Nullable GpuTextureView> samplers = new Object2ObjectOpenHashMap<>();
+        protected final Map<String, Pair<GpuTextureView, GpuSampler>> samplers = new Object2ObjectOpenHashMap<>();
         private final HgRenderPass renderPass;
         private final HgFramebuffer framebuffer;
         private final HgCommandBuffer commandBuffer;
@@ -517,8 +524,12 @@ public class Hg3DCommandEncoder implements C3DCommandEncoder, Hg3DObject, Destro
         }
         
         @Override
-        public void bindSampler(String uniformName, @Nullable GpuTextureView texture) {
-            this.samplers.put(uniformName, texture);
+        public void bindTexture(String uniformName, @Nullable GpuTextureView view, @Nullable GpuSampler sampler) {
+            if(view == null || sampler == null){
+                this.samplers.remove(uniformName);
+            } else {
+                this.samplers.put(uniformName, new Pair<>(view, sampler));
+            }
             uniformsDirty = true;
         }
         
@@ -640,10 +651,11 @@ public class Hg3DCommandEncoder implements C3DCommandEncoder, Hg3DObject, Destro
             for (final var binding : uniformSetLayout.bindings()) {
                 switch (binding.type()) {
                     case COMBINED_IMAGE_SAMPLER -> {
-                        @Nullable
-                        final var imageView = (Hg3DGpuTextureView) samplers.get(binding.name());
-                        assert imageView != null;
-                        writes.add(new HgUniformSet.Write.Image(binding, 0, List.of(new Pair<>(imageView.imageView(), imageView.texture().sampler()))));
+                        final var viewSampler = samplers.get(binding.name());
+                        assert viewSampler != null;
+                        final var imageView = (Hg3DGpuTextureView) viewSampler.first();
+                        final var sampler = (Hg3DGpuSampler) viewSampler.second();
+                        writes.add(new HgUniformSet.Write.Image(binding, 0, List.of(new Pair<>(imageView.imageView(), sampler.sampler()))));
                     }
                     case UNIFORM_TEXEL_BUFFER -> {
                         @Nullable
@@ -742,7 +754,7 @@ public class Hg3DCommandEncoder implements C3DCommandEncoder, Hg3DObject, Destro
                     final var firstInstanceRemainder = orderedDynamicUniformValue.offset() % ssboArrayStride;
                     canBatchDynamicUniform = canBatchDynamicUniform && firstInstanceRemainder == 0;
                     canBatchDynamicUniform = canBatchDynamicUniform && orderedDynamicUniformValue.length() == ssboArrayStride;
-                    drawCommands.firstInstance(firstInstance);
+                    drawCommands.firstInstance((int) firstInstance);
                     
                     final var draw = orderedDraws.get(i);
                     
@@ -809,7 +821,7 @@ public class Hg3DCommandEncoder implements C3DCommandEncoder, Hg3DObject, Destro
                             }
                             final var arrayIndex = orderedDynamicUniformValues.get(i).offset() / ssboArrayStride;
                             final var vertexOffset = (int)((Hg3DGpuBuffer)draw.vertexBuffer()).hgSlice().offset() / vertexSize;
-                            commandBuffer.drawIndexed(draw.indexCount(), 1, draw.firstIndex(), vertexOffset, arrayIndex);
+                            commandBuffer.drawIndexed(draw.indexCount(), 1, draw.firstIndex(), vertexOffset, (int) arrayIndex);
                         }
                     } else if (canBatchIndexBuffer && canBatchIndexType) {
                         assert expectedIndexCinnabarBuffer != null;
@@ -827,7 +839,7 @@ public class Hg3DCommandEncoder implements C3DCommandEncoder, Hg3DObject, Destro
                             final var indexB3DBuffer = draw.indexBuffer() == null ? indexBuffer : draw.indexBuffer();
                             assert indexB3DBuffer != null;
                             final var firstIndex = (int) (((Hg3DGpuBuffer) indexB3DBuffer).hgSlice().offset() / expectedIndexType.bytes);
-                            commandBuffer.drawIndexed(draw.indexCount(), 1, firstIndex + draw.firstIndex(), 0, arrayIndex);
+                            commandBuffer.drawIndexed(draw.indexCount(), 1, firstIndex + draw.firstIndex(), 0, (int) arrayIndex);
                         }
                     } else {
                         @Nullable
@@ -849,7 +861,7 @@ public class Hg3DCommandEncoder implements C3DCommandEncoder, Hg3DObject, Destro
                             }
                             setVertexBuffer(draw.slot(), draw.vertexBuffer());
                             final var arrayIndex = orderedDynamicUniformValues.get(i).offset() / ssboArrayStride;
-                            commandBuffer.drawIndexed(draw.indexCount(), 1, draw.firstIndex(), 0, arrayIndex);
+                            commandBuffer.drawIndexed(draw.indexCount(), 1, draw.firstIndex(), 0, (int) arrayIndex);
                         }
                     }
                 } else {

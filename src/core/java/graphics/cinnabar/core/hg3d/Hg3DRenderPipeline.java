@@ -4,6 +4,7 @@ import com.google.common.collect.ImmutableMap;
 import com.mojang.blaze3d.pipeline.CompiledRenderPipeline;
 import com.mojang.blaze3d.pipeline.RenderPipeline;
 import com.mojang.blaze3d.preprocessor.GlslPreprocessor;
+import com.mojang.blaze3d.shaders.ShaderSource;
 import com.mojang.blaze3d.shaders.ShaderType;
 import com.mojang.blaze3d.vertex.VertexFormatElement;
 import graphics.cinnabar.api.hg.HgGraphicsPipeline;
@@ -17,14 +18,13 @@ import it.unimi.dsi.fastutil.objects.Object2ReferenceArrayMap;
 import it.unimi.dsi.fastutil.objects.Object2ReferenceOpenHashMap;
 import it.unimi.dsi.fastutil.objects.Reference2ReferenceOpenHashMap;
 import it.unimi.dsi.fastutil.objects.ReferenceArrayList;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import org.jetbrains.annotations.Nullable;
 import org.joml.Vector4f;
 
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.function.BiFunction;
 
 import static com.mojang.blaze3d.platform.DepthTestFunction.NO_DEPTH_TEST;
 import static org.lwjgl.vulkan.VK10.*;
@@ -41,11 +41,11 @@ public class Hg3DRenderPipeline implements Hg3DObject, CompiledRenderPipeline, D
     private final HgGraphicsPipeline.CreateInfo.State pipelineState;
     private final Map<HgRenderPass, HgGraphicsPipeline> pipelines = new Reference2ReferenceOpenHashMap<>();
     private final Map<String, HgFormat> texelBufferFormats = new Object2ReferenceArrayMap<>();
-    public Hg3DRenderPipeline(Hg3DGpuDevice device, RenderPipeline pipeline, BiFunction<ResourceLocation, ShaderType, String> shaderSourceProvider) {
+    public Hg3DRenderPipeline(Hg3DGpuDevice device, RenderPipeline pipeline, ShaderSource shaderSourceProvider) {
         this.info = pipeline;
         this.device = device;
         final var hgDevice = device.hgDevice();
-        var vertexSource = shaderSourceCache.computeIfAbsent(new ShaderSourceCacheKey(pipeline.getVertexShader(), ShaderType.VERTEX), key -> shaderSourceProvider.apply(key.location, key.type));
+        var vertexSource = shaderSourceCache.computeIfAbsent(new ShaderSourceCacheKey(pipeline.getVertexShader(), ShaderType.VERTEX), key -> shaderSourceProvider.get(key.location, key.type));
         // TODO: remove this when the shader gets fixed
         if ("minecraft:core/entity".equals(pipeline.getVertexShader().toString())) {
             vertexSource = vertexSource.replace("overlayColor = texelFetch(Sampler1, UV1, 0);", """
@@ -54,7 +54,10 @@ public class Hg3DRenderPipeline implements Hg3DObject, CompiledRenderPipeline, D
                         #endif
                     """);
         }
-        final var fragmentSource = shaderSourceCache.computeIfAbsent(new ShaderSourceCacheKey(pipeline.getFragmentShader(), ShaderType.FRAGMENT), key -> shaderSourceProvider.apply(key.location, key.type));
+        var fragmentSource = shaderSourceCache.computeIfAbsent(new ShaderSourceCacheKey(pipeline.getFragmentShader(), ShaderType.FRAGMENT), key -> shaderSourceProvider.get(key.location, key.type));
+        // "sampler" is reserved in newer GLSL
+        fragmentSource = fragmentSource.replace("sampler2D sampler", "sampler2D samp");
+        fragmentSource = fragmentSource.replace("return textureGrad(sampler, uv, du, dv);", "return textureGrad(samp, uv, du, dv);");
         final var glVertexGLSL = GlslPreprocessor.injectDefines(vertexSource, pipeline.getShaderDefines());
         final var glFragmentGLSL = GlslPreprocessor.injectDefines(fragmentSource, pipeline.getShaderDefines());
         
@@ -216,6 +219,6 @@ public class Hg3DRenderPipeline implements Hg3DObject, CompiledRenderPipeline, D
         return info;
     }
     
-    record ShaderSourceCacheKey(ResourceLocation location, ShaderType type) {
+    record ShaderSourceCacheKey(Identifier location, ShaderType type) {
     }
 }

@@ -21,7 +21,7 @@ import it.unimi.dsi.fastutil.ints.Int2ReferenceOpenHashMap;
 import it.unimi.dsi.fastutil.objects.Reference2ReferenceOpenHashMap;
 import it.unimi.dsi.fastutil.objects.ReferenceArrayList;
 import net.minecraft.client.Minecraft;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.loading.FMLLoader;
 import net.neoforged.neoforge.client.blaze3d.GpuDeviceFeatures;
@@ -42,14 +42,13 @@ import static org.lwjgl.vulkan.VK10.VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
 #endif
 
 #if FABRIC
+
 import com.mojang.blaze3d.buffers.GpuBuffer;
 import com.mojang.blaze3d.pipeline.CompiledRenderPipeline;
 import com.mojang.blaze3d.pipeline.RenderPipeline;
-import com.mojang.blaze3d.shaders.ShaderType;
+import com.mojang.blaze3d.shaders.ShaderSource;
 import com.mojang.blaze3d.systems.GpuDevice;
-import com.mojang.blaze3d.textures.GpuTexture;
-import com.mojang.blaze3d.textures.GpuTextureView;
-import com.mojang.blaze3d.textures.TextureFormat;
+import com.mojang.blaze3d.textures.*;
 import graphics.cinnabar.api.hg.*;
 import graphics.cinnabar.api.hg.enums.HgFormat;
 import graphics.cinnabar.api.util.Destroyable;
@@ -62,13 +61,12 @@ import it.unimi.dsi.fastutil.objects.Reference2ReferenceOpenHashMap;
 import it.unimi.dsi.fastutil.objects.ReferenceArrayList;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.Minecraft;
-import net.minecraft.resources.ResourceLocation;
 import org.jetbrains.annotations.Nullable;
 
 import java.nio.ByteBuffer;
 import java.util.List;
 import java.util.Map;
-import java.util.function.BiFunction;
+import java.util.OptionalDouble;
 import java.util.function.Supplier;
 
 import static com.mojang.blaze3d.buffers.GpuBuffer.USAGE_COPY_DST;
@@ -86,7 +84,7 @@ public class Hg3DGpuDevice implements GpuDevice {
     private final HgDevice hgDevice;
     private final Hg3DCommandEncoder commandEncoder;
     
-    private final BiFunction<ResourceLocation, ShaderType, String> shaderSourceProvider;
+    private final ShaderSource shaderSourceProvider;
     
     private final HgSemaphore interFrameSemaphore;
     private final HgSemaphore cleanupDoneSemaphore;
@@ -98,7 +96,7 @@ public class Hg3DGpuDevice implements GpuDevice {
     private ReferenceArrayList<Destroyable> activelyDestroying = new ReferenceArrayList<>();
     private final Hg3DGpuBuffer.Manager bufferManager;
     
-    public Hg3DGpuDevice(long windowHandle, int debugLevel, boolean syncDebug, BiFunction<ResourceLocation, ShaderType, String> shaderSourceProvider, boolean debugLabels) {
+    public Hg3DGpuDevice(long windowHandle, int debugLevel, boolean syncDebug, ShaderSource shaderSourceProvider, boolean debugLabels) {
         CinnabarLibBootstrapper.bootstrap();
         this.shaderSourceProvider = shaderSourceProvider;
         
@@ -110,7 +108,6 @@ public class Hg3DGpuDevice implements GpuDevice {
         hgDevice = Hg.createDevice(new HgDevice.CreateInfo());
         commandEncoder = new Hg3DCommandEncoder(this);
         bufferManager = new Hg3DGpuBuffer.Manager(this);
-        initSamplers();
         ((Hg3DWindow) Minecraft.getInstance().getWindow()).attachDevice(this);
         interFrameSemaphore = hgDevice.createSemaphore(0);
         cleanupDoneSemaphore = hgDevice.createSemaphore(0);
@@ -182,7 +179,14 @@ public class Hg3DGpuDevice implements GpuDevice {
     }
     
     @Override
+    public GpuSampler createSampler(AddressMode addressModeU, AddressMode addressModeV, FilterMode minFilter, FilterMode magFilter, int maxAnisotropy, OptionalDouble maxLod) {
+        return new Hg3DGpuSampler(this, addressModeU, addressModeU, minFilter, minFilter, maxAnisotropy, maxLod);
+    }
+    
+    @Override
     public GpuTexture createTexture(@Nullable Supplier<String> label, int usage, TextureFormat format, int width, int height, int depthOrLayers, int mipLevels) {
+        // bug in MC, just force it to the max reasonable number of mips
+        mipLevels = Math.min(Integer.numberOfTrailingZeros(Math.min(width, height)) + 1, mipLevels);
         final var texture = new Hg3DGpuTexture(this, usage, "TODO: replace me", format, width, height, depthOrLayers, mipLevels);
         createCommandEncoder().setupTexture(texture);
         return texture;
@@ -206,7 +210,7 @@ public class Hg3DGpuDevice implements GpuDevice {
     }
     
     @Override
-    public GpuBuffer createBuffer(@Nullable Supplier<String> label, int usage, int size) {
+    public GpuBuffer createBuffer(@Nullable Supplier<String> label, int usage, long size) {
         return bufferManager.create(usage, size, 32, null);
     }
     
@@ -272,7 +276,7 @@ public class Hg3DGpuDevice implements GpuDevice {
     }
     
     @Override
-    public CompiledRenderPipeline precompilePipeline(RenderPipeline renderPipeline, @Nullable BiFunction<ResourceLocation, ShaderType, String> shaderSource) {
+    public CompiledRenderPipeline precompilePipeline(RenderPipeline renderPipeline, @Nullable ShaderSource shaderSource) {
         final var hg3dPipeline = getPipeline(renderPipeline, shaderSource == null ? shaderSourceProvider : shaderSource);
         // this is the most likely format(s) to be used
         // and will also trigger any validation errors
@@ -290,6 +294,11 @@ public class Hg3DGpuDevice implements GpuDevice {
     @Override
     public List<String> getEnabledExtensions() {
         return List.of();
+    }
+    
+    @Override
+    public int getMaxSupportedAnisotropy() {
+        return (int)hgDevice.properties().maxAnisotropy();
     }
     
     #if NEO
@@ -335,11 +344,11 @@ public class Hg3DGpuDevice implements GpuDevice {
         return getPipeline(pipeline, shaderSourceProvider);
     }
     
-    Hg3DRenderPipeline getPipeline(RenderPipeline pipeline, BiFunction<ResourceLocation, ShaderType, String> shaderSourceProvider) {
+    Hg3DRenderPipeline getPipeline(RenderPipeline pipeline, ShaderSource shaderSourceProvider) {
         return pipelineCache.computeIfAbsent(pipeline, pipe -> createPipeline(pipe, shaderSourceProvider));
     }
     
-    private Hg3DRenderPipeline createPipeline(RenderPipeline pipeline, BiFunction<ResourceLocation, ShaderType, String> shaderSourceProvider) {
+    private Hg3DRenderPipeline createPipeline(RenderPipeline pipeline, ShaderSource shaderSourceProvider) {
         return new Hg3DRenderPipeline(this, pipeline, shaderSourceProvider);
     }
     
@@ -353,57 +362,5 @@ public class Hg3DGpuDevice implements GpuDevice {
         final var newRenderPass = hgDevice.createRenderPass(new HgRenderPass.CreateInfo(List.of(colorFormat), depthStencilFormat));
         renderPasses.put(formatsId, newRenderPass);
         return newRenderPass;
-    }
-    
-    private void initSamplers() {
-        // bit 1: minLinear
-        // bit 2: magLinear
-        // bit 3: mip
-        // bit 4-5: adddressU
-        // bit 6-7: adddressV
-        // bit 8-9: adddressW
-        for (int i = 0; i < 512; i++) {
-            boolean minLinear = (i & 0x1) != 0;
-            boolean magLinear = (i & (0x1 << 1)) != 0;
-            int addressU = (i >> 3) & 0x3;
-            int addressV = (i >> 5) & 0x3;
-            int addressW = (i >> 7) & 0x3;
-            boolean mip = (i & (0x1 << 2)) != 0;
-            samplers.add(hgDevice.createSampler(new HgSampler.CreateInfo(minLinear, magLinear, addressU, addressV, addressW, mip)));
-        }
-    }
-    
-    public HgSampler getSampler(boolean minLinear, boolean magLinear, int addressU, int addressV, int addressW, boolean mip) {
-        int index = 0;
-        if (minLinear) {
-            index |= 0x1;
-        }
-        if (magLinear) {
-            index |= 0x2;
-        }
-        if (mip) {
-            index |= 0x4;
-        }
-        index |= (0x3 & addressU) << 3;
-        index |= (0x3 & addressV) << 5;
-        index |= (0x3 & addressW) << 7;
-        return samplers.get(index);
-    }
-    
-    #if NEO
-    @SubscribeEvent
-    private void handleDebugTextEvent(CustomizeGuiOverlayEvent.DebugText event) {
-        final var list = event.getRight();
-        list.add("");
-        hgDevice.addDebugText(list);
-    }
-    #endif
-    
-    public void advanceFramesForEviction() {
-        // advances enough frames that nothing can be in-flight on the GPU anymore
-        // this is only hit in extreme memory pressure circumstances
-        for (int i = 0; i < MagicNumbers.MaximumFramesInFlight; i++) {
-            endFrame();
-        }
     }
 }

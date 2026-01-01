@@ -184,8 +184,8 @@ public class Hg3DConst {
     
     public static HgGraphicsPipeline.PrimitiveTopology topology(VertexFormat.Mode vertexFormatMode) {
         return switch (vertexFormatMode) {
+            case VertexFormat.Mode.POINTS -> HgGraphicsPipeline.PrimitiveTopology.POINT_LIST;
             case VertexFormat.Mode.LINES -> HgGraphicsPipeline.PrimitiveTopology.TRIANGLE_LIST;
-            case VertexFormat.Mode.LINE_STRIP -> HgGraphicsPipeline.PrimitiveTopology.TRIANGLE_STRIP;
             case VertexFormat.Mode.DEBUG_LINES -> HgGraphicsPipeline.PrimitiveTopology.LINE_LIST;
             case VertexFormat.Mode.DEBUG_LINE_STRIP -> HgGraphicsPipeline.PrimitiveTopology.LINE_STRIP;
             case VertexFormat.Mode.TRIANGLES -> HgGraphicsPipeline.PrimitiveTopology.TRIANGLE_LIST;

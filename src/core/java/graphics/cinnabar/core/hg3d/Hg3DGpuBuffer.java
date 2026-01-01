@@ -32,8 +32,9 @@ public class Hg3DGpuBuffer extends GpuBuffer implements Hg3DObject, Destroyable 
     private HgBuffer.Slice slice;
     @Nullable
     private HgBuffer.Suballocator.Alloc alloc;
-    @Nullable
-    private ByteBuffer evictedData;
+    // TODO: tihs could be better, PointerWrapper?
+    private long evictedData;
+    private long evictedDataSize;
     @Nullable
     private HgBuffer.MemoryType memoryType;
     @Nullable
@@ -42,7 +43,7 @@ public class Hg3DGpuBuffer extends GpuBuffer implements Hg3DObject, Destroyable 
     private final SpliceableLinkedList.Node<Hg3DGpuBuffer> usageListNode = new SpliceableLinkedList.Node<>(this);
     private long lastUsedFrame = -1;
     
-    private Hg3DGpuBuffer(Manager manager, int usage, int size, @Nullable ByteBuffer sourceData) {
+    private Hg3DGpuBuffer(Manager manager, int usage, long size, @Nullable ByteBuffer sourceData) {
         super(usage, size);
         this.device = manager.device;
         this.manager = manager;
@@ -88,7 +89,7 @@ public class Hg3DGpuBuffer extends GpuBuffer implements Hg3DObject, Destroyable 
             alloc.destroy();
         }
         MemoryUtil.memFree(sourceData);
-        MemoryUtil.memFree(evictedData);
+        MemoryUtil.nmemFree(evictedData);
         manager.destroy(this);
     }
     
@@ -183,6 +184,7 @@ public class Hg3DGpuBuffer extends GpuBuffer implements Hg3DObject, Destroyable 
                 vertexPoolSize >>= 1;
             }
             vertexPoolSize = Math.min(Hg.debugLogging() ? (256 * MagicMemorySizes.MiB) : Integer.MAX_VALUE, vertexPoolSize);
+            vertexPoolSize = Math.min(device.hgDevice().properties().maxMemoryAllocSize(), vertexPoolSize);
             vertexPoolBuffer = device.hgDevice().createBuffer(HgBuffer.MemoryRequest.GPU, vertexPoolSize, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT);
             vertexPoolAllocator = new HgBuffer.Suballocator(vertexPoolBuffer);
             
@@ -197,7 +199,7 @@ public class Hg3DGpuBuffer extends GpuBuffer implements Hg3DObject, Destroyable 
             emergencyEvictionBuffer.destroy();
         }
         
-        public Hg3DGpuBuffer create(int usage, int size, int align, @Nullable ByteBuffer data) {
+        public Hg3DGpuBuffer create(int usage, long size, int align, @Nullable ByteBuffer data) {
             // if the data can't change, then i can rely on the data currently passed in to be constant for the buffer's entire lifetime
             final var dataCanChange = (usage & (USAGE_COPY_DST | USAGE_MAP_WRITE)) != 0;
             assert dataCanChange || data != null;
@@ -205,13 +207,14 @@ public class Hg3DGpuBuffer extends GpuBuffer implements Hg3DObject, Destroyable 
             if (dataCanChange && data != null) {
                 // if data was specified (and its not constant), consider it "evicted data" at first
                 // it'll automatically get promoted when it gets used
-                buffer.evictedData = MemoryUtil.memAlloc(data.remaining());
-                LibCString.memcpy(buffer.evictedData, data);
+                buffer.evictedData = MemoryUtil.nmemAlloc(data.remaining());
+                buffer.evictedDataSize = data.remaining();
+                LibCString.nmemcpy(buffer.evictedData, MemoryUtil.memAddress(data), data.remaining());
             }
             return buffer;
         }
         
-        public GpuBuffer createImmediate(int usage, int size, ByteBuffer data) {
+        public GpuBuffer createImmediate(int usage, long size, ByteBuffer data) {
             final var dataCanChange = (usage & (USAGE_COPY_DST | USAGE_MAP_WRITE)) != 0;
             assert dataCanChange;
             final var buffer = new Hg3DGpuBuffer(this, usage, size, null);
@@ -236,7 +239,7 @@ public class Hg3DGpuBuffer extends GpuBuffer implements Hg3DObject, Destroyable 
             buffer.buffer = null;
             buffer.slice = null;
             buffer.alloc = null;
-            buffer.evictedData = null;
+            buffer.evictedData = 0;
         }
         
         public void used(Hg3DGpuBuffer buffer) {
@@ -300,9 +303,10 @@ public class Hg3DGpuBuffer extends GpuBuffer implements Hg3DObject, Destroyable 
                     // mappable memory, can evict to CPU memory and then follow immediate eviction path
                     // UMA (iGPUs) will also end up here
                     // GPU_MAPPABLE is specifically for over-pcie devices, which is extremely slow to read (though you can), so im not doing it in this pass
-                    currentBuffer.data.evictedData = MemoryUtil.memAlloc(currentBuffer.data.size());
+                    currentBuffer.data.evictedData = MemoryUtil.nmemAlloc(currentBuffer.data.size());
+                    currentBuffer.data.evictedDataSize = currentBuffer.data.size();
                     final var ptr = currentBuffer.data.buffer.slice().map();
-                    LibCString.nmemcpy(MemoryUtil.memAddress(currentBuffer.data.evictedData), ptr.pointer(), currentBuffer.data.size());
+                    LibCString.nmemcpy(currentBuffer.data.evictedData, ptr.pointer(), currentBuffer.data.size());
                     currentBuffer.data.buffer.slice().unmap();
                     
                     currentBuffer.data.buffer.destroy();
@@ -349,9 +353,10 @@ public class Hg3DGpuBuffer extends GpuBuffer implements Hg3DObject, Destroyable 
                     // mappable memory, can evict to CPU memory and then follow immediate eviction path
                     // UMA (iGPUs) will also end up here
                     // GPU_MAPPABLE is specifically for over-pcie devices, which is extremely slow to read (though you can), so im not doing it in this pass
-                    currentBuffer.data.evictedData = MemoryUtil.memAlloc(currentBuffer.data.size());
+                    currentBuffer.data.evictedData = MemoryUtil.nmemAlloc(currentBuffer.data.size());
+                    currentBuffer.data.evictedDataSize = currentBuffer.data.size();
                     final var ptr = currentBuffer.data.buffer.slice().map();
-                    LibCString.nmemcpy(MemoryUtil.memAddress(currentBuffer.data.evictedData), ptr.pointer(), currentBuffer.data.size());
+                    LibCString.nmemcpy(currentBuffer.data.evictedData, ptr.pointer(), currentBuffer.data.size());
                     currentBuffer.data.buffer.slice().unmap();
                     
                     currentBuffer.data.buffer.destroy();
@@ -428,8 +433,8 @@ public class Hg3DGpuBuffer extends GpuBuffer implements Hg3DObject, Destroyable 
                 
                 currentEmergencyBufferOffset = 0;
                 for (@Nullable var currentBuffer = shufflingBuffers.peekFirst(); currentBuffer != null; ) {
-                    currentBuffer.data.evictedData = MemoryUtil.memAlloc(currentBuffer.data.size());
-                    LibCString.nmemcpy(MemoryUtil.memAddress(currentBuffer.data.evictedData), ptr.pointer() + currentEmergencyBufferOffset, currentBuffer.data.size());
+                    currentBuffer.data.evictedData = MemoryUtil.nmemAlloc(currentBuffer.data.size());
+                    LibCString.nmemcpy(currentBuffer.data.evictedData, ptr.pointer() + currentEmergencyBufferOffset, currentBuffer.data.size());
                     currentEmergencyBufferOffset += currentBuffer.data.size();
                     
                     assert currentBuffer.data.buffer != null;
@@ -483,22 +488,23 @@ public class Hg3DGpuBuffer extends GpuBuffer implements Hg3DObject, Destroyable 
             
             used(buffer);
             
-            if (buffer.evictedData != null || buffer.sourceData != null || buffer.immediateUpload != null) {
-                final var toUpload = buffer.immediateUpload != null ? buffer.immediateUpload : buffer.evictedData == null ? buffer.sourceData : buffer.evictedData;
+            if (buffer.evictedData != 0 || buffer.sourceData != null || buffer.immediateUpload != null) {
+                final var toUploadAddr = buffer.immediateUpload != null ? MemoryUtil.memAddress(buffer.immediateUpload) : buffer.evictedData == 0 ? MemoryUtil.memAddress(buffer.sourceData) : buffer.evictedData;
+                final var toUploadSize = buffer.immediateUpload != null ? buffer.immediateUpload.remaining() : buffer.evictedData == 0 ? buffer.sourceData.remaining() : buffer.evictedDataSize;
                 if (buffer.slice.buffer().memoryType().mappable) {
                     // mappable, direct copy
                     final var bufferPtr = buffer.slice.map();
                     assert bufferPtr.pointer() != 0;
-                    assert MemoryUtil.memAddress(toUpload) != 0;
-                    LibCString.nmemcpy(bufferPtr.pointer(), MemoryUtil.memAddress(toUpload), toUpload.remaining());
+                    assert toUploadAddr != 0;
+                    LibCString.nmemcpy(bufferPtr.pointer(), toUploadAddr, toUploadSize);
                     buffer.slice.unmap();
                 } else {
                     // non-mappable, need a  staging buffer
-                    final var tempBuffer = device.createCommandEncoder().uploadBufferSlice(toUpload.remaining());
+                    final var tempBuffer = device.createCommandEncoder().uploadBufferSlice(toUploadSize);
                     final var ptr = tempBuffer.map();
                     assert ptr.pointer() != 0;
-                    assert MemoryUtil.memAddress(toUpload) != 0;
-                    LibCString.nmemcpy(ptr.pointer(), MemoryUtil.memAddress(toUpload), ptr.size());
+                    assert toUploadAddr != 0;
+                    LibCString.nmemcpy(ptr.pointer(), toUploadAddr, ptr.size());
                     tempBuffer.unmap();
                     
                     if (promotionCommandBuffer == null) {
@@ -510,8 +516,9 @@ public class Hg3DGpuBuffer extends GpuBuffer implements Hg3DObject, Destroyable 
                     
                     promotionCommandBuffer.copyBufferToBuffer(tempBuffer, buffer.slice);
                 }
-                MemoryUtil.memFree(buffer.evictedData);
-                buffer.evictedData = null;
+                MemoryUtil.nmemFree(buffer.evictedData);
+                buffer.evictedData = 0;
+                buffer.evictedDataSize = 0;
                 buffer.immediateUpload = null;
             }
         }
@@ -625,9 +632,10 @@ public class Hg3DGpuBuffer extends GpuBuffer implements Hg3DObject, Destroyable 
                         // must shuffle this to system memory
                         // mappable memory, can evict to CPU memory and then follow immediate eviction path
                         // UMA (iGPUs) will also end up here
-                        currentBuffer.evictedData = MemoryUtil.memAlloc(currentBuffer.size());
+                        currentBuffer.evictedData = MemoryUtil.nmemAlloc(currentBuffer.size());
+                        currentBuffer.evictedDataSize = currentBuffer.size();
                         final var ptr = currentBuffer.buffer.slice().map();
-                        LibCString.nmemcpy(MemoryUtil.memAddress(currentBuffer.evictedData), ptr.pointer(), currentBuffer.size());
+                        LibCString.nmemcpy(currentBuffer.evictedData, ptr.pointer(), currentBuffer.size());
                         currentBuffer.buffer.slice().unmap();
                         
                         currentBuffer.buffer.destroy();
@@ -689,6 +697,7 @@ public class Hg3DGpuBuffer extends GpuBuffer implements Hg3DObject, Destroyable 
                         continue;
                     }
                     
+                    assert currentNode.data.sourceData != null;
                     assert currentNode.data.alloc != null;
                     currentNode.data.alloc.destroy();
                     currentNode.data.alloc = null;
@@ -718,7 +727,7 @@ public class Hg3DGpuBuffer extends GpuBuffer implements Hg3DObject, Destroyable 
                         // alloc failed, next demotion cycle(s) should free enough to demote this buffer
                         break;
                     }
-                    assert !newBuffer.memoryType().gpuLocal;
+                    assert newBuffer.memoryType().cpuLocal; // because UMA, assert that its CPU local, rather than not GPU local
                     assert newBuffer.memoryType().mappable;
                     assert currentBuffer.buffer == null;
                     device.destroyEndOfFrame(currentBuffer.alloc);
