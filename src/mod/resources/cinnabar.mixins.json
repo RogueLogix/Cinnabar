@@ -15,7 +15,8 @@
     "WindowMixin",
     "DeviceCreationMixin",
     "RenderSystemMixin",
-    "ShaderManagerMixin"
+    "ShaderManagerMixin",
+    "VertexFormatBuilderMixin"
   ],
   "injectors": {
     "defaultRequire": 1
