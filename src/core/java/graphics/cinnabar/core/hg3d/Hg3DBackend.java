@@ -7,6 +7,7 @@ import com.mojang.blaze3d.shaders.ShaderSource;
 import com.mojang.blaze3d.systems.BackendCreationException;
 import com.mojang.blaze3d.systems.GpuBackend;
 import com.mojang.blaze3d.systems.WindowAndDevice;
+import graphics.cinnabar.loader.earlywindow.VulkanStartup;
 
 import static org.lwjgl.glfw.GLFW.*;
 
@@ -18,6 +19,10 @@ public class Hg3DBackend implements GpuBackend {
     
     @Override
     public WindowAndDevice createDeviceWithWindow(int width, int height, String title, long monitor, ShaderSource defaultShaderSource, GpuDebugOptions debugOptions) throws BackendCreationException {
+        if(!VulkanStartup.isSupported()){
+            throw new BackendCreationException("Vulkan not supported");
+        }
+        
         GLFWErrorCapture glfwErrors = new GLFWErrorCapture();
         
         try (GLFWErrorScope ignored = new GLFWErrorScope(glfwErrors)) {
