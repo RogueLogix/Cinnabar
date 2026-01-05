@@ -621,6 +621,10 @@ public class VulkanStartup {
             logMissingFeature("multiDrawIndirect");
             hasAllFeatures = false;
         }
+        if (!physicalDeviceFeatures10.samplerAnisotropy()) {
+            logMissingFeature("samplerAnisotropy");
+            hasAllFeatures = false;
+        }
         
         if (!physicalDeviceFeatures11.shaderDrawParameters()) {
             logMissingFeature("shaderDrawParameters");
@@ -760,9 +764,10 @@ public class VulkanStartup {
             final var physicalDeviceFeatures12 = VkPhysicalDeviceVulkan12Features.calloc(stack).sType$Default();
             final var sync2Features = VkPhysicalDeviceSynchronization2FeaturesKHR.calloc(stack).sType$Default();
             
+            physicalDeviceFeatures10.multiDrawIndirect(true);
             physicalDeviceFeatures10.drawIndirectFirstInstance(true);
             physicalDeviceFeatures10.fillModeNonSolid(true);
-            physicalDeviceFeatures10.multiDrawIndirect(true);
+            physicalDeviceFeatures10.samplerAnisotropy(true);
             
             physicalDeviceFeatures11.shaderDrawParameters(true);
             
