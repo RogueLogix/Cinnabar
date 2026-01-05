@@ -4,7 +4,7 @@ plugins {
     id 'idea'
     id 'java-library'
     id 'maven-publish'
-    id 'net.neoforged.moddev' version '2.0.110'
+    id 'net.neoforged.moddev' version '2.0.137'
     id("net.darkhax.curseforgegradle") version "1.1.26"
 }
 
@@ -104,7 +104,7 @@ repositories {
     }
 }
 
-java.toolchain.languageVersion = JavaLanguageVersion.of(21)
+java.toolchain.languageVersion = JavaLanguageVersion.of(25)
 
 sourceSets {
     // externally accessible API
@@ -195,11 +195,6 @@ sourceSets {
 
 neoForge {
     version = project.neo_version
-
-    parchment {
-        mappingsVersion = project.parchment_mappings_version
-        minecraftVersion = project.parchment_minecraft_version
-    }
 
     accessTransformers = project.files('src/mod/resources/META-INF/accesstransformer.cfg')
 
@@ -410,7 +405,7 @@ if (curseforgeToken != null && this.project == this.rootProject) {
         mainFile.releaseType = release_type
         mainFile.gameVersions.clear()
         mainFile.addGameVersion(minecraft_version)
-        mainFile.addJavaVersion('Java 21')
+        mainFile.addJavaVersion('Java 25')
         mainFile.addModLoader('NeoForge')
 
         mainFile.withAdditionalFile(apiJar)

@@ -26,11 +26,21 @@ public class Hg3DBackend implements GpuBackend {
         GLFWErrorCapture glfwErrors = new GLFWErrorCapture();
         
         try (GLFWErrorScope ignored = new GLFWErrorScope(glfwErrors)) {
-            final var device = new Hg3DGpuDevice(defaultShaderSource, debugOptions);
             
-            glfwDefaultWindowHints();
-            glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-            final long window = glfwCreateWindow(width, height, title, monitor, 0L);
+            final long window;
+            #if NEO
+            var earlyLoadingScreen = net.neoforged.fml.loading.EarlyLoadingScreenController.current();
+            if (earlyLoadingScreen != null) {
+                window = earlyLoadingScreen.takeOverGlfwWindow();
+                glfwSetWindowTitle(window, title);
+            } else
+            #endif {
+                glfwDefaultWindowHints();
+                glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
+                window = glfwCreateWindow(width, height, title, monitor, 0L);
+            }
+            
+            final var device = new Hg3DGpuDevice(defaultShaderSource, debugOptions);
             
             device.attachWindow(window);
             

@@ -30,31 +30,31 @@ public class CinnabarGraphicsBootstrapper implements GraphicsBootstrapper {
     @Override
     public void bootstrap(String[] arguments) {
         Configuration.STACK_SIZE.set(256);
-        try {
-            // look for this class, because that _must_ be in this jar
-            final var jarLocation = CinnabarGraphicsBootstrapper.class.getResource("/graphics/cinnabar/loader/services/CinnabarGraphicsBootstrapper.class").getPath().replace("%20", " ");
-            final byte[] fileBytes;
-            try (var jarContents = JarContents.ofPath(Path.of(jarLocation.substring(jarLocation.indexOf(":") + 1, jarLocation.lastIndexOf('!'))))) {
-                fileBytes = jarContents.readFile("modinfo.toml");
-            }
-            assert fileBytes != null;
-            final var lines = new String(fileBytes);
-            config = TomlFormat.instance().createParser().parse(lines).unmodifiable();
-        } catch (IOException | FileSystemNotFoundException e) {
-            e.printStackTrace();
-            throw new RuntimeException(e);
-        }
-        for (int i = 0; i < arguments.length - 1; i++) {
-            if ("--fml.neoForgeVersion".equals(arguments[i])) {
-                if (!neoVersionSupported(arguments[i + 1])) {
-                    // don't init cinnabar's early window with an incompatible neo version, the mod itself will fail the loading later
-                    return;
-                }
-                VulkanStartup.Config.mcVersionString = CinnabarGraphicsBootstrapper.config.get("minecraft_version");
-                VulkanStartup.Config.cinnabarVersionString = CinnabarGraphicsBootstrapper.config.get("cinnabar_version");
-                CinnabarEarlyWindowProvider.attemptConfigInit();
-            }
-        }
+//        try {
+//            // look for this class, because that _must_ be in this jar
+//            final var jarLocation = CinnabarGraphicsBootstrapper.class.getResource("/graphics/cinnabar/loader/services/CinnabarGraphicsBootstrapper.class").getPath().replace("%20", " ");
+//            final byte[] fileBytes;
+//            try (var jarContents = JarContents.ofPath(Path.of(jarLocation.substring(jarLocation.indexOf(":") + 1, jarLocation.lastIndexOf('!'))))) {
+//                fileBytes = jarContents.readFile("modinfo.toml");
+//            }
+//            assert fileBytes != null;
+//            final var lines = new String(fileBytes);
+//            config = TomlFormat.instance().createParser().parse(lines).unmodifiable();
+//        } catch (IOException | FileSystemNotFoundException e) {
+//            e.printStackTrace();
+//            throw new RuntimeException(e);
+//        }
+//        for (int i = 0; i < arguments.length - 1; i++) {
+//            if ("--fml.neoForgeVersion".equals(arguments[i])) {
+//                if (!neoVersionSupported(arguments[i + 1])) {
+//                    // don't init cinnabar's early window with an incompatible neo version, the mod itself will fail the loading later
+//                    return;
+//                }
+//                VulkanStartup.Config.mcVersionString = CinnabarGraphicsBootstrapper.config.get("minecraft_version");
+//                VulkanStartup.Config.cinnabarVersionString = CinnabarGraphicsBootstrapper.config.get("cinnabar_version");
+//                CinnabarEarlyWindowProvider.attemptConfigInit();
+//            }
+//        }
         CinnabarEarlyWindowProvider.attemptConfigInit();
     }
     

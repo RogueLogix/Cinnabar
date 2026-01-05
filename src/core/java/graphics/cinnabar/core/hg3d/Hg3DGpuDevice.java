@@ -5,11 +5,10 @@ package graphics.cinnabar.core.hg3d;
 import com.mojang.blaze3d.buffers.GpuBuffer;
 import com.mojang.blaze3d.pipeline.CompiledRenderPipeline;
 import com.mojang.blaze3d.pipeline.RenderPipeline;
-import com.mojang.blaze3d.shaders.ShaderType;
+import com.mojang.blaze3d.shaders.GpuDebugOptions;
+import com.mojang.blaze3d.shaders.ShaderSource;
 import com.mojang.blaze3d.systems.GpuDevice;
-import com.mojang.blaze3d.textures.GpuTexture;
-import com.mojang.blaze3d.textures.GpuTextureView;
-import com.mojang.blaze3d.textures.TextureFormat;
+import com.mojang.blaze3d.textures.*;
 import graphics.cinnabar.api.hg.*;
 import graphics.cinnabar.api.hg.enums.HgFormat;
 import graphics.cinnabar.api.util.Destroyable;
@@ -21,20 +20,17 @@ import it.unimi.dsi.fastutil.ints.Int2ReferenceOpenHashMap;
 import it.unimi.dsi.fastutil.objects.Reference2ReferenceOpenHashMap;
 import it.unimi.dsi.fastutil.objects.ReferenceArrayList;
 import net.minecraft.client.Minecraft;
-import net.minecraft.resources.Identifier;
-import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.loading.FMLLoader;
 import net.neoforged.neoforge.client.blaze3d.GpuDeviceFeatures;
 import net.neoforged.neoforge.client.blaze3d.GpuDeviceProperties;
 import net.neoforged.neoforge.client.event.ConfigureGpuDeviceEvent;
-import net.neoforged.neoforge.client.event.CustomizeGuiOverlayEvent;
 import net.neoforged.neoforge.common.NeoForge;
 import org.jetbrains.annotations.Nullable;
 
 import java.nio.ByteBuffer;
 import java.util.List;
 import java.util.Map;
-import java.util.function.BiFunction;
+import java.util.OptionalDouble;
 import java.util.function.Supplier;
 
 import static com.mojang.blaze3d.buffers.GpuBuffer.USAGE_COPY_DST;
@@ -116,18 +112,10 @@ public class Hg3DGpuDevice implements GpuDevice {
         for (int i = 0; i < MagicNumbers.MaximumFramesInFlight; i++) {
             pendingDestroys.add(new ReferenceArrayList<>());
         }
-
-        #if NEO
-        NeoForge.EVENT_BUS.register(this);
-        #endif
     }
     
     @Override
     public void close() {
-        #if NEO
-        NeoForge.EVENT_BUS.unregister(this);
-        #endif
-        
         // wait for pending GPU work
         interFrameSemaphore.waitValue(currentFrame - 1, -1L);
         // fake the GPU being done with work

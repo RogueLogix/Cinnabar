@@ -13,7 +13,6 @@
     "Std140BuilderMixin",
     "FogRendererMixin",
     "WindowMixin",
-    "DeviceCreationMixin",
     "RenderSystemMixin",
     "ShaderManagerMixin",
     "VertexFormatBuilderMixin"
