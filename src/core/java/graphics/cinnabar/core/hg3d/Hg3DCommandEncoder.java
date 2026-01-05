@@ -15,6 +15,7 @@ import graphics.cinnabar.api.c3d.C3DCommandEncoder;
 import graphics.cinnabar.api.c3d.C3DRenderPass;
 import graphics.cinnabar.api.hg.*;
 import graphics.cinnabar.api.hg.enums.HgUniformType;
+import graphics.cinnabar.api.memory.GrowingMemoryStack;
 import graphics.cinnabar.api.memory.MagicMemorySizes;
 import graphics.cinnabar.api.memory.PointerWrapper;
 import graphics.cinnabar.api.util.Destroyable;
@@ -22,7 +23,6 @@ import graphics.cinnabar.api.util.Pair;
 import it.unimi.dsi.fastutil.ints.IntList;
 import it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.objects.ReferenceArrayList;
-import net.minecraft.client.Minecraft;
 import org.jetbrains.annotations.Nullable;
 import org.joml.Vector3i;
 import org.lwjgl.system.MemoryStack;
@@ -60,6 +60,8 @@ public class Hg3DCommandEncoder implements C3DCommandEncoder, Hg3DObject, Destro
     private final ReferenceArrayList<HgBuffer> availableUploadBuffers = new ReferenceArrayList<>();
     @Nullable
     private Hg3DRenderPass continuedRenderPass;
+    
+    private final MemoryStack memoryStack = new GrowingMemoryStack();
     
     Hg3DCommandEncoder(Hg3DGpuDevice device) {
         this.device = device;
@@ -726,7 +728,7 @@ public class Hg3DCommandEncoder implements C3DCommandEncoder, Hg3DObject, Destro
                 }
             }
             
-            try (final var stack = MemoryStack.stackPush()) {
+            try (final var stack = memoryStack.push()) {
                 var canBatchDynamicUniform = true;
                 var canBatchVertexBuffer = true;
                 var canBatchIndexBuffer = true;

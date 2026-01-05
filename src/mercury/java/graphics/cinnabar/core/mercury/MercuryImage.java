@@ -4,7 +4,6 @@ import graphics.cinnabar.api.exceptions.VkOutOfDeviceMemory;
 import graphics.cinnabar.api.hg.HgBuffer;
 import graphics.cinnabar.api.hg.HgImage;
 import graphics.cinnabar.api.hg.enums.HgFormat;
-import org.lwjgl.system.MemoryStack;
 import org.lwjgl.util.vma.VmaAllocationCreateInfo;
 import org.lwjgl.vulkan.VkImageCreateInfo;
 import org.lwjgl.vulkan.VkMemoryRequirements;
@@ -35,7 +34,7 @@ public class MercuryImage extends MercuryObject implements HgImage {
         this.layers = layers;
         this.levelCount = levelCount;
         
-        try (final var stack = MemoryStack.stackPush()) {
+        try (final var stack = memoryStack().push()) {
             final var imageCreateInfo = VkImageCreateInfo.calloc(stack).sType$Default();
             imageCreateInfo.imageType(type.ordinal());
             imageCreateInfo.extent().set(width, height, depth);

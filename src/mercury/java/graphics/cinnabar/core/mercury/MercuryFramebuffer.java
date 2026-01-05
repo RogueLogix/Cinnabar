@@ -1,7 +1,6 @@
 package graphics.cinnabar.core.mercury;
 
 import graphics.cinnabar.api.hg.HgFramebuffer;
-import org.lwjgl.system.MemoryStack;
 import org.lwjgl.vulkan.VkFramebufferCreateInfo;
 
 import static org.lwjgl.vulkan.VK10.vkCreateFramebuffer;
@@ -14,7 +13,7 @@ public class MercuryFramebuffer extends MercuryObject implements HgFramebuffer {
     
     public MercuryFramebuffer(MercuryDevice device, CreateInfo createInfo) {
         super(device);
-        try (final var stack = MemoryStack.stackPush()) {
+        try (final var stack = memoryStack().push()) {
             final var vkCreateInfo = VkFramebufferCreateInfo.calloc(stack).sType$Default();
             vkCreateInfo.renderPass(((MercuryRenderPass) createInfo.renderPass()).vkRenderPass());
             vkCreateInfo.attachmentCount(createInfo.colorAttachments().size() + (createInfo.depthAttachment() != null ? 1 : 0));

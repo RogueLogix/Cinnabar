@@ -2,7 +2,6 @@ package graphics.cinnabar.core.mercury;
 
 import graphics.cinnabar.api.hg.HgUniformSet;
 import it.unimi.dsi.fastutil.objects.ReferenceImmutableList;
-import org.lwjgl.system.MemoryStack;
 import org.lwjgl.vulkan.VkDescriptorSetLayoutBinding;
 import org.lwjgl.vulkan.VkDescriptorSetLayoutCreateInfo;
 
@@ -19,7 +18,7 @@ public class MercuryUniformSetLayout extends MercuryObject implements HgUniformS
         super(device);
         this.bindings = new ReferenceImmutableList<>(createInfo.bindings());
         
-        try (final var stack = MemoryStack.stackPush()) {
+        try (final var stack = memoryStack().push()) {
             
             final var vkBindings = VkDescriptorSetLayoutBinding.calloc(createInfo.bindings().size(), stack);
             for (int i = 0; i < createInfo.bindings().size(); i++) {

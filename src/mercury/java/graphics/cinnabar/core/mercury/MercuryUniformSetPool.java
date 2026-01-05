@@ -125,7 +125,7 @@ public class MercuryUniformSetPool extends MercuryObject implements HgUniformSet
         
         @Override
         public void write(List<Write> writes) {
-            try (final var stack = MemoryStack.stackPush()) {
+            try (final var stack = memoryStack().push()) {
                 final var vkWrites = VkWriteDescriptorSet.calloc(writes.size(), stack);
                 for (int i = 0; i < writes.size(); i++) {
                     final var write = writes.get(i);

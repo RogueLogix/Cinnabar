@@ -74,7 +74,7 @@ public class MercuryShaderSet extends MercuryObject implements HgGraphicsPipelin
         final var fragmentSpvCode = Objects.requireNonNull(shaderc_result_get_bytes(fragmentCompileResult));
         
         long spvcContext = 0;
-        try (final var stack = MemoryStack.stackPush()) {
+        try (final var stack = memoryStack().push()) {
             final var intReturn = stack.ints(0);
             final var ptrReturn = stack.pointers(0);
             spvc_context_create(ptrReturn);
@@ -360,7 +360,7 @@ public class MercuryShaderSet extends MercuryObject implements HgGraphicsPipelin
         
         final long vertexShader;
         final long fragmentShader;
-        try (final var stack = MemoryStack.stackPush()) {
+        try (final var stack = memoryStack().push()) {
             final var shaderModuleCreateInfo = VkShaderModuleCreateInfo.calloc(stack).sType$Default();
             shaderModuleCreateInfo.pCode(vertexSpvCode);
             final var handleReturn = stack.longs(0);

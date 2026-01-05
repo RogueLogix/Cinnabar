@@ -4,7 +4,6 @@ import graphics.cinnabar.api.hg.HgGraphicsPipeline;
 import graphics.cinnabar.api.hg.HgUniformSet;
 import it.unimi.dsi.fastutil.objects.ReferenceImmutableList;
 import org.jetbrains.annotations.Nullable;
-import org.lwjgl.system.MemoryStack;
 import org.lwjgl.vulkan.VkPipelineLayoutCreateInfo;
 import org.lwjgl.vulkan.VkPushConstantRange;
 
@@ -20,7 +19,7 @@ public class MercuryGraphicsPipelineLayout extends MercuryObject implements HgGr
     public MercuryGraphicsPipelineLayout(MercuryDevice device, HgGraphicsPipeline.Layout.CreateInfo createInfo) {
         super(device);
         this.uniformSetLayouts = new ReferenceImmutableList<>(createInfo.uniformLayouts());
-        try (final var stack = MemoryStack.stackPush()) {
+        try (final var stack = memoryStack().push()) {
             final var pipelineLayoutCreateInfo = VkPipelineLayoutCreateInfo.calloc(stack).sType$Default();
             final var descriptorSetLayoutHandles = stack.callocLong(createInfo.uniformLayouts().size());
             for (int i = 0; i < createInfo.uniformLayouts().size(); i++) {

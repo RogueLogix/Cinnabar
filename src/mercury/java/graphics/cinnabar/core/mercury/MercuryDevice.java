@@ -3,7 +3,6 @@ package graphics.cinnabar.core.mercury;
 import graphics.cinnabar.api.exceptions.VkOutOfDeviceMemory;
 import graphics.cinnabar.api.hg.*;
 import graphics.cinnabar.api.hg.enums.HgFormat;
-import graphics.cinnabar.api.memory.MagicMemorySizes;
 import graphics.cinnabar.lib.util.MathUtil;
 import graphics.cinnabar.loader.earlywindow.VulkanStartup;
 import graphics.cinnabar.loader.earlywindow.vulkan.VulkanDebug;
@@ -17,6 +16,7 @@ import org.lwjgl.vulkan.*;
 
 import java.util.List;
 
+import static graphics.cinnabar.core.mercury.Mercury.MEMORY_STACK;
 import static org.lwjgl.util.vma.Vma.*;
 import static org.lwjgl.vulkan.EXTDebugMarker.VK_EXT_DEBUG_MARKER_EXTENSION_NAME;
 import static org.lwjgl.vulkan.EXTDebugUtils.vkDestroyDebugUtilsMessengerEXT;
@@ -46,7 +46,7 @@ public class MercuryDevice implements HgDevice {
     
     public MercuryDevice() {
         // TODO: the vulkan instance can be statically created
-        try (final var stack = MemoryStack.stackPush()) {
+        try (final var stack = memoryStack().push()) {
             final var debugCreateInfo = VulkanDebug.getCreateInfo(stack, new VulkanDebug.MessageSeverity[]{VulkanDebug.MessageSeverity.ERROR, VulkanDebug.MessageSeverity.WARNING, VulkanDebug.MessageSeverity.INFO}, new VulkanDebug.MessageType[]{VulkanDebug.MessageType.GENERAL, VulkanDebug.MessageType.VALIDATION});
             final var instanceAndDebugCallback = VulkanStartup.createVkInstance(Mercury.VULKAN_VALIDATION, false, debugCreateInfo);
             vkInstance = instanceAndDebugCallback.instance();
@@ -95,7 +95,7 @@ public class MercuryDevice implements HgDevice {
         
         properties = MercuryDeviceProperties.create(this);
         
-        try (final var stack = MemoryStack.stackPush()) {
+        try (final var stack = memoryStack().push()) {
             
             final var vmaVulkanFunctions = VmaVulkanFunctions.calloc(stack);
             vmaVulkanFunctions.set(vkInstance, vkDevice);
@@ -116,7 +116,7 @@ public class MercuryDevice implements HgDevice {
         final int hostVisibleCoherentDeviceLocal = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
         final int hostVisibleCoherent = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
         
-        try (final var stack = MemoryStack.stackPush()) {
+        try (final var stack = memoryStack().push()) {
             final var handlePtr = stack.pointers(0);
             vmaGetMemoryProperties(vmaAllocator, handlePtr);
             final var memoryProperties = VkPhysicalDeviceMemoryProperties.create(handlePtr.get(0));
@@ -206,6 +206,10 @@ public class MercuryDevice implements HgDevice {
     @Override
     public Properties properties() {
         return properties;
+    }
+    
+    private static MemoryStack memoryStack() {
+        return MEMORY_STACK.get();
     }
     
     @Override
@@ -303,7 +307,7 @@ public class MercuryDevice implements HgDevice {
     
     @Override
     public boolean waitSemaphores(List<HgSemaphore.Op> hgSemaphores, long timeout, boolean any) {
-        try (final var stack = MemoryStack.stackPush()) {
+        try (final var stack = memoryStack().push()) {
             final var count = hgSemaphores.size();
             final var handles = stack.callocLong(count);
             final var values = stack.callocLong(count);
@@ -323,7 +327,7 @@ public class MercuryDevice implements HgDevice {
     
     @Override
     public void addDebugText(List<String> lines) {
-        try (final var stack = MemoryStack.stackPush()) {
+        try (final var stack = memoryStack().push()) {
             final var stats = VmaBudget.calloc(VK_MAX_MEMORY_HEAPS, stack);
             vmaGetHeapBudgets(vmaAllocator, stats);
             for (int i = 0; i < VK_MAX_MEMORY_HEAPS; i++) {
@@ -343,7 +347,7 @@ public class MercuryDevice implements HgDevice {
     
     @Override
     public LongLongImmutablePair hostLocalMemoryStats() {
-        try (final var stack = MemoryStack.stackPush()) {
+        try (final var stack = memoryStack().push()) {
             final var propsPtr = stack.pointers(0);
             vmaGetMemoryProperties(vmaAllocator, propsPtr);
             final var props = VkPhysicalDeviceMemoryProperties.createSafe(propsPtr.get(0));
@@ -368,7 +372,7 @@ public class MercuryDevice implements HgDevice {
     
     @Override
     public LongLongImmutablePair deviceLocalMemoryStats() {
-        try (final var stack = MemoryStack.stackPush()) {
+        try (final var stack = memoryStack().push()) {
             final var propsPtr = stack.pointers(0);
             vmaGetMemoryProperties(vmaAllocator, propsPtr);
             final var props = VkPhysicalDeviceMemoryProperties.createSafe(propsPtr.get(0));

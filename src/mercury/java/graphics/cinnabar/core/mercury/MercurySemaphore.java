@@ -1,7 +1,6 @@
 package graphics.cinnabar.core.mercury;
 
 import graphics.cinnabar.api.hg.HgSemaphore;
-import org.lwjgl.system.MemoryStack;
 import org.lwjgl.vulkan.VkSemaphoreCreateInfo;
 import org.lwjgl.vulkan.VkSemaphoreSignalInfo;
 import org.lwjgl.vulkan.VkSemaphoreTypeCreateInfo;
@@ -16,7 +15,7 @@ public class MercurySemaphore extends MercuryObject implements HgSemaphore {
     public MercurySemaphore(MercuryDevice device, long initialValue) {
         super(device);
         
-        try (final var stack = MemoryStack.stackPush()) {
+        try (final var stack = memoryStack().push()) {
             final var createInfo = VkSemaphoreCreateInfo.calloc(stack).sType$Default();
             final var typeCreateInfo = VkSemaphoreTypeCreateInfo.calloc(stack).sType$Default();
             typeCreateInfo.semaphoreType(VK_SEMAPHORE_TYPE_TIMELINE);
@@ -42,7 +41,7 @@ public class MercurySemaphore extends MercuryObject implements HgSemaphore {
     
     @Override
     public long value() {
-        try (final var stack = MemoryStack.stackPush()) {
+        try (final var stack = memoryStack().push()) {
             final var valuePtr = stack.longs(0);
             vkGetSemaphoreCounterValue(device.vkDevice(), handle, valuePtr);
             return valuePtr.get(0);
@@ -51,7 +50,7 @@ public class MercurySemaphore extends MercuryObject implements HgSemaphore {
     
     @Override
     public void waitValue(long value, long timeout) {
-        try (final var stack = MemoryStack.stackPush()) {
+        try (final var stack = memoryStack().push()) {
             final var waitInfo = VkSemaphoreWaitInfo.calloc(stack).sType$Default();
             waitInfo.semaphoreCount(1);
             waitInfo.pSemaphores(stack.longs(handle));
@@ -62,7 +61,7 @@ public class MercurySemaphore extends MercuryObject implements HgSemaphore {
     
     @Override
     public void singlaValue(long value) {
-        try (final var stack = MemoryStack.stackPush()) {
+        try (final var stack = memoryStack().push()) {
             final var signalInfo = VkSemaphoreSignalInfo.calloc(stack).sType$Default();
             signalInfo.semaphore(handle);
             signalInfo.value(value);

@@ -5,7 +5,6 @@ import graphics.cinnabar.api.hg.HgBuffer;
 import graphics.cinnabar.api.hg.enums.HgFormat;
 import graphics.cinnabar.api.memory.PointerWrapper;
 import org.jetbrains.annotations.Nullable;
-import org.lwjgl.system.MemoryStack;
 import org.lwjgl.util.vma.VmaAllocationCreateInfo;
 import org.lwjgl.util.vma.VmaAllocationInfo;
 import org.lwjgl.vulkan.VkBufferCreateInfo;
@@ -23,7 +22,7 @@ public class MercuryBuffer extends MercuryObject implements HgBuffer {
 
     @Nullable
     public static MercuryBuffer attemptCreate(MercuryDevice device, MemoryRequest memoryRequest, long size, long usage) {
-        try (final var stack = MemoryStack.stackPush()) {
+        try (final var stack = memoryStack().push()) {
             final var bufferPtr = stack.callocLong(1);
             final var allocPtr = stack.callocPointer(1);
             final var createInfo = VkBufferCreateInfo.calloc(stack);
@@ -121,7 +120,7 @@ public class MercuryBuffer extends MercuryObject implements HgBuffer {
     
     @Override
     public PointerWrapper map() {
-        try (final var stack = MemoryStack.stackPush()) {
+        try (final var stack = memoryStack().push()) {
             final var pointerReturn = stack.pointers(0);
             checkVkCode(vmaMapMemory(device.vmaAllocator(), vmaAllocation, pointerReturn));
             return new PointerWrapper(pointerReturn.get(0), size);

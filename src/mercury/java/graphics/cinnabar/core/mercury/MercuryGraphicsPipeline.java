@@ -2,7 +2,6 @@ package graphics.cinnabar.core.mercury;
 
 import graphics.cinnabar.api.hg.HgGraphicsPipeline;
 import org.jetbrains.annotations.Nullable;
-import org.lwjgl.system.MemoryStack;
 import org.lwjgl.vulkan.*;
 
 import static graphics.cinnabar.api.exceptions.VkException.checkVkCode;
@@ -17,7 +16,7 @@ public class MercuryGraphicsPipeline extends MercuryObject implements HgGraphics
         super(device);
         this.layout = (MercuryGraphicsPipelineLayout) createInfo.layout();
         
-        try (final var stack = MemoryStack.stackPush()) {
+        try (final var stack = memoryStack().push()) {
             final var viewportState = VkPipelineViewportStateCreateInfo.calloc(stack).sType$Default();
             viewportState.pNext(0);
             viewportState.flags(0);

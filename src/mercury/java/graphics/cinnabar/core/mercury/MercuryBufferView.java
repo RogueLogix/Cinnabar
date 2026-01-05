@@ -2,7 +2,6 @@ package graphics.cinnabar.core.mercury;
 
 import graphics.cinnabar.api.hg.HgBuffer;
 import graphics.cinnabar.api.hg.enums.HgFormat;
-import org.lwjgl.system.MemoryStack;
 import org.lwjgl.vulkan.VkBufferViewCreateInfo;
 
 import static org.lwjgl.vulkan.VK10.vkCreateBufferView;
@@ -13,7 +12,7 @@ public class MercuryBufferView extends MercuryObject implements HgBuffer.View {
     
     public MercuryBufferView(MercuryBuffer buffer, HgFormat format, long offset, long size) {
         super(buffer.device);
-        try (final var stack = MemoryStack.stackPush()) {
+        try (final var stack = memoryStack().push()) {
             final var bufferViewCreateInfo = VkBufferViewCreateInfo.calloc(stack).sType$Default();
             bufferViewCreateInfo.buffer(buffer.vkBuffer());
             bufferViewCreateInfo.format(MercuryConst.vkFormat(format));

@@ -3,7 +3,6 @@ package graphics.cinnabar.core.mercury;
 import graphics.cinnabar.api.hg.HgSurface;
 import graphics.cinnabar.loader.earlywindow.GLFWClassloadHelper;
 import org.jetbrains.annotations.Nullable;
-import org.lwjgl.system.MemoryStack;
 
 import static org.lwjgl.vulkan.KHRSurface.vkDestroySurfaceKHR;
 
@@ -14,7 +13,7 @@ public class MercurySurface extends MercuryObject implements HgSurface {
     public MercurySurface(MercuryDevice device, long glfwWindow) {
         super(device);
         this.glfwWindow = glfwWindow;
-        try (final var stack = MemoryStack.stackPush()) {
+        try (final var stack = memoryStack().push()) {
             final var handlePtr = stack.longs(0);
             GLFWClassloadHelper.glfwExtCreateWindowSurface(device.vkDevice().getPhysicalDevice().getInstance(), glfwWindow, null, handlePtr);
             handle = handlePtr.get(0);

@@ -1,7 +1,6 @@
 package graphics.cinnabar.core.mercury;
 
 import graphics.cinnabar.api.hg.HgRenderPass;
-import org.lwjgl.system.MemoryStack;
 import org.lwjgl.vulkan.VkAttachmentDescription2;
 import org.lwjgl.vulkan.VkAttachmentReference2;
 import org.lwjgl.vulkan.VkRenderPassCreateInfo2;
@@ -19,7 +18,7 @@ public class MercuryRenderPass extends MercuryObject implements HgRenderPass {
     public MercuryRenderPass(MercuryDevice device, HgRenderPass.CreateInfo createInfo) {
         super(device);
         colorAttachmentCount = createInfo.colorFormats().size();
-        try (final var stack = MemoryStack.stackPush()) {
+        try (final var stack = memoryStack().push()) {
             final var attachmentDescriptions = VkAttachmentDescription2.calloc(colorAttachmentCount + (createInfo.depthStencilFormat() != null ? 1 : 0), stack);
             for (int i = 0; i < colorAttachmentCount; i++) {
                 attachmentDescriptions.position(i).sType$Default();

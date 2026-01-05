@@ -47,7 +47,7 @@ public class MercurySwapchain extends MercuryObject implements HgSurface.Swapcha
     public MercurySwapchain(MercurySurface surface, boolean vsync, @Nullable MercurySwapchain previous) {
         super(surface.device);
         
-        try (final var stack = MemoryStack.stackPush()) {
+        try (final var stack = memoryStack().push()) {
             final var intPtr = stack.callocInt(1);
             final var longPtr = stack.callocLong(1);
             
@@ -170,7 +170,7 @@ public class MercurySwapchain extends MercuryObject implements HgSurface.Swapcha
             throw new IllegalStateException();
         }
         assert currentImageIndex == -1;
-        try (final var stack = MemoryStack.stackPush()) {
+        try (final var stack = memoryStack().push()) {
             final var frameIndexPtr = stack.mallocInt(1);
             frameIndexPtr.put(0, -1);
             final var nextSemaphore = freeSemaphores.removeFirst();
@@ -207,7 +207,7 @@ public class MercurySwapchain extends MercuryObject implements HgSurface.Swapcha
         if (TRACE_LOGGING) {
             MERCURY_LOG.debug("Swapchain {} present; frameIndex: {}, semaphore: {}", hashCode(), currentImageIndex, activeSemaphores.get(currentImageIndex));
         }
-        try (final var stack = MemoryStack.stackPush()) {
+        try (final var stack = memoryStack().push()) {
             final var presentInfo = VkPresentInfoKHR.calloc(stack).sType$Default();
             presentInfo.pWaitSemaphores(stack.longs(currentSemaphore().vkSemaphore()));
             presentInfo.swapchainCount(1);

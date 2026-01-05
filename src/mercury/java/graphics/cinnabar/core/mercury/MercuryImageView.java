@@ -2,7 +2,6 @@ package graphics.cinnabar.core.mercury;
 
 import graphics.cinnabar.api.hg.HgImage;
 import graphics.cinnabar.api.hg.enums.HgFormat;
-import org.lwjgl.system.MemoryStack;
 import org.lwjgl.vulkan.VkImageViewCreateInfo;
 
 import static graphics.cinnabar.api.exceptions.VkException.checkVkCode;
@@ -28,7 +27,7 @@ public class MercuryImageView extends MercuryObject implements HgImage.View {
         this.levelCount = levelCount;
         this.baseArrayLayer = baseArrayLayer;
         this.layerCount = layerCount;
-        try (final var stack = MemoryStack.stackPush()) {
+        try (final var stack = memoryStack().push()) {
             final var imageViewCreateInfo = VkImageViewCreateInfo.calloc(stack).sType$Default();
             imageViewCreateInfo.image(image.vkImage());
             imageViewCreateInfo.viewType(viewType.ordinal());

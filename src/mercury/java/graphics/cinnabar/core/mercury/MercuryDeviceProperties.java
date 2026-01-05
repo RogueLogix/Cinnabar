@@ -1,10 +1,10 @@
 package graphics.cinnabar.core.mercury;
 
 import graphics.cinnabar.api.hg.HgDevice;
-import org.lwjgl.system.MemoryStack;
 import org.lwjgl.vulkan.VkPhysicalDeviceProperties2;
 import org.lwjgl.vulkan.VkPhysicalDeviceVulkan11Properties;
 
+import static graphics.cinnabar.core.mercury.Mercury.MEMORY_STACK;
 import static org.lwjgl.vulkan.VK12.*;
 
 public record MercuryDeviceProperties(
@@ -14,7 +14,7 @@ public record MercuryDeviceProperties(
         float maxAnisotropy
 ) implements HgDevice.Properties {
     public static MercuryDeviceProperties create(MercuryDevice device) {
-        try (final var stack = MemoryStack.stackPush()) {
+        try (final var stack = MEMORY_STACK.get().push()) {
             var physicalDeviceProperties2 = VkPhysicalDeviceProperties2.calloc(stack).sType$Default();
             var physicalDeviceProperties = physicalDeviceProperties2.properties();
             var limits = physicalDeviceProperties.limits();

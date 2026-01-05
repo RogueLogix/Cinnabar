@@ -5,7 +5,6 @@ import graphics.cinnabar.api.hg.*;
 import graphics.cinnabar.api.memory.GrowingMemoryStack;
 import it.unimi.dsi.fastutil.ints.IntList;
 import org.jetbrains.annotations.Nullable;
-import org.lwjgl.system.MemoryStack;
 import org.lwjgl.vulkan.*;
 
 import java.util.List;
@@ -406,7 +405,7 @@ public class MercuryCommandBuffer extends MercuryObject implements HgCommandBuff
     
     @Override
     public HgCommandBuffer clearAttachments(IntList clearColors, double clearDepth, int x, int y, int width, int height) {
-        try (final var stack = MemoryStack.stackPush()) {
+        try (final var stack = memoryStack().push()) {
             final var rects = VkClearRect.calloc(clearColors.size() + 1, stack);
             for (int i = 0; i < clearColors.size() + 1; i++) {
                 rects.position(i);

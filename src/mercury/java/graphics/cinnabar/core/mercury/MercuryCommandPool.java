@@ -2,7 +2,6 @@ package graphics.cinnabar.core.mercury;
 
 import graphics.cinnabar.api.hg.HgCommandBuffer;
 import it.unimi.dsi.fastutil.longs.LongArrayList;
-import org.lwjgl.system.MemoryStack;
 import org.lwjgl.vulkan.VkCommandBuffer;
 import org.lwjgl.vulkan.VkCommandBufferAllocateInfo;
 import org.lwjgl.vulkan.VkCommandPoolCreateInfo;
@@ -22,7 +21,7 @@ public class MercuryCommandPool extends MercuryObject implements HgCommandBuffer
     public MercuryCommandPool(MercuryDevice device, int queueFamily, boolean commandBufferReset, boolean oneTimeSubmit) {
         super(device);
         this.commandBufferReset = commandBufferReset;
-        try (final var stack = MemoryStack.stackPush()) {
+        try (final var stack = memoryStack().push()) {
             final var createInfo = VkCommandPoolCreateInfo.calloc(stack).sType$Default();
             if (commandBufferReset) {
                 createInfo.flags(createInfo.flags() | VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
@@ -48,7 +47,7 @@ public class MercuryCommandPool extends MercuryObject implements HgCommandBuffer
     }
     
     private void allocateMoreBuffers() {
-        try (final var stack = MemoryStack.stackPush()) {
+        try (final var stack = memoryStack().push()) {
             if (!buffersToDelete.isEmpty()) {
                 try (final var ignored = stack.push()) {
                     final var buffers = stack.callocPointer(buffersToDelete.size());

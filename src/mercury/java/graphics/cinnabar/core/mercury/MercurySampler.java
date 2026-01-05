@@ -2,7 +2,6 @@ package graphics.cinnabar.core.mercury;
 
 import graphics.cinnabar.api.hg.HgSampler;
 import graphics.cinnabar.api.hg.enums.HgCompareOp;
-import org.lwjgl.system.MemoryStack;
 import org.lwjgl.vulkan.VkSamplerCreateInfo;
 
 import static graphics.cinnabar.api.exceptions.VkException.checkVkCode;
@@ -15,7 +14,7 @@ public class MercurySampler extends MercuryObject implements HgSampler {
     public MercurySampler(MercuryDevice device, HgSampler.CreateInfo createInfo) {
         super(device);
         
-        try (final var stack = MemoryStack.stackPush()) {
+        try (final var stack = memoryStack().push()) {
             final var vkCreateInfo = VkSamplerCreateInfo.calloc(stack);
             vkCreateInfo.sType(VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO);
             vkCreateInfo.pNext(0);
