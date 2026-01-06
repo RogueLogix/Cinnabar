@@ -121,7 +121,7 @@ public interface HgQueue extends HgObject {
         
         @ThreadSafety.Many
         public static Item execute(HgCommandBuffer commandBuffer) {
-            return new Item(Type.WAIT, null, 0, 0, commandBuffer);
+            return new Item(Type.EXECUTE, null, 0, 0, commandBuffer);
         }
         
         @ThreadSafety.Many
