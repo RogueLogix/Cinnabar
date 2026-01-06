@@ -144,8 +144,8 @@ public class Hg3DGpuDevice implements GpuDevice {
     public void endFrame() {
         bufferManager.endOfFrame();
         WorkQueue.AFTER_END_OF_GPU_FRAME.signal(cleanupDoneSemaphore, currentFrame);
+        commandEncoder.insertQueueItem(HgQueue.Item.signal(interFrameSemaphore, currentFrame, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT));
         commandEncoder.flush();
-        hgDevice.queue(HgQueue.Type.GRAPHICS).submit(HgQueue.Item.signal(interFrameSemaphore, currentFrame, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT));
         hgDevice.markFame();
         
         currentFrame++;

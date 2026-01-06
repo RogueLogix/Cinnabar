@@ -45,21 +45,21 @@ public class Hg3DCommandEncoder implements C3DCommandEncoder, Hg3DObject, Destro
     private final HgQueue queue;
     private final HgCommandBuffer.Pool commandPool;
     private final ReferenceArrayList<Runnable> flushCallbacks = new ReferenceArrayList<>();
-    private final ReferenceArrayList<HgCommandBuffer> commandBuffers = new ReferenceArrayList<>();
+    private long flushIndex = 0;
+    private final ReferenceArrayList<HgCommandBuffer> commandBuffersThisFlush = new ReferenceArrayList<>();
+    private final ReferenceArrayList<HgQueue.Item> queueItems = new ReferenceArrayList<>();
     @Nullable
     private HgCommandBuffer earlyCommandBuffer;
     @Nullable
     private HgCommandBuffer mainCommandBuffer;
-    @Nullable
-    private HgCommandBuffer presentCommandBuffer;
-    @Nullable
-    private HgSemaphore presentSemaphore;
     @Nullable
     private HgBuffer uploadBuffer;
     private long uploadBufferAllocated = 0;
     private final ReferenceArrayList<HgBuffer> availableUploadBuffers = new ReferenceArrayList<>();
     @Nullable
     private Hg3DRenderPass continuedRenderPass;
+    private final HgSemaphore fenceSemaphore;
+    private long nextFenceValue = 1;
     
     private final MemoryStack memoryStack = new GrowingMemoryStack();
     
@@ -67,10 +67,12 @@ public class Hg3DCommandEncoder implements C3DCommandEncoder, Hg3DObject, Destro
         this.device = device;
         queue = device.hgDevice().queue(HgQueue.Type.GRAPHICS);
         commandPool = queue.createCommandPool(true, true);
+        fenceSemaphore = device.hgDevice().createSemaphore(0);
     }
     
     @Override
     public void destroy() {
+        fenceSemaphore.destroy();
         commandPool.destroy();
         if (uploadBuffer != null) {
             uploadBuffer.unmap();
@@ -99,7 +101,6 @@ public class Hg3DCommandEncoder implements C3DCommandEncoder, Hg3DObject, Destro
             earlyCommandBuffer = allocateCommandBuffer();
             earlyCommandBuffer.setName("Early Command Buffer");
             earlyCommandBuffer.barrier();
-            commandBuffers.add(earlyCommandBuffer);
         }
         return earlyCommandBuffer;
     }
@@ -111,7 +112,6 @@ public class Hg3DCommandEncoder implements C3DCommandEncoder, Hg3DObject, Destro
             mainCommandBuffer = allocateCommandBuffer();
             mainCommandBuffer.setName("Main Command Buffer");
             mainCommandBuffer.barrier();
-            commandBuffers.add(mainCommandBuffer);
         }
         return mainCommandBuffer;
     }
@@ -121,11 +121,15 @@ public class Hg3DCommandEncoder implements C3DCommandEncoder, Hg3DObject, Destro
         if (earlyCommandBuffer != null) {
             earlyCommandBuffer.barrier();
             earlyCommandBuffer.end();
+            commandBuffersThisFlush.add(earlyCommandBuffer);
+            queueItems.add(HgQueue.Item.execute(earlyCommandBuffer));
         }
         earlyCommandBuffer = null;
         if (mainCommandBuffer != null) {
             mainCommandBuffer.barrier();
             mainCommandBuffer.end();
+            commandBuffersThisFlush.add(mainCommandBuffer);
+            queueItems.add(HgQueue.Item.execute(mainCommandBuffer));
         }
         mainCommandBuffer = null;
     }
@@ -139,13 +143,19 @@ public class Hg3DCommandEncoder implements C3DCommandEncoder, Hg3DObject, Destro
     }
     
     void insertCommandBufferFirst(HgCommandBuffer commandBuffer) {
-        commandBuffers.add(0, commandBuffer);
+        commandBuffersThisFlush.add(commandBuffer);
+        queueItems.add(0, HgQueue.Item.execute(commandBuffer));
     }
     
     @Override
     public void insertCommandBuffer(HgCommandBuffer commandBuffer) {
+        insertQueueItem(HgQueue.Item.execute(commandBuffer));
+    }
+    
+    @Override
+    public void insertQueueItem(HgQueue.Item item) {
         endCommandBuffers();
-        commandBuffers.add(commandBuffer);
+        queueItems.add(item);
     }
     
     HgBuffer.Slice uploadBufferSlice(long size) {
@@ -175,23 +185,19 @@ public class Hg3DCommandEncoder implements C3DCommandEncoder, Hg3DObject, Destro
     }
     
     public void flush() {
-        endCommandBuffers();
         flushCallbacks.forEach(Runnable::run);
         flushCallbacks.clear();
-        try (final var submission = queue.submit()) {
-            submission.execute(commandBuffers);
-            if (presentCommandBuffer != null) {
-                assert presentSemaphore != null;
-                submission.wait(presentSemaphore, 0, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT_KHR);
-                submission.execute(presentCommandBuffer);
-                submission.signal(presentSemaphore, 0, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT_KHR);
-                commandBuffers.add(presentCommandBuffer);
-                presentCommandBuffer = null;
-                presentSemaphore = null;
-            }
+        if (queueItems.isEmpty()) {
+            // nothing to flush
+            return;
         }
-        device.destroyEndOfFrame(commandBuffers);
-        commandBuffers.clear();
+        try (final var submission = queue.submit()) {
+            submission.enqueue(queueItems);
+            queueItems.clear();
+        }
+        device.destroyEndOfFrame(commandBuffersThisFlush);
+        commandBuffersThisFlush.clear();
+        flushIndex++;
     }
     
     public void resetUploadBuffer() {
@@ -412,40 +418,49 @@ public class Hg3DCommandEncoder implements C3DCommandEncoder, Hg3DObject, Destro
     
     @Override
     public void presentTexture(GpuTextureView texture) {
+        // end first so they are in the queue ahead of the present
+        endCommandBuffers();
+        
         final var swapchain = device.swapchain();
+        final var semaphore = swapchain.currentSemaphore();
         
         final var commandBuffer = commandPool.allocate();
         commandBuffer.begin();
         commandBuffer.blitToSwapchain(((Hg3DGpuTextureView) texture).imageView(), swapchain);
         commandBuffer.end();
-        presentCommandBuffer = commandBuffer;
-        presentSemaphore = swapchain.currentSemaphore();
-        flush();
+        
+        queueItems.add(HgQueue.Item.wait(semaphore, 0, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT_KHR));
+        queueItems.add(HgQueue.Item.execute(commandBuffer));
+        queueItems.add(HgQueue.Item.signal(semaphore, 0, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT_KHR));
+        commandBuffersThisFlush.add(commandBuffer);
     }
     
     @Override
     public GpuFence createFence() {
-        flush();
+        endCommandBuffers();
         return new GpuFence() {
             
-            final HgSemaphore semaphore = device.hgDevice().createSemaphore(0);
+            final long expectedValue = nextFenceValue++;
+            final long flush = flushIndex;
             
             {
-                queue.submit(HgQueue.Item.signal(semaphore, 1, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT_KHR));
+                insertQueueItem(HgQueue.Item.signal(fenceSemaphore, expectedValue, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT_KHR));
             }
             
             @Override
             public void close() {
-                awaitCompletion(Long.MAX_VALUE);
-                semaphore.destroy();
+                // dont need to care, its a single global semaphore
             }
             
             @Override
             public boolean awaitCompletion(long timeout) {
                 if (timeout > 0) {
-                    semaphore.waitValue(1, timeout);
+                    if (flush == flushIndex) {
+                        Hg3DCommandEncoder.this.flush();
+                    }
+                    fenceSemaphore.waitValue(expectedValue, timeout);
                 }
-                return semaphore.value() == 1;
+                return fenceSemaphore.value() >= expectedValue;
             }
         };
     }
@@ -457,11 +472,11 @@ public class Hg3DCommandEncoder implements C3DCommandEncoder, Hg3DObject, Destro
     
     @Override
     public void timerQueryEnd(GpuQuery gpuQuery) {
-    
     }
     
     public class Hg3DRenderPass implements C3DRenderPass {
         
+        private boolean active = false;
         protected final Map<String, @Nullable GpuBufferSlice> uniforms = new Object2ObjectOpenHashMap<>();
         protected final Map<String, Pair<GpuTextureView, GpuSampler>> samplers = new Object2ObjectOpenHashMap<>();
         private final HgRenderPass renderPass;
@@ -494,14 +509,19 @@ public class Hg3DCommandEncoder implements C3DCommandEncoder, Hg3DObject, Destro
             
             commandBuffer.setViewport(0, 0, 0, framebuffer.width(), framebuffer.height());
             commandBuffer.setScissor(0, 0, 0, framebuffer.width(), framebuffer.height());
+            active = true;
         }
         
         @Override
         public void close() {
+            active = false;
             popDebugGroup();
         }
         
         private void end() {
+            if (active) {
+                throw new IllegalStateException("Cannot end a RenderPass while it is active");
+            }
             commandBuffer.endRenderPass();
             commandBuffer.barrier();
         }
@@ -526,7 +546,7 @@ public class Hg3DCommandEncoder implements C3DCommandEncoder, Hg3DObject, Destro
         
         @Override
         public void bindTexture(String uniformName, @Nullable GpuTextureView view, @Nullable GpuSampler sampler) {
-            if(view == null || sampler == null){
+            if (view == null || sampler == null) {
                 this.samplers.remove(uniformName);
             } else {
                 this.samplers.put(uniformName, new Pair<>(view, sampler));
@@ -821,7 +841,7 @@ public class Hg3DCommandEncoder implements C3DCommandEncoder, Hg3DObject, Destro
                                 setIndexBuffer(indexBufferToUse, indexTypeToUse);
                             }
                             final var arrayIndex = orderedDynamicUniformValues.get(i).offset() / ssboArrayStride;
-                            final var vertexOffset = (int)((Hg3DGpuBuffer)draw.vertexBuffer()).hgSlice().offset() / vertexSize;
+                            final var vertexOffset = (int) ((Hg3DGpuBuffer) draw.vertexBuffer()).hgSlice().offset() / vertexSize;
                             commandBuffer.drawIndexed(draw.indexCount(), 1, draw.firstIndex(), vertexOffset, (int) arrayIndex);
                         }
                     } else if (canBatchIndexBuffer && canBatchIndexType) {
