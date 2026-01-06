@@ -89,7 +89,7 @@ public class MercuryDevice implements HgDevice {
         if (vkComputeQueue == vkTransferQueue) {
             transferQueue = computeQueue;
         } else {
-            transferQueue = new MercuryQueue(this, vkTransferQueue.queue(), vkComputeQueue.queueFamily());
+            transferQueue = new MercuryQueue(this, vkTransferQueue.queue(), vkTransferQueue.queueFamily());
         }
         enabledDeviceExtensions = deviceAndQueues.enabledDeviceExtensions();
         
