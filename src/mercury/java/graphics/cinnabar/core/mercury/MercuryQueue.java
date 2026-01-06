@@ -26,6 +26,10 @@ public class MercuryQueue extends MercuryObject implements HgQueue {
         this.vkQueue = vkQueue;
         this.queueFamily = queueFamily;
     }
+
+    public int familyIndex() {
+        return queueFamily;
+    }
     
     @Override
     public void destroy() {
