@@ -75,7 +75,17 @@ public class MercuryQueue extends MercuryObject implements HgQueue {
             
             @Override
             public void signal(HgSemaphore semaphore, long value, long stages) {
-                currentStage.signals.add(new SemaphoreOp((MercurySemaphore) semaphore, value, stages));
+                if (!currentStage.signals.isEmpty() && currentStage.signals.getLast().semaphore == semaphore) {
+                    // signaling the same semaphore again, if this is a binary semaphore, that's invalid, if its timeline then we can replace/combine the previous signal with this one
+                    final var lastOp = currentStage.signals.removeLast();
+                    final var combinedStages = lastOp.stages | stages;
+                    assert value > lastOp.value; // this is part of the VK spec, but for making it just work reasons im using max anyway
+                    //noinspection DataFlowIssue
+                    final var maxValue = Math.max(lastOp.value, value);
+                    currentStage.signals.add(new SemaphoreOp((MercurySemaphore) semaphore, maxValue, combinedStages));
+                } else {
+                    currentStage.signals.add(new SemaphoreOp((MercurySemaphore) semaphore, value, stages));
+                }
             }
             
             @Override
