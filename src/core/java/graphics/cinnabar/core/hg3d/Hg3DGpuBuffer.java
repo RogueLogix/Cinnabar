@@ -268,6 +268,7 @@ public class Hg3DGpuBuffer extends GpuBuffer implements Hg3DObject, Destroyable 
                 return;
             }
             promotionCommandBuffer.barrier();
+            promotionCommandBuffer.popDebugGroup();
             promotionCommandBuffer.end();
             device.createCommandEncoder().insertCommandBufferFirst(promotionCommandBuffer);
             promotionCommandBuffer = null;
@@ -511,6 +512,7 @@ public class Hg3DGpuBuffer extends GpuBuffer implements Hg3DObject, Destroyable 
                         device.createCommandEncoder().addFlushCallback(this::endPromotionCommandBuffer);
                         promotionCommandBuffer = device.createCommandEncoder().allocateCommandBuffer();
                         promotionCommandBuffer.setName("Promotion command buffer");
+                        promotionCommandBuffer.pushDebugGroup("Buffer Promotions");
                         promotionCommandBuffer.barrier();
                     }
                     
@@ -578,6 +580,7 @@ public class Hg3DGpuBuffer extends GpuBuffer implements Hg3DObject, Destroyable 
                 device.createCommandEncoder().addFlushCallback(this::endPromotionCommandBuffer);
                 promotionCommandBuffer = device.createCommandEncoder().allocateCommandBuffer();
                 promotionCommandBuffer.setName("Promotion command buffer");
+                promotionCommandBuffer.pushDebugGroup("Buffer Promotions");
                 promotionCommandBuffer.barrier();
             }
             promotionCommandBuffer.copyBufferToBuffer(oldSlice, buffer.slice);
@@ -596,7 +599,9 @@ public class Hg3DGpuBuffer extends GpuBuffer implements Hg3DObject, Destroyable 
             final var commandEncoder = device.createCommandEncoder();
             final var commandBuffer = commandEncoder.allocateCommandBuffer();
             commandBuffer.setName("Demotion command buffer");
+            commandBuffer.pushDebugGroup("Buffer Demotions");
             commandBuffer.barrier();
+            boolean anyCommandRecorded = false;
             
             // stage 1, demote any not in-flight mappable memory above 87.5% (7/8ths) of VMA's budget to system memory
             {
@@ -675,6 +680,7 @@ public class Hg3DGpuBuffer extends GpuBuffer implements Hg3DObject, Destroyable 
                     assert currentBuffer.buffer != null;
                     device.destroyEndOfFrame(currentBuffer.buffer);
                     commandBuffer.copyBufferToBuffer(currentBuffer.buffer.slice(), newBuffer.slice());
+                    anyCommandRecorded = true;
                     currentBuffer.buffer = newBuffer;
                     currentBuffer.slice = newBuffer.slice();
                     currentBuffer.memoryType = currentBuffer.slice.buffer().memoryType();
@@ -732,6 +738,7 @@ public class Hg3DGpuBuffer extends GpuBuffer implements Hg3DObject, Destroyable 
                     assert currentBuffer.buffer == null;
                     device.destroyEndOfFrame(currentBuffer.alloc);
                     commandBuffer.copyBufferToBuffer(currentBuffer.alloc.slice(), newBuffer.slice());
+                    anyCommandRecorded = true;
                     currentBuffer.alloc = null;
                     currentBuffer.buffer = newBuffer;
                     currentBuffer.slice = newBuffer.slice();
@@ -747,8 +754,11 @@ public class Hg3DGpuBuffer extends GpuBuffer implements Hg3DObject, Destroyable 
             }
             
             commandBuffer.barrier();
+            commandBuffer.popDebugGroup();
             commandBuffer.end();
-            commandEncoder.insertCommandBufferFirst(commandBuffer);
+            if (anyCommandRecorded) {
+                commandEncoder.insertCommandBufferFirst(commandBuffer);
+            }
         }
         
         public void endOfFrame() {

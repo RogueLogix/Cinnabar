@@ -100,6 +100,7 @@ public class Hg3DCommandEncoder implements C3DCommandEncoder, Hg3DObject, Destro
         if (earlyCommandBuffer == null) {
             earlyCommandBuffer = allocateCommandBuffer();
             earlyCommandBuffer.setName("Early Command Buffer");
+            earlyCommandBuffer.pushDebugGroup("Early Command Buffer");
             earlyCommandBuffer.barrier();
         }
         return earlyCommandBuffer;
@@ -107,10 +108,10 @@ public class Hg3DCommandEncoder implements C3DCommandEncoder, Hg3DObject, Destro
     
     HgCommandBuffer mainCommandBuffer() {
         endRenderPass();
-        earlyCommandBuffer();
         if (mainCommandBuffer == null) {
             mainCommandBuffer = allocateCommandBuffer();
             mainCommandBuffer.setName("Main Command Buffer");
+            mainCommandBuffer.pushDebugGroup("Main Command Buffer");
             mainCommandBuffer.barrier();
         }
         return mainCommandBuffer;
@@ -120,6 +121,7 @@ public class Hg3DCommandEncoder implements C3DCommandEncoder, Hg3DObject, Destro
         endRenderPass();
         if (earlyCommandBuffer != null) {
             earlyCommandBuffer.barrier();
+            earlyCommandBuffer.popDebugGroup();
             earlyCommandBuffer.end();
             commandBuffersThisFlush.add(earlyCommandBuffer);
             queueItems.add(HgQueue.Item.execute(earlyCommandBuffer));
@@ -127,6 +129,7 @@ public class Hg3DCommandEncoder implements C3DCommandEncoder, Hg3DObject, Destro
         earlyCommandBuffer = null;
         if (mainCommandBuffer != null) {
             mainCommandBuffer.barrier();
+            mainCommandBuffer.popDebugGroup();
             mainCommandBuffer.end();
             commandBuffersThisFlush.add(mainCommandBuffer);
             queueItems.add(HgQueue.Item.execute(mainCommandBuffer));
@@ -493,6 +496,7 @@ public class Hg3DCommandEncoder implements C3DCommandEncoder, Hg3DObject, Destro
             this.framebuffer = framebuffer;
             commandBuffer = mainCommandBuffer();
             
+            commandBuffer.pushDebugGroup("RenderPass");
             commandBuffer.barrier();
             commandBuffer.beginRenderPass(renderPass, framebuffer);
         }
@@ -524,6 +528,7 @@ public class Hg3DCommandEncoder implements C3DCommandEncoder, Hg3DObject, Destro
             }
             commandBuffer.endRenderPass();
             commandBuffer.barrier();
+            commandBuffer.popDebugGroup();
         }
         
         @Override
