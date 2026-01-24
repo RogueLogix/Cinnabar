@@ -11,8 +11,10 @@ public class Mercury {
     public static final Logger MERCURY_LOG = LogUtils.getLogger();
     public static final boolean TRACE_LOGGING = Config.traceLogging;
     public static final boolean DEBUG_LOGGING = Config.debugLogging || TRACE_LOGGING;
+    public static final boolean RENDERDOC_ATTACHED = "1".equals(System.getenv("ENABLE_VULKAN_RENDERDOC_CAPTURE"));
     public static final boolean MERCURY_VALIDATION = Config.mercuryValidationLayers;
-    public static final boolean VULKAN_VALIDATION = Config.vulkanValidationLayers;
+    // vulkan validation doesnt work with renderdoc attached
+    public static final boolean VULKAN_VALIDATION = !RENDERDOC_ATTACHED && Config.vulkanValidationLayers;
     
     public static final ThreadLocal<MemoryStack> MEMORY_STACK = ThreadLocal.withInitial(GrowingMemoryStack::new);
     
