@@ -8,6 +8,7 @@ import graphics.cinnabar.api.hg.HgCommandBuffer;
 import graphics.cinnabar.api.hg.HgQueue;
 import graphics.cinnabar.api.memory.MagicMemorySizes;
 import graphics.cinnabar.api.util.Destroyable;
+import graphics.cinnabar.api.util.UnsignedMath;
 import graphics.cinnabar.core.util.MagicNumbers;
 import graphics.cinnabar.lib.datastructures.SpliceableLinkedList;
 import org.jetbrains.annotations.Nullable;
@@ -178,13 +179,13 @@ public class Hg3DGpuBuffer extends GpuBuffer implements Hg3DObject, Destroyable 
             emergencyEvictionBuffer = device.hgDevice().createBuffer(HgBuffer.MemoryRequest.CPU, MagicMemorySizes.MiB, VK_BUFFER_USAGE_TRANSFER_DST_BIT);
             device.hgDevice().setAllocFailedCallback(this::allocFailed);
             // 50% of budget can be vertex
-            long vertexPoolSize = device.hgDevice().deviceLocalMemoryStats().secondLong() / 2;
+            long vertexPoolSize = (device.hgDevice().deviceLocalMemoryStats().secondLong() >> 1) & Long.MAX_VALUE; // just in case that top bit is set to 1
             // for UMA, halve that again, to leave something for the CPU
             if (device.hgDevice().UMA()) {
                 vertexPoolSize >>= 1;
             }
             vertexPoolSize = Math.min(Hg.debugLogging() ? (256 * MagicMemorySizes.MiB) : Integer.MAX_VALUE, vertexPoolSize);
-            vertexPoolSize = Math.min(device.hgDevice().properties().maxMemoryAllocSize(), vertexPoolSize);
+            vertexPoolSize = UnsignedMath.min(device.hgDevice().properties().maxMemoryAllocSize(), vertexPoolSize);
             vertexPoolBuffer = device.hgDevice().createBuffer(HgBuffer.MemoryRequest.GPU, vertexPoolSize, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT);
             vertexPoolAllocator = new HgBuffer.Suballocator(vertexPoolBuffer);
             
