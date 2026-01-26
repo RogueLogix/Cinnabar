@@ -307,7 +307,7 @@ public class Hg3DCommandEncoder implements C3DCommandEncoder, Hg3DObject, Destro
         } else {
             final var tempBuffer = uploadBufferSlice(buffer.remaining());
             final var ptr = tempBuffer.map();
-            LibCString.nmemcpy(ptr.pointer(), MemoryUtil.memAddress(buffer), ptr.size());
+            MemoryUtil.memCopy(ptr.pointer(), MemoryUtil.memAddress(buffer), ptr.size());
             tempBuffer.unmap();
             final var earlyUpload = !targetBuffer.usedThisFrame();
             final var cb = earlyUpload ? earlyCommandBuffer() : mainCommandBuffer();
@@ -379,7 +379,7 @@ public class Hg3DCommandEncoder implements C3DCommandEncoder, Hg3DObject, Destro
     private void writeToTexture(GpuTexture texture, long buffer, long bufferSize, int mipLevel, int depthOrLayer, int x, int y, int width, int height, int srcWidth, int srcHeight) {
         final var tempBuffer = uploadBufferSlice(bufferSize);
         final var ptr = tempBuffer.map();
-        LibCString.nmemcpy(ptr.pointer(), buffer, ptr.size());
+        MemoryUtil.memCopy(ptr.pointer(), buffer, ptr.size());
         tempBuffer.unmap();
         
         final var hg3dTexture = (Hg3DGpuTexture) texture;
@@ -824,7 +824,7 @@ public class Hg3DCommandEncoder implements C3DCommandEncoder, Hg3DObject, Destro
                         final var drawsCPUBuffer = device.hgDevice().createBuffer(HgBuffer.MemoryRequest.CPU, (long) drawCount * VkDrawIndexedIndirectCommand.SIZEOF, VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT);
                         device.destroyEndOfFrameAsync(drawsCPUBuffer);
                         final var ptr = drawsCPUBuffer.map();
-                        LibCString.nmemcpy(ptr.pointer(), drawCommands.address(0), (long) drawCount * VkDrawIndexedIndirectCommand.SIZEOF);
+                        MemoryUtil.memCopy(ptr.pointer(), drawCommands.address(0), (long) drawCount * VkDrawIndexedIndirectCommand.SIZEOF);
                         commandBuffer.drawIndexedIndirect(drawsCPUBuffer.slice());
                     } else if (canBatchVertexBuffer) {
                         commandBuffer.bindVertexBuffer(0, expectedVertexBuffer.slice());

@@ -164,7 +164,7 @@ public record PointerWrapper(long pointer, long size) implements Comparable<Poin
         if (overlaps) {
             LibCString.nmemmove(dstPtr, srcPtr, size);
         } else {
-            LibCString.nmemcpy(dstPtr, srcPtr, size);
+            MemoryUtil.memCopy(dstPtr, srcPtr, size);
         }
     }
     
