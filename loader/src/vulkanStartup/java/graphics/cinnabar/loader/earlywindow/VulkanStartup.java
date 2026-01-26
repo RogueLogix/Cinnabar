@@ -148,14 +148,14 @@ public class VulkanStartup {
         callbacks.pfnReallocation(new VkReallocationFunction() {
             @Override
             public long invoke(long pUserData, long pOriginal, long size, long alignment, int allocationScope) {
-                final var newAlloc = MemoryUtil.nmemRealloc(pOriginal, size);
-                if ((newAlloc & (alignment - 1)) == 0) {
-                    return newAlloc;
+                final var realloc = MemoryUtil.nmemRealloc(pOriginal, size);
+                if ((realloc & (alignment - 1)) == 0) {
+                    return realloc;
                 }
-                final var alignedAlloc = MemoryUtil.nmemAlignedAlloc(alignment, size);
-                MemoryUtil.memCopy(alignedAlloc, newAlloc, size);
-                MemoryUtil.nmemFree(newAlloc);
-                return alignedAlloc;
+                final var newAlignedAlloc = MemoryUtil.nmemAlignedAlloc(alignment, size);
+                MemoryUtil.memCopy(realloc, newAlignedAlloc, size);
+                MemoryUtil.nmemFree(realloc);
+                return newAlignedAlloc;
             }
         });
         callbacks.pfnFree(new VkFreeFunction() {

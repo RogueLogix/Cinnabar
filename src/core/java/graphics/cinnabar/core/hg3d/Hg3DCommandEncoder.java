@@ -302,12 +302,12 @@ public class Hg3DCommandEncoder implements C3DCommandEncoder, Hg3DObject, Destro
             // buffer isn't in flight, and is mappable, write directly to it
             final var bufferPtr = targetBuffer.hgSlice().map();
             assert buffer.remaining() <= slice.length();
-            MemoryUtil.memCopy(bufferPtr.pointer() + slice.offset(), MemoryUtil.memAddress(buffer), buffer.remaining());
+            MemoryUtil.memCopy(MemoryUtil.memAddress(buffer), bufferPtr.pointer() + slice.offset(), buffer.remaining());
             targetBuffer.hgSlice().unmap();
         } else {
             final var tempBuffer = uploadBufferSlice(buffer.remaining());
             final var ptr = tempBuffer.map();
-            MemoryUtil.memCopy(ptr.pointer(), MemoryUtil.memAddress(buffer), ptr.size());
+            MemoryUtil.memCopy(MemoryUtil.memAddress(buffer), ptr.pointer(), ptr.size());
             tempBuffer.unmap();
             final var earlyUpload = !targetBuffer.usedThisFrame();
             final var cb = earlyUpload ? earlyCommandBuffer() : mainCommandBuffer();
@@ -379,7 +379,7 @@ public class Hg3DCommandEncoder implements C3DCommandEncoder, Hg3DObject, Destro
     private void writeToTexture(GpuTexture texture, long buffer, long bufferSize, int mipLevel, int depthOrLayer, int x, int y, int width, int height, int srcWidth, int srcHeight) {
         final var tempBuffer = uploadBufferSlice(bufferSize);
         final var ptr = tempBuffer.map();
-        MemoryUtil.memCopy(ptr.pointer(), buffer, ptr.size());
+        MemoryUtil.memCopy(buffer, ptr.pointer(), ptr.size());
         tempBuffer.unmap();
         
         final var hg3dTexture = (Hg3DGpuTexture) texture;
@@ -824,7 +824,7 @@ public class Hg3DCommandEncoder implements C3DCommandEncoder, Hg3DObject, Destro
                         final var drawsCPUBuffer = device.hgDevice().createBuffer(HgBuffer.MemoryRequest.CPU, (long) drawCount * VkDrawIndexedIndirectCommand.SIZEOF, VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT);
                         device.destroyEndOfFrameAsync(drawsCPUBuffer);
                         final var ptr = drawsCPUBuffer.map();
-                        MemoryUtil.memCopy(ptr.pointer(), drawCommands.address(0), (long) drawCount * VkDrawIndexedIndirectCommand.SIZEOF);
+                        MemoryUtil.memCopy(drawCommands.address(0), ptr.pointer(), (long) drawCount * VkDrawIndexedIndirectCommand.SIZEOF);
                         commandBuffer.drawIndexedIndirect(drawsCPUBuffer.slice());
                     } else if (canBatchVertexBuffer) {
                         commandBuffer.bindVertexBuffer(0, expectedVertexBuffer.slice());

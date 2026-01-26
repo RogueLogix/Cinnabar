@@ -210,7 +210,7 @@ public class Hg3DGpuBuffer extends GpuBuffer implements Hg3DObject, Destroyable 
                 // it'll automatically get promoted when it gets used
                 buffer.evictedData = MemoryUtil.nmemAlloc(data.remaining());
                 buffer.evictedDataSize = data.remaining();
-                MemoryUtil.memCopy(buffer.evictedData, MemoryUtil.memAddress(data), data.remaining());
+                MemoryUtil.memCopy(MemoryUtil.memAddress(data), buffer.evictedData, data.remaining());
             }
             return buffer;
         }
@@ -308,7 +308,7 @@ public class Hg3DGpuBuffer extends GpuBuffer implements Hg3DObject, Destroyable 
                     currentBuffer.data.evictedData = MemoryUtil.nmemAlloc(currentBuffer.data.size());
                     currentBuffer.data.evictedDataSize = currentBuffer.data.size();
                     final var ptr = currentBuffer.data.buffer.slice().map();
-                    MemoryUtil.memCopy(currentBuffer.data.evictedData, ptr.pointer(), currentBuffer.data.size());
+                    MemoryUtil.memCopy(ptr.pointer(), currentBuffer.data.evictedData, currentBuffer.data.size());
                     currentBuffer.data.buffer.slice().unmap();
                     
                     currentBuffer.data.buffer.destroy();
@@ -358,7 +358,7 @@ public class Hg3DGpuBuffer extends GpuBuffer implements Hg3DObject, Destroyable 
                     currentBuffer.data.evictedData = MemoryUtil.nmemAlloc(currentBuffer.data.size());
                     currentBuffer.data.evictedDataSize = currentBuffer.data.size();
                     final var ptr = currentBuffer.data.buffer.slice().map();
-                    MemoryUtil.memCopy(currentBuffer.data.evictedData, ptr.pointer(), currentBuffer.data.size());
+                    MemoryUtil.memCopy(ptr.pointer(), currentBuffer.data.evictedData, currentBuffer.data.size());
                     currentBuffer.data.buffer.slice().unmap();
                     
                     currentBuffer.data.buffer.destroy();
@@ -436,7 +436,7 @@ public class Hg3DGpuBuffer extends GpuBuffer implements Hg3DObject, Destroyable 
                 currentEmergencyBufferOffset = 0;
                 for (@Nullable var currentBuffer = shufflingBuffers.peekFirst(); currentBuffer != null; ) {
                     currentBuffer.data.evictedData = MemoryUtil.nmemAlloc(currentBuffer.data.size());
-                    MemoryUtil.memCopy(currentBuffer.data.evictedData, ptr.pointer() + currentEmergencyBufferOffset, currentBuffer.data.size());
+                    MemoryUtil.memCopy(ptr.pointer() + currentEmergencyBufferOffset, currentBuffer.data.evictedData, currentBuffer.data.size());
                     currentEmergencyBufferOffset += currentBuffer.data.size();
                     
                     assert currentBuffer.data.buffer != null;
@@ -498,7 +498,7 @@ public class Hg3DGpuBuffer extends GpuBuffer implements Hg3DObject, Destroyable 
                     final var bufferPtr = buffer.slice.map();
                     assert bufferPtr.pointer() != 0;
                     assert toUploadAddr != 0;
-                    MemoryUtil.memCopy(bufferPtr.pointer(), toUploadAddr, toUploadSize);
+                    MemoryUtil.memCopy(toUploadAddr, bufferPtr.pointer(), toUploadSize);
                     buffer.slice.unmap();
                 } else {
                     // non-mappable, need a  staging buffer
@@ -506,7 +506,7 @@ public class Hg3DGpuBuffer extends GpuBuffer implements Hg3DObject, Destroyable 
                     final var ptr = tempBuffer.map();
                     assert ptr.pointer() != 0;
                     assert toUploadAddr != 0;
-                    MemoryUtil.memCopy(ptr.pointer(), toUploadAddr, ptr.size());
+                    MemoryUtil.memCopy(toUploadAddr, ptr.pointer(), ptr.size());
                     tempBuffer.unmap();
                     
                     if (promotionCommandBuffer == null) {
@@ -641,7 +641,7 @@ public class Hg3DGpuBuffer extends GpuBuffer implements Hg3DObject, Destroyable 
                         currentBuffer.evictedData = MemoryUtil.nmemAlloc(currentBuffer.size());
                         currentBuffer.evictedDataSize = currentBuffer.size();
                         final var ptr = currentBuffer.buffer.slice().map();
-                        MemoryUtil.memCopy(currentBuffer.evictedData, ptr.pointer(), currentBuffer.size());
+                        MemoryUtil.memCopy(ptr.pointer(), currentBuffer.evictedData, currentBuffer.size());
                         currentBuffer.buffer.slice().unmap();
                         
                         currentBuffer.buffer.destroy();
