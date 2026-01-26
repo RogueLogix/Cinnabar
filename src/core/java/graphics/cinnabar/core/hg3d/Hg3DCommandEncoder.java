@@ -301,7 +301,8 @@ public class Hg3DCommandEncoder implements C3DCommandEncoder, Hg3DObject, Destro
         if (!targetBuffer.isInFlight() && targetBuffer.hgSlice().buffer().memoryType().mappable) {
             // buffer isn't in flight, and is mappable, write directly to it
             final var bufferPtr = targetBuffer.hgSlice().map();
-            LibCString.nmemcpy(bufferPtr.pointer(), MemoryUtil.memAddress(buffer), buffer.remaining());
+            assert buffer.remaining() <= slice.length();
+            MemoryUtil.memCopy(bufferPtr.pointer() + slice.offset(), MemoryUtil.memAddress(buffer), buffer.remaining());
             targetBuffer.hgSlice().unmap();
         } else {
             final var tempBuffer = uploadBufferSlice(buffer.remaining());
