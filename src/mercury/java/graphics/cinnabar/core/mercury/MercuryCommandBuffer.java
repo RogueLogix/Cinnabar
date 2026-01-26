@@ -300,7 +300,7 @@ public class MercuryCommandBuffer extends MercuryObject implements HgCommandBuff
             imageSubresourceRange.layerCount(1);
             imageBarrier.subresourceRange(imageSubresourceRange);
             
-            imageBarrier.dstAccessMask(VK_ACCESS_TRANSFER_READ_BIT);
+            imageBarrier.dstAccessMask(VK_ACCESS_TRANSFER_WRITE_BIT);
             imageBarrier.oldLayout(VK_IMAGE_LAYOUT_UNDEFINED);
             imageBarrier.newLayout(VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
             imageBarrier.image(((MercurySwapchain) swapchain).currentVkImage());
