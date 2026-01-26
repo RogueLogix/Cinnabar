@@ -114,29 +114,6 @@ public class VulkanStartup {
             new ObjectObjectImmutablePair<>(VK_KHR_PORTABILITY_SUBSET_EXTENSION_NAME, List.of())
     );
     
-    private static final boolean supported = ((Supplier<Boolean>) () -> {
-        LOGGER.info("Querying Vulkan support");
-        try {
-            final var instanceRecord = createVkInstance(false, false, null);
-            try {
-                selectPhysicalDevice(instanceRecord.instance, false, -1, instanceRecord.enabledInsanceExtensions());
-                // if we made it here, there is a supported device, so it will be used
-                LOGGER.info("Compatible card found, using Vulkan");
-                return true;
-            } finally {
-                instanceRecord.destroy();
-            }
-        } catch (RuntimeException ignored) {
-            ignored.printStackTrace();
-        }
-        LOGGER.info("No compatible card found, using OpenGL");
-        return false;
-    }).get();
-    
-    public static boolean isSupported() {
-        return supported;
-    }
-    
     private static VkAllocationCallbacks callbacks() {
         final var callbacks = VkAllocationCallbacks.calloc();
         callbacks.pfnAllocation(new VkAllocationFunction() {

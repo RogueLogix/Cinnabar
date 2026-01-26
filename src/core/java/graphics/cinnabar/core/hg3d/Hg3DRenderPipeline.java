@@ -54,10 +54,7 @@ public class Hg3DRenderPipeline implements Hg3DObject, CompiledRenderPipeline, D
                         #endif
                     """);
         }
-        var fragmentSource = shaderSourceCache.computeIfAbsent(new ShaderSourceCacheKey(pipeline.getFragmentShader(), ShaderType.FRAGMENT), key -> shaderSourceProvider.get(key.location, key.type));
-        // "sampler" is reserved in newer GLSL
-        fragmentSource = fragmentSource.replace("sampler2D sampler", "sampler2D samp");
-        fragmentSource = fragmentSource.replace("return textureGrad(sampler, uv, du, dv);", "return textureGrad(samp, uv, du, dv);");
+        final var fragmentSource = shaderSourceCache.computeIfAbsent(new ShaderSourceCacheKey(pipeline.getFragmentShader(), ShaderType.FRAGMENT), key -> shaderSourceProvider.get(key.location, key.type));
         final var glVertexGLSL = GlslPreprocessor.injectDefines(vertexSource, pipeline.getShaderDefines());
         final var glFragmentGLSL = GlslPreprocessor.injectDefines(fragmentSource, pipeline.getShaderDefines());
         

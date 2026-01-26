@@ -174,8 +174,7 @@ public class Hg3DGpuDevice implements GpuDevice {
     
     @Override
     public GpuTexture createTexture(@Nullable Supplier<String> label, int usage, TextureFormat format, int width, int height, int depthOrLayers, int mipLevels) {
-        // bug in MC, just force it to the max reasonable number of mips
-        mipLevels = Math.min(Integer.numberOfTrailingZeros(Math.min(width, height)) + 1, mipLevels);
+        assert mipLevels <= Integer.numberOfTrailingZeros(Math.max(width, height)) + 1;
         final var texture = new Hg3DGpuTexture(this, usage, "TODO: replace me", format, width, height, depthOrLayers, mipLevels);
         createCommandEncoder().setupTexture(texture);
         return texture;

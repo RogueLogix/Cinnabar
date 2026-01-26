@@ -43,6 +43,8 @@ public class Hg {
     public static HgDevice createDevice(HgDevice.CreateInfo createInfo) {
         try {
             return (HgDevice) createMethodHandle.invoke(createInfo);
+        } catch (RuntimeException e) {
+            throw e;
         } catch (Throwable e) {
             throw new RuntimeException(e);
         }
