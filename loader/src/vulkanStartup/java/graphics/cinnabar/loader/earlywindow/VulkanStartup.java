@@ -53,7 +53,6 @@ import org.jetbrains.annotations.Nullable;
 import org.lwjgl.system.Configuration;
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.system.MemoryUtil;
-import org.lwjgl.system.libc.LibCString;
 import org.lwjgl.util.tinyfd.TinyFileDialogs;
 import org.lwjgl.vulkan.*;
 import org.slf4j.Logger;
@@ -66,6 +65,8 @@ import static graphics.cinnabar.loader.earlywindow.GLFWClassloadHelper.glfwExtGe
 import static org.lwjgl.vulkan.EXTDebugMarker.VK_EXT_DEBUG_MARKER_EXTENSION_NAME;
 import static org.lwjgl.vulkan.EXTDebugReport.VK_EXT_DEBUG_REPORT_EXTENSION_NAME;
 import static org.lwjgl.vulkan.EXTDebugUtils.*;
+import static org.lwjgl.vulkan.EXTValidationFeatures.VK_VALIDATION_FEATURE_ENABLE_BEST_PRACTICES_EXT;
+import static org.lwjgl.vulkan.EXTValidationFeatures.VK_VALIDATION_FEATURE_ENABLE_SYNCHRONIZATION_VALIDATION_EXT;
 import static org.lwjgl.vulkan.KHRPortabilitySubset.VK_KHR_PORTABILITY_SUBSET_EXTENSION_NAME;
 import static org.lwjgl.vulkan.KHRSwapchain.VK_KHR_SWAPCHAIN_EXTENSION_NAME;
 import static org.lwjgl.vulkan.KHRSynchronization2.VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME;
@@ -152,7 +153,7 @@ public class VulkanStartup {
                     return newAlloc;
                 }
                 final var alignedAlloc = MemoryUtil.nmemAlignedAlloc(alignment, size);
-                LibCString.nmemcpy(alignedAlloc, newAlloc, size);
+                MemoryUtil.memCopy(alignedAlloc, newAlloc, size);
                 MemoryUtil.nmemFree(newAlloc);
                 return alignedAlloc;
             }
@@ -274,8 +275,12 @@ public class VulkanStartup {
                     enabledInstanceExtensions.add(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
                     
                     if (debugCreateInfo != null) {
-                        createInfo.pNext(debugCreateInfo.address());
+                        createInfo.pNext(debugCreateInfo);
                     }
+                    
+                    final var validationFeatures = VkValidationFeaturesEXT.calloc(stack).sType$Default();
+                    validationFeatures.pEnabledValidationFeatures(stack.ints(VK_VALIDATION_FEATURE_ENABLE_SYNCHRONIZATION_VALIDATION_EXT, VK_VALIDATION_FEATURE_ENABLE_BEST_PRACTICES_EXT));
+                    createInfo.pNext(validationFeatures);
                 }
             }
             if (enableMesaOverlay && System.getenv().get("ENABLE_VULKAN_RENDERDOC_CAPTURE") == null) {
