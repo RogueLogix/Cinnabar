@@ -8,7 +8,6 @@ import it.unimi.dsi.fastutil.longs.LongLists;
 import it.unimi.dsi.fastutil.objects.ReferenceArrayList;
 import org.jetbrains.annotations.Nullable;
 import org.lwjgl.glfw.GLFW;
-import org.lwjgl.system.MemoryStack;
 import org.lwjgl.vulkan.*;
 
 import static graphics.cinnabar.api.exceptions.VkException.checkVkCode;
@@ -18,9 +17,6 @@ import static org.lwjgl.vulkan.KHRSwapchain.*;
 import static org.lwjgl.vulkan.VK10.*;
 
 public class MercurySwapchain extends MercuryObject implements HgSurface.Swapchain {
-    
-    public static final int SwapchainColorFormat = VK_FORMAT_B8G8R8A8_UNORM;
-    public static final int SwapchainColorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
     
     public static final int[] VSyncPresentModeOrder = new int[]{
             VK_PRESENT_MODE_MAILBOX_KHR, // triple buffering, should add a toggle for this
@@ -94,9 +90,38 @@ public class MercurySwapchain extends MercuryObject implements HgSurface.Swapcha
             final var createInfo = VkSwapchainCreateInfoKHR.calloc(stack).sType$Default();
             createInfo.surface(surface.vkSurface());
             
+            final var formatCount = stack.callocInt(1);
+            vkGetPhysicalDeviceSurfaceFormatsKHR(device().vkDevice().getPhysicalDevice(), surface.vkSurface(), formatCount, null);
+            final var formats = VkSurfaceFormatKHR.calloc(formatCount.get(0));
+            vkGetPhysicalDeviceSurfaceFormatsKHR(device().vkDevice().getPhysicalDevice(), surface.vkSurface(), formatCount, formats);
+            int selectedFormatIndex = -1;
+            for (int i = 0; i < formatCount.get(0); i++) {
+                formats.position(i);
+                if (formats.colorSpace() != VK_COLORSPACE_SRGB_NONLINEAR_KHR) {
+                    continue;
+                }
+                if (selectedFormatIndex == -1) {
+                    switch (formats.format()) {
+                        case VK_FORMAT_R8G8B8A8_UNORM, VK_FORMAT_B8G8R8A8_UNORM, VK_FORMAT_A2B10G10R10_UNORM_PACK32 ->
+                                selectedFormatIndex = i;
+                    }
+                }
+                // prefer 10-bit color formats, even though that doesn't really matter
+                if (formats.format() == VK_FORMAT_A2B10G10R10_UNORM_PACK32 && formats.get(selectedFormatIndex).format() != VK_FORMAT_A2B10G10R10_UNORM_PACK32) {
+                    selectedFormatIndex = i;
+                }
+            }
+            if (selectedFormatIndex == -1) {
+                throw new IllegalStateException();
+            }
+            final var selectedFormat = formats.get(selectedFormatIndex);
+            if (DEBUG_LOGGING) {
+                MERCURY_LOG.debug("Selected swapchain format " + formats.format());
+            }
+            
             createInfo.minImageCount(imageCount);
-            createInfo.imageFormat(SwapchainColorFormat);
-            createInfo.imageColorSpace(SwapchainColorSpace);
+            createInfo.imageFormat(selectedFormat.format());
+            createInfo.imageColorSpace(selectedFormat.colorSpace());
             createInfo.imageExtent(extent);
             createInfo.imageArrayLayers(1);
             // images are always blit onto the swapchain instead of rendering directly to it
