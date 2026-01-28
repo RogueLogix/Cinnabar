@@ -6,8 +6,8 @@ import com.mojang.blaze3d.shaders.GpuDebugOptions;
 import com.mojang.blaze3d.shaders.ShaderSource;
 import com.mojang.blaze3d.systems.BackendCreationException;
 import com.mojang.blaze3d.systems.GpuBackend;
+import com.mojang.blaze3d.systems.GpuDevice;
 import com.mojang.blaze3d.systems.WindowAndDevice;
-import graphics.cinnabar.loader.earlywindow.VulkanStartup;
 
 import static org.lwjgl.glfw.GLFW.*;
 
@@ -46,7 +46,7 @@ public class Hg3DBackend implements GpuBackend {
             
             device.attachWindow(window);
             
-            return new WindowAndDevice(window, device);
+            return new WindowAndDevice(window, new GpuDevice(device));
         }
     }
 }

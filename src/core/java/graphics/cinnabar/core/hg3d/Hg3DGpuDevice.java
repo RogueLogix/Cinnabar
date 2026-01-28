@@ -45,6 +45,7 @@ import com.mojang.blaze3d.pipeline.RenderPipeline;
 import com.mojang.blaze3d.shaders.GpuDebugOptions;
 import com.mojang.blaze3d.shaders.ShaderSource;
 import com.mojang.blaze3d.systems.GpuDevice;
+import com.mojang.blaze3d.systems.GpuDeviceBackend;
 import com.mojang.blaze3d.textures.*;
 import graphics.cinnabar.api.hg.*;
 import graphics.cinnabar.api.hg.enums.HgFormat;
@@ -70,7 +71,7 @@ import static com.mojang.blaze3d.buffers.GpuBuffer.USAGE_COPY_DST;
 import static org.lwjgl.vulkan.VK10.VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
 #endif
 
-public class Hg3DGpuDevice implements GpuDevice {
+public class Hg3DGpuDevice implements GpuDeviceBackend {
     private static final String backendName = "CinnabarVK "
         #if NEO
             + FMLLoader.getCurrent().getLoadingModList().getModFileById("cinnabar").versionString();

@@ -224,20 +224,28 @@ public class Hg3DCommandEncoder implements C3DCommandEncoder, Hg3DObject, Destro
     }
     
     @Override
-    public Hg3DRenderPass createRenderPass(Supplier<String> debugGroup, GpuTextureView colorTexture, OptionalInt clearColor, @Nullable GpuTextureView depthTexture, OptionalDouble clearDepth) {
+    public RenderPass createRenderPass(Supplier<String> debugGroup, GpuTextureView colorTexture, OptionalInt clearColor, @Nullable GpuTextureView depthTexture, OptionalDouble clearDepth) {
+        return new RenderPass(createHg3DRenderPass(debugGroup, colorTexture, clearColor, depthTexture, clearDepth), this.device);
+    }
+    
+    @Override
+    public boolean isInRenderPass() {
+        return continuedRenderPass != null && continuedRenderPass.active;
+    }
+    
+    public Hg3DRenderPass createHg3DRenderPass(Supplier<String> debugGroup, GpuTextureView colorTexture, OptionalInt clearColor, @Nullable GpuTextureView depthTexture, OptionalDouble clearDepth) {
         final var hgRenderPass = device.getRenderPass(Hg3DConst.format(colorTexture.texture().getFormat()), depthTexture != null ? Hg3DConst.format(depthTexture.texture().getFormat()) : null);
         @Nullable
         final var depthView = depthTexture != null ? ((Hg3DGpuTextureView) depthTexture).imageView() : null;
         final var framebuffer = ((Hg3DGpuTextureView) colorTexture).getFramebuffer(hgRenderPass, depthView);
-        final var renderPass = createRenderPass(debugGroup, hgRenderPass, framebuffer);
+        final var renderPass = createHg3DRenderPass(debugGroup, hgRenderPass, framebuffer);
         if (clearColor.isPresent()) {
             renderPass.clearAttachments(IntList.of(clearColor.getAsInt()), clearDepth.orElse(-1), 0, 0, framebuffer.width(), framebuffer.height());
         }
         return renderPass;
     }
     
-    @Override
-    public Hg3DRenderPass createRenderPass(Supplier<String> debugGroup, HgRenderPass renderpass, HgFramebuffer framebuffer) {
+    public Hg3DRenderPass createHg3DRenderPass(Supplier<String> debugGroup, HgRenderPass renderpass, HgFramebuffer framebuffer) {
         // if all render params are the same continue the pass
         if (continuedRenderPass == null || continuedRenderPass.renderPass != renderpass || continuedRenderPass.framebuffer != framebuffer) {
             endRenderPass();
@@ -272,7 +280,7 @@ public class Hg3DCommandEncoder implements C3DCommandEncoder, Hg3DObject, Destro
                 // creating a renderpass needs texture views, but im only passed textures... amazing
                 final var colorTextureView = device.createTextureView(colorTexture);
                 final var depthTextureView = device.createTextureView(depthTexture);
-                final var renderpass = createRenderPass(() -> "ClearColorDepthTextures", colorTextureView, OptionalInt.empty(), depthTextureView, OptionalDouble.empty())
+                final var renderpass = createHg3DRenderPass(() -> "ClearColorDepthTextures", colorTextureView, OptionalInt.empty(), depthTextureView, OptionalDouble.empty())
         ) {
             renderpass.clearAttachments(IntList.of(clearColor), clearDepth, scissorX, scissorY, scissorWidth, scissorHeight);
         }
@@ -323,11 +331,6 @@ public class Hg3DCommandEncoder implements C3DCommandEncoder, Hg3DObject, Destro
     }
     
     @Override
-    public GpuBuffer.MappedView mapBuffer(GpuBuffer buffer, boolean read, boolean write) {
-        return mapBuffer(buffer.slice(), read, write);
-    }
-    
-    @Override
     public GpuBuffer.MappedView mapBuffer(GpuBufferSlice slice, boolean read, boolean write) {
         assert slice.buffer() instanceof Hg3DGpuBuffer;
         final var hgBufferSlice = ((Hg3DGpuBuffer) slice.buffer()).hgSlice().slice(slice.offset(), slice.length());
@@ -355,11 +358,6 @@ public class Hg3DCommandEncoder implements C3DCommandEncoder, Hg3DObject, Destro
         final var dstSlice = ((Hg3DGpuBuffer) target.buffer()).hgSlice().slice(target.offset(), target.length());
         cb.copyBufferToBuffer(srcSlice, dstSlice);
         cb.barrier();
-    }
-    
-    @Override
-    public void writeToTexture(GpuTexture texture, NativeImage image) {
-        writeToTexture(texture, image, 0, 0, 0, 0, image.getWidth(), image.getHeight(), 0, 0);
     }
     
     @Override
@@ -523,6 +521,11 @@ public class Hg3DCommandEncoder implements C3DCommandEncoder, Hg3DObject, Destro
             popDebugGroup();
         }
         
+        @Override
+        public boolean isClosed() {
+            return !active;
+        }
+        
         private void end() {
             if (active) {
                 throw new IllegalStateException("Cannot end a RenderPass while it is active");
@@ -616,7 +619,7 @@ public class Hg3DCommandEncoder implements C3DCommandEncoder, Hg3DObject, Destro
         }
         
         @Override
-        public <T> void drawMultipleIndexed(Collection<Draw<T>> draws, @Nullable GpuBuffer indexBuffer, @Nullable VertexFormat.IndexType indexType, Collection<String> dynamicUniforms, T userData) {
+        public <T> void drawMultipleIndexed(Collection<RenderPass.Draw<T>> draws, @Nullable GpuBuffer indexBuffer, @Nullable VertexFormat.IndexType indexType, Collection<String> dynamicUniforms, T userData) {
             assert hgPipeline != null;
             assert hgPipeline != null;
             
@@ -634,7 +637,7 @@ public class Hg3DCommandEncoder implements C3DCommandEncoder, Hg3DObject, Destro
             GpuBuffer lastIndexBuffer = null;
             @Nullable
             VertexFormat.IndexType lastIndexType = null;
-            for (Draw<T> draw : draws) {
+            for (RenderPass.Draw<T> draw : draws) {
                 @Nullable
                 final var indexTypeToUse = draw.indexType() == null ? indexType : draw.indexType();
                 @Nullable
@@ -648,7 +651,7 @@ public class Hg3DCommandEncoder implements C3DCommandEncoder, Hg3DObject, Destro
                 }
                 if (draw.uniformUploaderConsumer() instanceof BiConsumer<?, ?> consumer) {
                     //noinspection unchecked
-                    ((BiConsumer<T, UniformUploader>) consumer).accept(userData, this::setUniform);
+                    ((BiConsumer<T, RenderPass.UniformUploader>) consumer).accept(userData, this::setUniform);
                 }
                 setVertexBuffer(draw.slot(), draw.vertexBuffer());
                 updateUniforms();
@@ -713,7 +716,7 @@ public class Hg3DCommandEncoder implements C3DCommandEncoder, Hg3DObject, Destro
             commandBuffer.clearAttachments(clearColors, clearDepth, x, y, width, height);
         }
         
-        public <T> void fastDrawMultipleIndexed(Collection<Draw<T>> draws, @Nullable GpuBuffer indexBuffer, @Nullable VertexFormat.IndexType indexType, Collection<String> dynamicUniforms, T userData) {
+        public <T> void fastDrawMultipleIndexed(Collection<RenderPass.Draw<T>> draws, @Nullable GpuBuffer indexBuffer, @Nullable VertexFormat.IndexType indexType, Collection<String> dynamicUniforms, T userData) {
             // the single largest cost is in the descriptor set updates, if those can be avoided (they can) that's a large win (and a step toward multidraw)
             if (dynamicUniforms.size() != 1) {
                 // for memory reasons, its assumed there is only a single dynamic uniform in this path, this is currently always the case
@@ -736,9 +739,9 @@ public class Hg3DCommandEncoder implements C3DCommandEncoder, Hg3DObject, Destro
             }
             
             final var drawCount = draws.size();
-            final var orderedDraws = (List<Draw<T>>) draws;
+            final var orderedDraws = (List<RenderPass.Draw<T>>) draws;
             final var orderedDynamicUniformValues = new ReferenceArrayList<GpuBufferSlice>();
-            UniformUploader uploader = (name, bufferSlice) -> {
+            RenderPass.UniformUploader uploader = (name, bufferSlice) -> {
                 if (!name.equals(dynamicUniformName)) {
                     throw new IllegalArgumentException();
                 }
