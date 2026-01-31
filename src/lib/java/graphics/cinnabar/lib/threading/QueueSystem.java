@@ -1,5 +1,6 @@
 package graphics.cinnabar.lib.threading;
 
+import graphics.cinnabar.api.hg.HgDevice;
 import graphics.cinnabar.api.hg.HgSemaphore;
 import graphics.cinnabar.api.threading.ThreadIndex;
 import graphics.cinnabar.api.threading.ThreadIndexRegistry;
@@ -116,6 +117,25 @@ public final class QueueSystem {
             workerThread.start();
         }
         
+    }
+    
+    public static void deviceShutdown(HgDevice device) {
+        while (true) {
+            synchronized (hgSemaphores) {
+                boolean hasPendingSemaphore = false;
+                for (int i = 0; i < hgSemaphores.size(); i++) {
+                    if (hgSemaphores.get(i).semaphore().device() == device) {
+                        hasPendingSemaphore = true;
+                        break;
+                    }
+                }
+                if (!hasPendingSemaphore) {
+                    return;
+                }
+                // force wake that thread, in case its asleep
+                hgSemaphores.notify();
+            }
+        }
     }
     
     private static void cleanupThreadFunc() {

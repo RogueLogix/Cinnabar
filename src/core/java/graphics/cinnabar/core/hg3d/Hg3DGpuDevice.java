@@ -44,7 +44,6 @@ import com.mojang.blaze3d.pipeline.CompiledRenderPipeline;
 import com.mojang.blaze3d.pipeline.RenderPipeline;
 import com.mojang.blaze3d.shaders.GpuDebugOptions;
 import com.mojang.blaze3d.shaders.ShaderSource;
-import com.mojang.blaze3d.systems.GpuDevice;
 import com.mojang.blaze3d.systems.GpuDeviceBackend;
 import com.mojang.blaze3d.textures.*;
 import graphics.cinnabar.api.hg.*;
@@ -52,6 +51,7 @@ import graphics.cinnabar.api.hg.enums.HgFormat;
 import graphics.cinnabar.api.util.Destroyable;
 import graphics.cinnabar.core.util.MagicNumbers;
 import graphics.cinnabar.lib.CinnabarLibBootstrapper;
+import graphics.cinnabar.lib.threading.QueueSystem;
 import graphics.cinnabar.lib.threading.WorkQueue;
 import it.unimi.dsi.fastutil.ints.Int2ReferenceMap;
 import it.unimi.dsi.fastutil.ints.Int2ReferenceOpenHashMap;
@@ -125,6 +125,8 @@ public class Hg3DGpuDevice implements GpuDeviceBackend {
         WorkQueue.AFTER_END_OF_GPU_FRAME.signal(interFrameSemaphore, currentFrame + 1);
         interFrameSemaphore.waitValue(currentFrame + 1, -1L);
         interFrameSemaphore.destroy();
+        
+        QueueSystem.deviceShutdown(hgDevice);
         
         bufferManager.destroy();
         commandEncoder.destroy();
