@@ -27,7 +27,6 @@ import org.jetbrains.annotations.Nullable;
 import org.joml.Vector3i;
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.system.MemoryUtil;
-import org.lwjgl.system.libc.LibCString;
 import org.lwjgl.vulkan.VkDrawIndexedIndirectCommand;
 
 import java.nio.ByteBuffer;
@@ -225,7 +224,7 @@ public class Hg3DCommandEncoder implements C3DCommandEncoder, Hg3DObject, Destro
     
     @Override
     public RenderPass createRenderPass(Supplier<String> debugGroup, GpuTextureView colorTexture, OptionalInt clearColor, @Nullable GpuTextureView depthTexture, OptionalDouble clearDepth) {
-        return new RenderPass(createHg3DRenderPass(debugGroup, colorTexture, clearColor, depthTexture, clearDepth), this.device);
+        return new RenderPass(createBackendRenderPass(debugGroup, colorTexture, clearColor, depthTexture, clearDepth), this.device);
     }
     
     @Override
@@ -233,19 +232,19 @@ public class Hg3DCommandEncoder implements C3DCommandEncoder, Hg3DObject, Destro
         return continuedRenderPass != null && continuedRenderPass.active;
     }
     
-    public Hg3DRenderPass createHg3DRenderPass(Supplier<String> debugGroup, GpuTextureView colorTexture, OptionalInt clearColor, @Nullable GpuTextureView depthTexture, OptionalDouble clearDepth) {
+    public Hg3DRenderPass createBackendRenderPass(Supplier<String> debugGroup, GpuTextureView colorTexture, OptionalInt clearColor, @Nullable GpuTextureView depthTexture, OptionalDouble clearDepth) {
         final var hgRenderPass = device.getRenderPass(Hg3DConst.format(colorTexture.texture().getFormat()), depthTexture != null ? Hg3DConst.format(depthTexture.texture().getFormat()) : null);
         @Nullable
         final var depthView = depthTexture != null ? ((Hg3DGpuTextureView) depthTexture).imageView() : null;
         final var framebuffer = ((Hg3DGpuTextureView) colorTexture).getFramebuffer(hgRenderPass, depthView);
-        final var renderPass = createHg3DRenderPass(debugGroup, hgRenderPass, framebuffer);
+        final var renderPass = createBackendRenderPass(debugGroup, hgRenderPass, framebuffer);
         if (clearColor.isPresent()) {
             renderPass.clearAttachments(IntList.of(clearColor.getAsInt()), clearDepth.orElse(-1), 0, 0, framebuffer.width(), framebuffer.height());
         }
         return renderPass;
     }
     
-    public Hg3DRenderPass createHg3DRenderPass(Supplier<String> debugGroup, HgRenderPass renderpass, HgFramebuffer framebuffer) {
+    public Hg3DRenderPass createBackendRenderPass(Supplier<String> debugGroup, HgRenderPass renderpass, HgFramebuffer framebuffer) {
         // if all render params are the same continue the pass
         if (continuedRenderPass == null || continuedRenderPass.renderPass != renderpass || continuedRenderPass.framebuffer != framebuffer) {
             endRenderPass();
@@ -280,7 +279,7 @@ public class Hg3DCommandEncoder implements C3DCommandEncoder, Hg3DObject, Destro
                 // creating a renderpass needs texture views, but im only passed textures... amazing
                 final var colorTextureView = device.createTextureView(colorTexture);
                 final var depthTextureView = device.createTextureView(depthTexture);
-                final var renderpass = createHg3DRenderPass(() -> "ClearColorDepthTextures", colorTextureView, OptionalInt.empty(), depthTextureView, OptionalDouble.empty())
+                final var renderpass = createBackendRenderPass(() -> "ClearColorDepthTextures", colorTextureView, OptionalInt.empty(), depthTextureView, OptionalDouble.empty())
         ) {
             renderpass.clearAttachments(IntList.of(clearColor), clearDepth, scissorX, scissorY, scissorWidth, scissorHeight);
         }
@@ -620,7 +619,6 @@ public class Hg3DCommandEncoder implements C3DCommandEncoder, Hg3DObject, Destro
         
         @Override
         public <T> void drawMultipleIndexed(Collection<RenderPass.Draw<T>> draws, @Nullable GpuBuffer indexBuffer, @Nullable VertexFormat.IndexType indexType, Collection<String> dynamicUniforms, T userData) {
-            assert hgPipeline != null;
             assert hgPipeline != null;
             
             if (dynamicUniforms.size() == 1) {
