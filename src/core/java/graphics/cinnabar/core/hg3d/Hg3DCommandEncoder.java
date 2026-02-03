@@ -11,6 +11,7 @@ import com.mojang.blaze3d.textures.GpuSampler;
 import com.mojang.blaze3d.textures.GpuTexture;
 import com.mojang.blaze3d.textures.GpuTextureView;
 import com.mojang.blaze3d.vertex.VertexFormat;
+import com.mojang.jtracy.TracyClient;
 import graphics.cinnabar.api.c3d.C3DCommandEncoder;
 import graphics.cinnabar.api.c3d.C3DRenderPass;
 import graphics.cinnabar.api.hg.*;
@@ -187,19 +188,21 @@ public class Hg3DCommandEncoder implements C3DCommandEncoder, Hg3DObject, Destro
     }
     
     public void flush() {
-        flushCallbacks.forEach(Runnable::run);
-        flushCallbacks.clear();
-        if (queueItems.isEmpty()) {
-            // nothing to flush
-            return;
+        try (final var _ = TracyClient.beginZone("Hg3DCommandEncoder.flush", false)) {
+            flushCallbacks.forEach(Runnable::run);
+            flushCallbacks.clear();
+            if (queueItems.isEmpty()) {
+                // nothing to flush
+                return;
+            }
+            try (final var submission = queue.submit()) {
+                submission.enqueue(queueItems);
+                queueItems.clear();
+            }
+            device.destroyEndOfFrame(commandBuffersThisFlush);
+            commandBuffersThisFlush.clear();
+            flushIndex++;
         }
-        try (final var submission = queue.submit()) {
-            submission.enqueue(queueItems);
-            queueItems.clear();
-        }
-        device.destroyEndOfFrame(commandBuffersThisFlush);
-        commandBuffersThisFlush.clear();
-        flushIndex++;
     }
     
     public void resetUploadBuffer() {
@@ -422,7 +425,12 @@ public class Hg3DCommandEncoder implements C3DCommandEncoder, Hg3DObject, Destro
         // end first so they are in the queue ahead of the present
         endCommandBuffers();
         
+        @Nullable
         final var swapchain = device.swapchain();
+        if (swapchain == null) {
+            // swapchain is invalid, just ignore this
+            return;
+        }
         final var semaphore = swapchain.currentSemaphore();
         
         final var commandBuffer = commandPool.allocate();

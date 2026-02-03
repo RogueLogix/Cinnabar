@@ -45,6 +45,7 @@ import com.mojang.blaze3d.pipeline.RenderPipeline;
 import com.mojang.blaze3d.shaders.GpuDebugOptions;
 import com.mojang.blaze3d.shaders.ShaderSource;
 import com.mojang.blaze3d.textures.*;
+import com.mojang.jtracy.TracyClient;
 import graphics.cinnabar.api.c3d.C3DGpuDevice;
 import graphics.cinnabar.api.hg.*;
 import graphics.cinnabar.api.hg.enums.HgFormat;
@@ -76,7 +77,7 @@ public class Hg3DGpuDevice implements C3DGpuDevice {
         #if NEO
             + FMLLoader.getCurrent().getLoadingModList().getModFileById("cinnabar").versionString();
         #else
-             + FabricLoader.getInstance().getModContainer("cinnabar").get().getMetadata().getVersion().getFriendlyString();
+            + FabricLoader.getInstance().getModContainer("cinnabar").get().getMetadata().getVersion().getFriendlyString();
         #endif
     
     private final HgDevice hgDevice;
@@ -145,24 +146,26 @@ public class Hg3DGpuDevice implements C3DGpuDevice {
     }
     
     public void endFrame() {
-        bufferManager.endOfFrame();
-        WorkQueue.AFTER_END_OF_GPU_FRAME.signal(cleanupDoneSemaphore, currentFrame);
-        commandEncoder.insertQueueItem(HgQueue.Item.signal(interFrameSemaphore, currentFrame, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT));
-        commandEncoder.flush();
-        hgDevice.markFame();
-        
-        currentFrame++;
-        
-        WorkQueue.AFTER_END_OF_GPU_FRAME.wait(interFrameSemaphore, currentFrame);
-        // wait for the cleanup of the last time this frame index was submitted
-        // the semaphore starts at MaximumFramesInFlight, so this returns immediately for the first few frames
-        cleanupDoneSemaphore.waitValue(currentFrame - MagicNumbers.MaximumFramesInFlight, -1L);
-        activelyDestroying = pendingDestroys.set((int) (currentFrame % MagicNumbers.MaximumFramesInFlight), activelyDestroying);
-        for (int i = 0; i < activelyDestroying.size(); i++) {
-            activelyDestroying.get(i).destroy();
+        try (final var _ = TracyClient.beginZone("Hg3DGpuDevice.endFrame", false)) {
+            bufferManager.endOfFrame();
+            WorkQueue.AFTER_END_OF_GPU_FRAME.signal(cleanupDoneSemaphore, currentFrame);
+            commandEncoder.insertQueueItem(HgQueue.Item.signal(interFrameSemaphore, currentFrame, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT));
+            commandEncoder.flush();
+            hgDevice.markFame();
+            
+            currentFrame++;
+            
+            WorkQueue.AFTER_END_OF_GPU_FRAME.wait(interFrameSemaphore, currentFrame);
+            // wait for the cleanup of the last time this frame index was submitted
+            // the semaphore starts at MaximumFramesInFlight, so this returns immediately for the first few frames
+            cleanupDoneSemaphore.waitValue(currentFrame - MagicNumbers.MaximumFramesInFlight, -1L);
+            activelyDestroying = pendingDestroys.set((int) (currentFrame % MagicNumbers.MaximumFramesInFlight), activelyDestroying);
+            for (int i = 0; i < activelyDestroying.size(); i++) {
+                activelyDestroying.get(i).destroy();
+            }
+            activelyDestroying.clear();
+            commandEncoder.resetUploadBuffer();
         }
-        activelyDestroying.clear();
-        commandEncoder.resetUploadBuffer();
     }
     
     @Override
@@ -289,7 +292,7 @@ public class Hg3DGpuDevice implements C3DGpuDevice {
     
     @Override
     public int getMaxSupportedAnisotropy() {
-        return (int)hgDevice.properties().maxAnisotropy();
+        return (int) hgDevice.properties().maxAnisotropy();
     }
     
     #if NEO
@@ -355,8 +358,11 @@ public class Hg3DGpuDevice implements C3DGpuDevice {
         return newRenderPass;
     }
     
+    @Nullable
     private HgSurface surface;
+    @Nullable
     private HgSurface.Swapchain swapchain;
+    private boolean swapchainInvalid = false;
     private boolean shouldVsync = false;
     private boolean isVsync = false;
     
@@ -366,7 +372,12 @@ public class Hg3DGpuDevice implements C3DGpuDevice {
         swapchain.acquire();
     }
     
+    @Nullable
     HgSurface.Swapchain swapchain() {
+        if (swapchainInvalid) {
+            return null;
+        }
+        assert swapchain != null;
         return swapchain;
     }
     
@@ -381,33 +392,55 @@ public class Hg3DGpuDevice implements C3DGpuDevice {
         
         final var window = Minecraft.getInstance().getWindow();
         
-        assert swapchain != null;
-        boolean shouldRecreateSwapchain = !swapchain.present();
-        shouldRecreateSwapchain = shouldRecreateSwapchain || window.getWidth() != swapchain.width();
-        shouldRecreateSwapchain = shouldRecreateSwapchain || window.getHeight() != swapchain.height();
-        
-        if (shouldVsync != isVsync) {
-            isVsync = shouldVsync;
-            shouldRecreateSwapchain = true;
-        }
-        
-        if (shouldRecreateSwapchain) {
-            window.refreshFramebufferSize();
-            recreateSwapchain();
-            window.eventHandler.resizeDisplay();
-        }
-        
-        while (!swapchain.acquire()) {
-            // if the swapchain failed to acquire here,
-            window.refreshFramebufferSize();
-            recreateSwapchain();
-            window.eventHandler.resizeDisplay();
+        try (final var _ = TracyClient.beginZone("Hg3DGpuDevice.swapchainPresent", false)) {
+            assert swapchain != null;
+            
+            if (swapchainInvalid) {
+                window.refreshFramebufferSize();
+                if (window.getWidth() <= 1 && window.getHeight() <= 1) {
+                    // can't do shit cap'n
+                    return;
+                }
+                recreateSwapchain();
+                window.eventHandler.resizeDisplay();
+                swapchain.acquire();
+                return;
+            }
+            
+            boolean shouldRecreateSwapchain = swapchainInvalid = !swapchain.present();
+            shouldRecreateSwapchain = shouldRecreateSwapchain || window.getWidth() != swapchain.width();
+            shouldRecreateSwapchain = shouldRecreateSwapchain || window.getHeight() != swapchain.height();
+            
+            if (swapchainInvalid) {
+                // can't do anything when the window is mimized, just early out
+                return;
+            }
+            
+            if (shouldVsync != isVsync) {
+                isVsync = shouldVsync;
+                shouldRecreateSwapchain = true;
+            }
+            
+            if (shouldRecreateSwapchain) {
+                window.refreshFramebufferSize();
+                recreateSwapchain();
+                window.eventHandler.resizeDisplay();
+            }
+            
+            while (!swapchain.acquire()) {
+                swapchainInvalid = true;
+                // if the swapchain failed to acquire here,
+                window.refreshFramebufferSize();
+                recreateSwapchain();
+                window.eventHandler.resizeDisplay();
+            }
         }
     }
     
     private void recreateSwapchain() {
         assert surface != null;
         swapchain = surface.createSwapchain(isVsync, swapchain);
+        swapchainInvalid = false;
     }
     
     @Override
