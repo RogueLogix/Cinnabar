@@ -21,7 +21,7 @@ public class ProfilingRenderPass implements RenderPassBackend {
     private final Zone tracyZone;
     
     public ProfilingRenderPass(Supplier<String> label, RenderPassBackend realRenderPass) {
-        tracyZone = TracyClient.beginZone(label.get(), false);
+        tracyZone = TracyClient.beginZone("RenderPass.begin" + label.get(), false);
         this.realRenderPass = realRenderPass;
     }
     

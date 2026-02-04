@@ -2,9 +2,7 @@ package graphics.cinnabar.core.mixin.mixins;
 
 import com.mojang.blaze3d.platform.Window;
 import com.mojang.blaze3d.systems.GpuBackend;
-import com.mojang.jtracy.TracyClient;
 import graphics.cinnabar.core.hg3d.Hg3DBackend;
-import graphics.cinnabar.core.profiling.ProfilingBackend;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.ModifyArgs;
@@ -20,10 +18,8 @@ public class WindowMixin {
     private void injectHg3DBackend(Args args) {
         final var defaultBackends = (GpuBackend[])args.get(0);
         final var backends = new GpuBackend[defaultBackends.length + 1];
-        backends[0] = TracyClient.isAvailable() ? new ProfilingBackend() : new Hg3DBackend();
-        for (int i = 0; i < defaultBackends.length; i++) {
-            backends[i + 1] = defaultBackends[i];
-        }
+        backends[0] = new Hg3DBackend();
+        System.arraycopy(defaultBackends, 0, backends, 1, defaultBackends.length);
         args.set(0, backends);
     }
 }

@@ -8,8 +8,6 @@ import com.mojang.blaze3d.systems.CommandEncoderBackend;
 import com.mojang.blaze3d.systems.GpuDeviceBackend;
 import com.mojang.blaze3d.textures.*;
 import com.mojang.jtracy.TracyClient;
-import graphics.cinnabar.api.c3d.C3DCommandEncoder;
-import graphics.cinnabar.api.c3d.C3DGpuDevice;
 import org.jspecify.annotations.Nullable;
 
 import java.nio.ByteBuffer;
@@ -19,10 +17,10 @@ import java.util.function.Supplier;
 
 public class ProfilingGpuDevice implements GpuDeviceBackend {
     
-    private final C3DGpuDevice realDevice;
+    private final GpuDeviceBackend realDevice;
     private final CommandEncoderBackend commandEncoder;
     
-    public ProfilingGpuDevice(C3DGpuDevice realDevice) {
+    public ProfilingGpuDevice(GpuDeviceBackend realDevice) {
         this.realDevice = realDevice;
         commandEncoder = new ProfilingCommandEncoder(this, realDevice.createCommandEncoder());
     }
