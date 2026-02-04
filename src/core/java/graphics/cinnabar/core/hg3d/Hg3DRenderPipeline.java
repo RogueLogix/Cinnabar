@@ -108,7 +108,7 @@ public class Hg3DRenderPipeline implements Hg3DObject, CompiledRenderPipeline, D
         for (int i = 0; i < shaderAttribs.size(); i++) {
             final var attrib = shaderAttribs.get(i);
             final var vertexFormatElement = Objects.requireNonNull(vertexFormatElements.get(attrib.name()));
-            vertexInputBindings.add(new HgGraphicsPipeline.VertexInput.Binding(0, attrib.location(), Hg3DConst.vertexInputFormat(vertexFormatElement.type(), vertexFormatElement.count(), Hg3DConst.normalized(vertexFormatElement.usage())), pipeline.getVertexFormat().getOffset(vertexFormatElement)));
+            vertexInputBindings.add(new HgGraphicsPipeline.VertexInput.Binding(0, attrib.location(), Hg3DConst.vertexInputFormat(vertexFormatElement.type(), vertexFormatElement.count(), vertexFormatElement.normalized()), pipeline.getVertexFormat().getOffset(vertexFormatElement)));
         }
         final var vertexInput = new HgGraphicsPipeline.VertexInput(List.of(new HgGraphicsPipeline.VertexInput.Buffer(0, pipeline.getVertexFormat().getVertexSize(), HgGraphicsPipeline.VertexInput.Buffer.InputRate.VERTEX)), vertexInputBindings);
         

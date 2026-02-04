@@ -42,13 +42,6 @@ public class Hg3DConst {
     
     private static final List<HgFormat> formatValues = List.of(HgFormat.values());
     
-    public static boolean normalized(VertexFormatElement.Usage usage) {
-        return switch (usage) {
-            case COLOR, NORMAL -> true;
-            default -> false;
-        };
-    }
-    
     public static HgFormat vertexInputFormat(VertexFormatElement.Type type, int count, boolean normalized) {
         return switch (type) {
             case FLOAT -> formatValues.get(HgFormat.R32_SFLOAT.ordinal() + count - 1);

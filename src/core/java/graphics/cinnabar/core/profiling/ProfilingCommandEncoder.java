@@ -4,18 +4,13 @@ import com.mojang.blaze3d.buffers.GpuBuffer;
 import com.mojang.blaze3d.buffers.GpuBufferSlice;
 import com.mojang.blaze3d.buffers.GpuFence;
 import com.mojang.blaze3d.platform.NativeImage;
+import com.mojang.blaze3d.systems.CommandEncoderBackend;
 import com.mojang.blaze3d.systems.GpuQuery;
-import com.mojang.blaze3d.systems.RenderPass;
+import com.mojang.blaze3d.systems.RenderPassBackend;
 import com.mojang.blaze3d.textures.GpuTexture;
 import com.mojang.blaze3d.textures.GpuTextureView;
 import com.mojang.jtracy.TracyClient;
-import graphics.cinnabar.api.c3d.C3DCommandEncoder;
-import graphics.cinnabar.api.c3d.C3DRenderPass;
 import graphics.cinnabar.api.exceptions.NotImplemented;
-import graphics.cinnabar.api.hg.HgCommandBuffer;
-import graphics.cinnabar.api.hg.HgFramebuffer;
-import graphics.cinnabar.api.hg.HgQueue;
-import graphics.cinnabar.api.hg.HgRenderPass;
 import org.jspecify.annotations.Nullable;
 
 import java.nio.ByteBuffer;
@@ -23,24 +18,24 @@ import java.util.OptionalDouble;
 import java.util.OptionalInt;
 import java.util.function.Supplier;
 
-public class ProfilingCommandEncoder implements C3DCommandEncoder {
+public class ProfilingCommandEncoder implements CommandEncoderBackend {
     
     private final ProfilingGpuDevice device;
-    private final C3DCommandEncoder realCommandEncoder;
+    private final CommandEncoderBackend realCommandEncoder;
     
-    public ProfilingCommandEncoder(ProfilingGpuDevice device,  C3DCommandEncoder realCommandEncoder) {
+    public ProfilingCommandEncoder(ProfilingGpuDevice device,  CommandEncoderBackend realCommandEncoder) {
         this.device = device;
         this.realCommandEncoder = realCommandEncoder;
     }
     
     @Override
-    public RenderPass createRenderPass(Supplier<String> label, GpuTextureView colorTexture, OptionalInt clearColor) {
+    public RenderPassBackend createRenderPass(Supplier<String> label, GpuTextureView colorTexture, OptionalInt clearColor) {
         throw new NotImplemented();
     }
     
     @Override
-    public RenderPass createRenderPass(Supplier<String> label, GpuTextureView colorTexture, OptionalInt clearColor, @Nullable GpuTextureView depthTexture, OptionalDouble clearDepth) {
-        return new RenderPass(new ProfilingRenderPass(label, realCommandEncoder.createBackendRenderPass(label, colorTexture, clearColor, depthTexture, clearDepth)), device);
+    public RenderPassBackend createRenderPass(Supplier<String> label, GpuTextureView colorTexture, OptionalInt clearColor, @Nullable GpuTextureView depthTexture, OptionalDouble clearDepth) {
+        return new ProfilingRenderPass(label, realCommandEncoder.createRenderPass(label, colorTexture, clearColor, depthTexture, clearDepth));
     }
     
     @Override
@@ -157,25 +152,5 @@ public class ProfilingCommandEncoder implements C3DCommandEncoder {
         try (final var ignored = TracyClient.beginZone("CommandEncoder.timerQueryEnd", false)) {
             realCommandEncoder.timerQueryEnd(query);
         }
-    }
-    
-    @Override
-    public void insertCommandBuffer(HgCommandBuffer commandBuffer) {
-        realCommandEncoder.insertCommandBuffer(commandBuffer);
-    }
-    
-    @Override
-    public void insertQueueItem(HgQueue.Item item) {
-        realCommandEncoder.insertQueueItem(item);
-    }
-    
-    @Override
-    public C3DRenderPass createBackendRenderPass(Supplier<String> debugGroup, GpuTextureView colorTexture, OptionalInt clearColor, @org.jetbrains.annotations.Nullable GpuTextureView depthTexture, OptionalDouble clearDepth) {
-        return realCommandEncoder.createBackendRenderPass(debugGroup, colorTexture, clearColor, depthTexture, clearDepth);
-    }
-    
-    @Override
-    public C3DRenderPass createBackendRenderPass(Supplier<String> debugGroup, HgRenderPass renderpass, HgFramebuffer framebuffer) {
-        return realCommandEncoder.createBackendRenderPass(debugGroup, renderpass, framebuffer);
     }
 }

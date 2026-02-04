@@ -18,7 +18,7 @@ public interface C3DCommandEncoder extends CommandEncoderBackend {
     
     void insertQueueItem(HgQueue.Item item);
     
-    C3DRenderPass createBackendRenderPass(Supplier<String> debugGroup, GpuTextureView colorTexture, OptionalInt clearColor, @Nullable GpuTextureView depthTexture, OptionalDouble clearDepth);
+    C3DRenderPass createRenderPass(Supplier<String> debugGroup, GpuTextureView colorTexture, OptionalInt clearColor, @Nullable GpuTextureView depthTexture, OptionalDouble clearDepth);
     
-    C3DRenderPass createBackendRenderPass(Supplier<String> debugGroup, HgRenderPass renderpass, HgFramebuffer framebuffer);
+    C3DRenderPass createRenderPass(Supplier<String> debugGroup, HgRenderPass renderpass, HgFramebuffer framebuffer);
 }

@@ -4,6 +4,7 @@ import com.mojang.blaze3d.buffers.GpuBuffer;
 import com.mojang.blaze3d.pipeline.CompiledRenderPipeline;
 import com.mojang.blaze3d.pipeline.RenderPipeline;
 import com.mojang.blaze3d.shaders.ShaderSource;
+import com.mojang.blaze3d.systems.CommandEncoderBackend;
 import com.mojang.blaze3d.systems.GpuDeviceBackend;
 import com.mojang.blaze3d.textures.*;
 import com.mojang.jtracy.TracyClient;
@@ -19,7 +20,7 @@ import java.util.function.Supplier;
 public class ProfilingGpuDevice implements GpuDeviceBackend {
     
     private final C3DGpuDevice realDevice;
-    private final C3DCommandEncoder commandEncoder;
+    private final CommandEncoderBackend commandEncoder;
     
     public ProfilingGpuDevice(C3DGpuDevice realDevice) {
         this.realDevice = realDevice;
@@ -27,7 +28,7 @@ public class ProfilingGpuDevice implements GpuDeviceBackend {
     }
     
     @Override
-    public C3DCommandEncoder createCommandEncoder() {
+    public CommandEncoderBackend createCommandEncoder() {
         return commandEncoder;
     }
     

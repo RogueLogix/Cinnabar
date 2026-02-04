@@ -7,6 +7,7 @@ import com.mojang.blaze3d.pipeline.RenderPipeline;
 import com.mojang.blaze3d.platform.NativeImage;
 import com.mojang.blaze3d.systems.GpuQuery;
 import com.mojang.blaze3d.systems.RenderPass;
+import com.mojang.blaze3d.systems.RenderPassBackend;
 import com.mojang.blaze3d.textures.GpuSampler;
 import com.mojang.blaze3d.textures.GpuTexture;
 import com.mojang.blaze3d.textures.GpuTextureView;
@@ -221,33 +222,28 @@ public class Hg3DCommandEncoder implements C3DCommandEncoder, Hg3DObject, Destro
     }
     
     @Override
-    public RenderPass createRenderPass(Supplier<String> debugGroup, GpuTextureView colorTexture, OptionalInt clearColor) {
-        return createRenderPass(debugGroup, colorTexture, clearColor, null, OptionalDouble.empty());
-    }
-    
-    @Override
-    public RenderPass createRenderPass(Supplier<String> debugGroup, GpuTextureView colorTexture, OptionalInt clearColor, @Nullable GpuTextureView depthTexture, OptionalDouble clearDepth) {
-        return new RenderPass(createBackendRenderPass(debugGroup, colorTexture, clearColor, depthTexture, clearDepth), this.device);
-    }
-    
-    @Override
     public boolean isInRenderPass() {
         return continuedRenderPass != null && continuedRenderPass.active;
     }
     
-    public Hg3DRenderPass createBackendRenderPass(Supplier<String> debugGroup, GpuTextureView colorTexture, OptionalInt clearColor, @Nullable GpuTextureView depthTexture, OptionalDouble clearDepth) {
+    @Override
+    public Hg3DRenderPass createRenderPass(Supplier<String> debugGroup, GpuTextureView colorTexture, OptionalInt clearColor) {
+        return createRenderPass(debugGroup, colorTexture, clearColor, null, OptionalDouble.empty());
+    }
+    
+    public Hg3DRenderPass createRenderPass(Supplier<String> debugGroup, GpuTextureView colorTexture, OptionalInt clearColor, @Nullable GpuTextureView depthTexture, OptionalDouble clearDepth) {
         final var hgRenderPass = device.getRenderPass(Hg3DConst.format(colorTexture.texture().getFormat()), depthTexture != null ? Hg3DConst.format(depthTexture.texture().getFormat()) : null);
         @Nullable
         final var depthView = depthTexture != null ? ((Hg3DGpuTextureView) depthTexture).imageView() : null;
         final var framebuffer = ((Hg3DGpuTextureView) colorTexture).getFramebuffer(hgRenderPass, depthView);
-        final var renderPass = createBackendRenderPass(debugGroup, hgRenderPass, framebuffer);
+        final var renderPass = createRenderPass(debugGroup, hgRenderPass, framebuffer);
         if (clearColor.isPresent()) {
             renderPass.clearAttachments(IntList.of(clearColor.getAsInt()), clearDepth.orElse(-1), 0, 0, framebuffer.width(), framebuffer.height());
         }
         return renderPass;
     }
     
-    public Hg3DRenderPass createBackendRenderPass(Supplier<String> debugGroup, HgRenderPass renderpass, HgFramebuffer framebuffer) {
+    public Hg3DRenderPass createRenderPass(Supplier<String> debugGroup, HgRenderPass renderpass, HgFramebuffer framebuffer) {
         // if all render params are the same continue the pass
         if (continuedRenderPass == null || continuedRenderPass.renderPass != renderpass || continuedRenderPass.framebuffer != framebuffer) {
             endRenderPass();
@@ -282,7 +278,7 @@ public class Hg3DCommandEncoder implements C3DCommandEncoder, Hg3DObject, Destro
                 // creating a renderpass needs texture views, but im only passed textures... amazing
                 final var colorTextureView = device.createTextureView(colorTexture);
                 final var depthTextureView = device.createTextureView(depthTexture);
-                final var renderpass = createBackendRenderPass(() -> "ClearColorDepthTextures", colorTextureView, OptionalInt.empty(), depthTextureView, OptionalDouble.empty())
+                final var renderpass = createRenderPass(() -> "ClearColorDepthTextures", colorTextureView, OptionalInt.empty(), depthTextureView, OptionalDouble.empty())
         ) {
             renderpass.clearAttachments(IntList.of(clearColor), clearDepth, scissorX, scissorY, scissorWidth, scissorHeight);
         }
