@@ -45,7 +45,9 @@ public class Hg3DRenderPipeline implements Hg3DObject, CompiledRenderPipeline, D
         this.info = pipeline;
         this.device = device;
         final var hgDevice = device.hgDevice();
+        @Nullable
         var vertexSource = shaderSourceCache.computeIfAbsent(new ShaderSourceCacheKey(pipeline.getVertexShader(), ShaderType.VERTEX), key -> shaderSourceProvider.get(key.location, key.type));
+        assert vertexSource != null;
         // TODO: remove this when the shader gets fixed
         if ("minecraft:core/entity".equals(pipeline.getVertexShader().toString())) {
             vertexSource = vertexSource.replace("overlayColor = texelFetch(Sampler1, UV1, 0);", """
@@ -54,7 +56,10 @@ public class Hg3DRenderPipeline implements Hg3DObject, CompiledRenderPipeline, D
                         #endif
                     """);
         }
+        vertexSource = vertexSource.replace(chunkSectionTarget, chunkSectionReplacement);
+        @Nullable
         final var fragmentSource = shaderSourceCache.computeIfAbsent(new ShaderSourceCacheKey(pipeline.getFragmentShader(), ShaderType.FRAGMENT), key -> shaderSourceProvider.get(key.location, key.type));
+        assert fragmentSource != null;
         final var glVertexGLSL = GlslPreprocessor.injectDefines(vertexSource, pipeline.getShaderDefines());
         final var glFragmentGLSL = GlslPreprocessor.injectDefines(fragmentSource, pipeline.getShaderDefines());
         
@@ -218,4 +223,83 @@ public class Hg3DRenderPipeline implements Hg3DObject, CompiledRenderPipeline, D
     
     record ShaderSourceCacheKey(Identifier location, ShaderType type) {
     }
+    
+    
+    private static final String chunkSectionTarget = """
+            layout(std140) uniform ChunkSection {
+                mat4 ModelViewMat;
+                float ChunkVisibility;
+                ivec2 TextureSize;
+                ivec3 ChunkPosition;
+            };
+            """;
+    private static final String chunkSectionReplacement = """
+            #ifdef CINNABAR_VK
+            
+            #if !defined(CINNABAR_VERTEX_SHADER) && !defined(CINNABAR_FRAGMENT_SHADER)
+            #error CINNABAR_VERTEX_SHADER or CINNABAR_FRAGMENT_SHADER must be defined
+            #endif
+            
+            #ifdef CINNABAR_VERTEX_SHADER
+            out flat int arrayIndex;
+            #else
+            in flat int arrayIndex;
+            #endif
+            
+            mat4 ModelViewMat;
+            float ChunkVisibility;
+            ivec2 TextureSize;
+            ivec3 ChunkPosition;
+            
+            struct CnkSection {
+                mat4 ModelViewMat;
+                float ChunkVisibility;
+                ivec2 TextureSize;
+                ivec3 ChunkPosition;
+                int padding1;
+            // std140 92 bytes, align 16, 96 byte array stride
+            #define REQUIRED_PADDING_VEC4S  ((((96 + (CINNABAR_UBO_ALIGNMENT - 1)) & ~(CINNABAR_UBO_ALIGNMENT - 1)) - 96) / 16)
+            #if REQUIRED_PADDING_VEC4S > 0
+                vec4[REQUIRED_PADDING_VEC4S] padding;
+            #endif
+            };
+            
+            layout(std140) buffer readonly ChunkSection {
+                CnkSection cnkSections[];
+            };
+            
+            void loadCnkSection() {
+                #ifdef CINNABAR_VERTEX_SHADER
+                // even with multidraw, base_instance can be used to index into it
+                // but this also works if im not doing multidraw
+                arrayIndex = gl_BaseInstance;
+                #endif
+                CnkSection section = cnkSections[arrayIndex];
+                ModelViewMat = section.ModelViewMat;
+                ChunkVisibility = section.ChunkVisibility;
+                TextureSize = section.TextureSize;
+                ChunkPosition = section.ChunkPosition;
+            }
+            
+            // overwrite the main func
+            void realMain();
+            
+            void main() {
+                loadCnkSection();
+                realMain();
+            }
+            
+            #define main realMain
+            
+            #else
+            
+            layout(std140) uniform ChunkSection {
+                mat4 ModelViewMat;
+                float ChunkVisibility;
+                ivec2 TextureSize;
+                ivec3 ChunkPosition;
+            };
+            
+            #endif
+            """;
 }

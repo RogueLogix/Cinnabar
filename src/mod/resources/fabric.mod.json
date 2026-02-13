@@ -23,7 +23,7 @@
   ],
   "depends": {
     "fabricloader": ">=0.18.4",
-    "minecraft": "26.1-alpha.6",
+    "minecraft": "26.1-alpha.7",
     "java": ">=25"
   },
   "accessWidener": "cinnabar.accesswidener"
