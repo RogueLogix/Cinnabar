@@ -759,6 +759,8 @@ public class Hg3DGpuBuffer extends GpuBuffer implements Hg3DObject, Destroyable 
             commandBuffer.end();
             if (anyCommandRecorded) {
                 commandEncoder.insertCommandBufferFirst(commandBuffer);
+            } else {
+                commandBuffer.destroy();
             }
         }
         
