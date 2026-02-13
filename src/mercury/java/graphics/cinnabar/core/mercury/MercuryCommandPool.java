@@ -6,11 +6,11 @@ import org.lwjgl.vulkan.VkCommandBuffer;
 import org.lwjgl.vulkan.VkCommandBufferAllocateInfo;
 import org.lwjgl.vulkan.VkCommandPoolCreateInfo;
 
+import static graphics.cinnabar.api.exceptions.VkException.checkVkCode;
 import static org.lwjgl.vulkan.VK10.*;
 
 public class MercuryCommandPool extends MercuryObject implements HgCommandBuffer.Pool {
     private static final int COMMAND_BUFFER_ALLOC_SIZE = 128;
-    
     
     private final boolean commandBufferReset;
     private final VkCommandBufferAllocateInfo allocInfo = VkCommandBufferAllocateInfo.calloc().sType$Default();
@@ -53,21 +53,26 @@ public class MercuryCommandPool extends MercuryObject implements HgCommandBuffer
                     final var buffers = stack.callocPointer(buffersToDelete.size());
                     for (int i = 0; i < buffersToDelete.size(); i++) {
                         buffers.put(i, buffersToDelete.getLong(i));
-                        vkFreeCommandBuffers(device.vkDevice(), poolHandle, buffers);
                     }
+                    vkFreeCommandBuffers(device.vkDevice(), poolHandle, buffers);
                 }
+                buffersToDelete.clear();
             }
             final var buffers = stack.callocPointer(COMMAND_BUFFER_ALLOC_SIZE);
-            vkAllocateCommandBuffers(device.vkDevice(), allocInfo, buffers);
+            checkVkCode(vkAllocateCommandBuffers(device.vkDevice(), allocInfo, buffers));
             for (int i = 0; i < COMMAND_BUFFER_ALLOC_SIZE; i++) {
-                newBuffers.push(buffers.get(i));
+                final long commandBufferHandle = buffers.get(i);
+                if (commandBufferHandle == 0) {
+                    throw new NullPointerException();
+                }
+                newBuffers.push(commandBufferHandle);
             }
         }
     }
     
     private void freeBuffer(VkCommandBuffer commandBuffer) {
         if (commandBufferReset) {
-            vkResetCommandBuffer(commandBuffer, VK_COMMAND_BUFFER_RESET_RELEASE_RESOURCES_BIT);
+            checkVkCode(vkResetCommandBuffer(commandBuffer, VK_COMMAND_BUFFER_RESET_RELEASE_RESOURCES_BIT));
             newBuffers.add(commandBuffer.address());
         } else {
             buffersToDelete.push(commandBuffer.address());
@@ -84,6 +89,6 @@ public class MercuryCommandPool extends MercuryObject implements HgCommandBuffer
     
     @Override
     public void reset() {
-        vkResetCommandPool(device.vkDevice(), poolHandle, 0);
+        checkVkCode(vkResetCommandPool(device.vkDevice(), poolHandle, 0));
     }
 }
