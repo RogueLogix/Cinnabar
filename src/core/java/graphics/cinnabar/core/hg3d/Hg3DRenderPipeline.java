@@ -56,7 +56,6 @@ public class Hg3DRenderPipeline implements Hg3DObject, CompiledRenderPipeline, D
                         #endif
                     """);
         }
-        vertexSource = vertexSource.replace(chunkSectionTarget, chunkSectionReplacement);
         @Nullable
         final var fragmentSource = shaderSourceCache.computeIfAbsent(new ShaderSourceCacheKey(pipeline.getFragmentShader(), ShaderType.FRAGMENT), key -> shaderSourceProvider.get(key.location, key.type));
         assert fragmentSource != null;
@@ -77,7 +76,8 @@ public class Hg3DRenderPipeline implements Hg3DObject, CompiledRenderPipeline, D
                 "in vec2 UV2;", "in ivec2 UV2;",
                 "gl_VertexID", "gl_VertexIndex",
                 "gl_InstanceID", "gl_InstanceIndex",
-                "samplerBuffer", "textureBuffer"
+                "samplerBuffer", "textureBuffer",
+                chunkSectionTarget, chunkSectionReplacement
         );
         
         var fixedUpVertexGLSL = glVertexGLSL;
