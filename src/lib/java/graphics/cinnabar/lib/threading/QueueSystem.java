@@ -14,6 +14,7 @@ public final class QueueSystem {
     private static int nextBackgroundQueue = 0;
     private static final ReferenceArrayList<WorkQueue.MultiThreaded> backgroundQueues = new ReferenceArrayList<>();
     private static final ReferenceArrayList<HgSemaphore.Op> hgSemaphores = new ReferenceArrayList<>();
+    private static final ReferenceArrayList<HgSemaphore.Op> hgSemaphoresWaitCopy = new ReferenceArrayList<>();
     
     public static WorkQueue createMainThreadQueue() {
         synchronized (mainThreadQueues) {
@@ -219,26 +220,32 @@ public final class QueueSystem {
         try {
             
             while (true) {
-                final var count = hgSemaphores.size();
-                if (count == 0) {
+                if (hgSemaphores.isEmpty()) {
                     synchronized (hgSemaphores) {
-                        try {
-                            hgSemaphores.wait();
-                        } catch (InterruptedException ignored) {
+                        if(hgSemaphores.isEmpty()) {
+                            try {
+                                hgSemaphores.wait();
+                            } catch (InterruptedException ignored) {
+                            }
                         }
                     }
                     continue;
                 }
                 final var hgDevice = hgSemaphores.getFirst().semaphore().device();
                 
-                for (int i = 0; i < count; i++) {
-                    final var semaphore = hgSemaphores.get(i);
+                synchronized (hgSemaphores){
+                    hgSemaphoresWaitCopy.clear();
+                    hgSemaphoresWaitCopy.addAll(hgSemaphores);
+                }
+                
+                for (int i = 0; i < hgSemaphoresWaitCopy.size(); i++) {
+                    final var semaphore = hgSemaphoresWaitCopy.get(i);
                     if (hgDevice != semaphore.semaphore().device()) {
                         System.exit(-1);
                     }
                 }
                 
-                hgDevice.waitSemaphores(hgSemaphores, -1, true);
+                hgDevice.waitSemaphores(hgSemaphoresWaitCopy, -1, true);
                 
                 wakeWorkers(-1);
                 wakeCleanupThread(-1);
