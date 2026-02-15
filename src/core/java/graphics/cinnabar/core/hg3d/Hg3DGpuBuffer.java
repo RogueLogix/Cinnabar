@@ -1,14 +1,11 @@
 package graphics.cinnabar.core.hg3d;
 
 import com.mojang.blaze3d.buffers.GpuBuffer;
-import com.mojang.blaze3d.vertex.DefaultVertexFormat;
-import graphics.cinnabar.api.hg.Hg;
 import graphics.cinnabar.api.hg.HgBuffer;
 import graphics.cinnabar.api.hg.HgCommandBuffer;
 import graphics.cinnabar.api.hg.HgQueue;
 import graphics.cinnabar.api.memory.MagicMemorySizes;
 import graphics.cinnabar.api.util.Destroyable;
-import graphics.cinnabar.api.util.UnsignedMath;
 import graphics.cinnabar.core.util.MagicNumbers;
 import graphics.cinnabar.lib.datastructures.SpliceableLinkedList;
 import org.jetbrains.annotations.Nullable;
@@ -17,7 +14,7 @@ import org.lwjgl.system.libc.LibCString;
 
 import java.nio.ByteBuffer;
 
-import static org.lwjgl.vulkan.VK10.*;
+import static org.lwjgl.vulkan.VK10.VK_BUFFER_USAGE_TRANSFER_DST_BIT;
 
 public class Hg3DGpuBuffer extends GpuBuffer implements Hg3DObject, Destroyable {
     private final Hg3DGpuDevice device;
@@ -31,8 +28,6 @@ public class Hg3DGpuBuffer extends GpuBuffer implements Hg3DObject, Destroyable 
     private HgBuffer buffer;
     @Nullable
     private HgBuffer.Slice slice;
-    @Nullable
-    private HgBuffer.Suballocator.Alloc alloc;
     // TODO: tihs could be better, PointerWrapper?
     private long evictedData;
     private long evictedDataSize;
@@ -86,9 +81,6 @@ public class Hg3DGpuBuffer extends GpuBuffer implements Hg3DObject, Destroyable 
         if (buffer != null) {
             buffer.destroy();
         }
-        if (alloc != null) {
-            alloc.destroy();
-        }
         MemoryUtil.memFree(sourceData);
         MemoryUtil.nmemFree(evictedData);
         manager.destroy(this);
@@ -141,14 +133,6 @@ public class Hg3DGpuBuffer extends GpuBuffer implements Hg3DObject, Destroyable 
             // anything mappable always has its preferred type, mappable
             return true;
         }
-        if (usage() == USAGE_VERTEX && alloc == null) {
-            // this buffer wants to be in the vertex pool
-            return false;
-        }
-        if (usage() == (USAGE_INDEX | USAGE_COPY_DST) && alloc == null) {
-            // this buffer wants to be in the index pool
-            return false;
-        }
         if (requestedMemory == HgBuffer.MemoryRequest.MAPPABLE_PREF_GPU) {
             // TODO: detect when we have mappable device memory, and return false here
             //       for now, consider it always preferred
@@ -166,33 +150,10 @@ public class Hg3DGpuBuffer extends GpuBuffer implements Hg3DObject, Destroyable 
         private HgCommandBuffer promotionCommandBuffer;
         private final HgBuffer emergencyEvictionBuffer;
         
-        private final HgBuffer vertexPoolBuffer;
-        private final HgBuffer.Suballocator vertexPoolAllocator;
-        private final SpliceableLinkedList<Hg3DGpuBuffer> pooledVertexBuffers = new SpliceableLinkedList<>();
-        
-        private final HgBuffer indexPoolBuffer;
-        private final HgBuffer.Suballocator indexPoolAllocator;
-        private final SpliceableLinkedList<Hg3DGpuBuffer> pooledIndexBuffers = new SpliceableLinkedList<>();
-        
         public Manager(Hg3DGpuDevice device) {
             this.device = device;
             emergencyEvictionBuffer = device.hgDevice().createBuffer(HgBuffer.MemoryRequest.CPU, MagicMemorySizes.MiB, VK_BUFFER_USAGE_TRANSFER_DST_BIT);
             device.hgDevice().setAllocFailedCallback(this::allocFailed);
-            // 50% of budget can be vertex
-            long vertexPoolSize = (device.hgDevice().deviceLocalMemoryStats().secondLong() >> 1) & Long.MAX_VALUE; // just in case that top bit is set to 1
-            // for UMA, halve that again, to leave something for the CPU
-            if (device.hgDevice().UMA()) {
-                vertexPoolSize >>= 1;
-            }
-            vertexPoolSize = Math.min(Hg.debugLogging() ? (256 * MagicMemorySizes.MiB) : Integer.MAX_VALUE, vertexPoolSize);
-            vertexPoolSize = UnsignedMath.min(device.hgDevice().properties().maxMemoryAllocSize(), vertexPoolSize);
-            vertexPoolBuffer = device.hgDevice().createBuffer(HgBuffer.MemoryRequest.GPU, vertexPoolSize, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT);
-            vertexPoolAllocator = new HgBuffer.Suballocator(vertexPoolBuffer);
-            
-            // index pool 1/4th that of the vertex
-            long indexPoolSize = vertexPoolSize / 4;
-            indexPoolBuffer = device.hgDevice().createBuffer(HgBuffer.MemoryRequest.GPU, indexPoolSize, VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
-            indexPoolAllocator = new HgBuffer.Suballocator(indexPoolBuffer);
         }
         
         @Override
@@ -227,41 +188,19 @@ public class Hg3DGpuBuffer extends GpuBuffer implements Hg3DObject, Destroyable 
         
         public void destroy(Hg3DGpuBuffer buffer) {
             if (buffer.usageListNode.linked()) {
-                if (buffer.buffer != null) {
-                    liveBuffers.remove(buffer.usageListNode);
-                } else {
-                    if (buffer.usage() == USAGE_VERTEX) {
-                        pooledVertexBuffers.remove(buffer.usageListNode);
-                    } else {
-                        pooledIndexBuffers.remove(buffer.usageListNode);
-                    }
-                }
+                assert (buffer.buffer != null);
+                liveBuffers.remove(buffer.usageListNode);
             }
             buffer.buffer = null;
             buffer.slice = null;
-            buffer.alloc = null;
             buffer.evictedData = 0;
         }
         
         public void used(Hg3DGpuBuffer buffer) {
-            if (buffer.alloc != null) {
-                if (buffer.usage() == USAGE_VERTEX) {
-                    if (buffer.usageListNode.linked()) {
-                        return;
-                    }
-                    pooledVertexBuffers.add(buffer.usageListNode);
-                } else {
-                    if (buffer.usageListNode.linked()) {
-                        return;
-                    }
-                    pooledIndexBuffers.add(buffer.usageListNode);
-                }
-            } else {
-                if (buffer.usageListNode.linked()) {
-                    liveBuffers.remove(buffer.usageListNode);
-                }
-                liveBuffers.add(buffer.usageListNode);
+            if (buffer.usageListNode.linked()) {
+                liveBuffers.remove(buffer.usageListNode);
             }
+            liveBuffers.add(buffer.usageListNode);
         }
         
         private void endPromotionCommandBuffer() {
@@ -459,26 +398,6 @@ public class Hg3DGpuBuffer extends GpuBuffer implements Hg3DObject, Destroyable 
             // buffer is about to be used, and doesn't have any backing HgBuffer.Slice
             // it needs something to work with _immediately_
             
-            if (buffer.usage() == USAGE_VERTEX) {
-                // static vertex buffer
-                // can use pool, if there is space
-                // most vertex buffers use the BLOCK format, so align to that
-                // in reality, a different pool should be used for each format, but i have no insight into the actual format getting used
-                buffer.alloc = vertexPoolAllocator.alloc(buffer.size(), DefaultVertexFormat.BLOCK.getVertexSize());
-                if (buffer.alloc != null) {
-                    buffer.slice = buffer.alloc.slice();
-                    buffer.memoryType = buffer.slice.buffer().memoryType();
-                }
-            } else if (buffer.usage() == (USAGE_COPY_DST | USAGE_INDEX)) {
-                // index buffer
-                // can use pool, if there is space
-                buffer.alloc = indexPoolAllocator.alloc(buffer.size(), 4);
-                if (buffer.alloc != null) {
-                    buffer.slice = buffer.alloc.slice();
-                    buffer.memoryType = buffer.slice.buffer().memoryType();
-                }
-            }
-            
             if (buffer.slice == null) {
                 buffer.buffer = device.hgDevice().tryCreateBuffer(buffer.requestedMemory, buffer.size(), Hg3DConst.bufferUsageBits(buffer.usage()));
                 if (buffer.buffer == null) {
@@ -527,10 +446,6 @@ public class Hg3DGpuBuffer extends GpuBuffer implements Hg3DObject, Destroyable 
         }
         
         private void promoteToDevice(Hg3DGpuBuffer buffer) {
-            if (buffer.alloc != null) {
-                // ignore anything allocated from a pool
-                return;
-            }
             if (lastPromotionFailedFrame == device.currentFrame()) {
                 // if another promotion failed this frame, just skip an attempt this frame
                 // the demotion step will make room, if it can
@@ -542,40 +457,18 @@ public class Hg3DGpuBuffer extends GpuBuffer implements Hg3DObject, Destroyable 
             assert buffer.slice != null;
             final var oldSlice = buffer.slice;
             
-            if (buffer.usage() == USAGE_VERTEX) {
-                buffer.alloc = vertexPoolAllocator.alloc(buffer.size(), DefaultVertexFormat.BLOCK.getVertexSize());
-                if (buffer.alloc == null) {
-                    // pool alloc failed, its fine wherever its at then
-                    return;
-                }
-                buffer.buffer = null;
-                buffer.slice = buffer.alloc.slice();
-                buffer.memoryType = buffer.slice.buffer().memoryType();
-            } else if (buffer.usage() == (USAGE_COPY_DST | USAGE_INDEX)) {
-                // index buffer
-                // can use pool, if there is space
-                buffer.alloc = indexPoolAllocator.alloc(buffer.size(), 4);
-                if (buffer.alloc == null) {
-                    // pool alloc failed, its fine wherever its at then
-                    return;
-                }
-                buffer.buffer = null;
-                buffer.slice = buffer.alloc.slice();
-                buffer.memoryType = buffer.slice.buffer().memoryType();
-            } else {
-                @Nullable
-                final var newBuffer = device.hgDevice().tryCreateBuffer(HgBuffer.MemoryRequest.GPU, buffer.size(), Hg3DConst.bufferUsageBits(buffer.usage()));
-                if (newBuffer == null) {
-                    // alloc failed, this is ok, the auto-demote process should make room next frame
-                    // skip any other device promotions this frame though, we are out of room
-                    lastPromotionFailedFrame = device.currentFrame();
-                    return;
-                }
-                assert newBuffer.memoryType().gpuLocal;
-                buffer.buffer = newBuffer;
-                buffer.slice = newBuffer.slice();
-                buffer.memoryType = buffer.slice.buffer().memoryType();
+            @Nullable final var newBuffer = device.hgDevice().tryCreateBuffer(HgBuffer.MemoryRequest.GPU, buffer.size(), Hg3DConst.bufferUsageBits(buffer.usage()));
+            if (newBuffer == null) {
+                // alloc failed, this is ok, the auto-demote process should make room next frame
+                // skip any other device promotions this frame though, we are out of room
+                lastPromotionFailedFrame = device.currentFrame();
+                return;
             }
+            assert newBuffer.memoryType().gpuLocal;
+            buffer.buffer = newBuffer;
+            buffer.slice = newBuffer.slice();
+            buffer.memoryType = buffer.slice.buffer().memoryType();
+            
             device.destroyEndOfFrame(oldBuffer);
             if (promotionCommandBuffer == null) {
                 device.createCommandEncoder().addFlushCallback(this::endPromotionCommandBuffer);
@@ -589,8 +482,7 @@ public class Hg3DGpuBuffer extends GpuBuffer implements Hg3DObject, Destroyable 
         
         private void autoDemote() {
             {
-                @Nullable
-                final var first = liveBuffers.peekFirst();
+                @Nullable final var first = liveBuffers.peekFirst();
                 if (first != null && first.data.isInFlight()) {
                     // everything live is in-flight, can't purge anything from VK
                     return;
@@ -670,8 +562,7 @@ public class Hg3DGpuBuffer extends GpuBuffer implements Hg3DObject, Destroyable 
                         continue;
                     }
                     
-                    @Nullable
-                    final var newBuffer = device.hgDevice().tryCreateBuffer(HgBuffer.MemoryRequest.CPU, currentBuffer.size(), Hg3DConst.bufferUsageBits(currentBuffer.usage()));
+                    @Nullable final var newBuffer = device.hgDevice().tryCreateBuffer(HgBuffer.MemoryRequest.CPU, currentBuffer.size(), Hg3DConst.bufferUsageBits(currentBuffer.usage()));
                     if (newBuffer == null) {
                         // alloc failed, next demotion cycle(s) should free enough to demote this buffer
                         break;
@@ -689,68 +580,6 @@ public class Hg3DGpuBuffer extends GpuBuffer implements Hg3DObject, Destroyable 
                     // for demotion process, consider it used
                     used(currentBuffer);
                     currentUsage -= currentBuffer.size();
-                }
-            }
-            
-            // stage 3, anything not in-flight in the vertex pool will get yote
-            // notable that these are all static data buffers, so they can be yote without other considerations
-            {
-                for (
-                        @Nullable var currentNode = pooledVertexBuffers.peekFirst();
-                        currentNode != null;
-                ) {
-                    if (currentNode.data.isInFlight()) {
-                        currentNode = currentNode.next();
-                        continue;
-                    }
-                    
-                    assert currentNode.data.sourceData != null;
-                    assert currentNode.data.alloc != null;
-                    currentNode.data.alloc.destroy();
-                    currentNode.data.alloc = null;
-                    currentNode.data.slice = null;
-                    final var toRemove = currentNode;
-                    currentNode = currentNode.next();
-                    pooledVertexBuffers.remove(toRemove);
-                }
-            }
-            
-            // stage 4, anything not in-flight in the index pool will get demoted to CPU-local memory
-            {
-                for (
-                        @Nullable var currentNode = pooledIndexBuffers.peekFirst();
-                        currentNode != null;
-                ) {
-                    final var currentBuffer = currentNode.data;
-                    assert currentBuffer.alloc != null;
-                    if (currentBuffer.isInFlight()) {
-                        currentNode = currentNode.next();
-                        continue;
-                    }
-                    
-                    @Nullable
-                    final var newBuffer = device.hgDevice().tryCreateBuffer(HgBuffer.MemoryRequest.CPU, currentBuffer.size(), Hg3DConst.bufferUsageBits(currentBuffer.usage()));
-                    if (newBuffer == null) {
-                        // alloc failed, next demotion cycle(s) should free enough to demote this buffer
-                        break;
-                    }
-                    assert newBuffer.memoryType().cpuLocal; // because UMA, assert that its CPU local, rather than not GPU local
-                    assert newBuffer.memoryType().mappable;
-                    assert currentBuffer.buffer == null;
-                    device.destroyEndOfFrame(currentBuffer.alloc);
-                    commandBuffer.copyBufferToBuffer(currentBuffer.alloc.slice(), newBuffer.slice());
-                    anyCommandRecorded = true;
-                    currentBuffer.alloc = null;
-                    currentBuffer.buffer = newBuffer;
-                    currentBuffer.slice = newBuffer.slice();
-                    currentBuffer.memoryType = currentBuffer.slice.buffer().memoryType();
-                    
-                    final var toRemove = currentNode;
-                    currentNode = currentNode.next();
-                    pooledIndexBuffers.remove(toRemove);
-                    // for demotion process, consider it used
-                    used(currentBuffer);
-                    
                 }
             }
             
