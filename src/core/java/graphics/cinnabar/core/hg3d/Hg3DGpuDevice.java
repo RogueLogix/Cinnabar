@@ -127,6 +127,18 @@ public class Hg3DGpuDevice implements C3DGpuDevice {
         interFrameSemaphore.waitValue(currentFrame + 1, -1L);
         interFrameSemaphore.destroy();
         
+        int cleanSweepDestroy = 0;
+        while(cleanSweepDestroy < pendingDestroys.size()) {
+            cleanSweepDestroy++;
+            activelyDestroying = pendingDestroys.set((int) (currentFrame % MagicNumbers.MaximumFramesInFlight), activelyDestroying);
+            for (int i = 0; i < activelyDestroying.size(); i++) {
+                activelyDestroying.get(i).destroy();
+                cleanSweepDestroy = 0;
+            }
+            activelyDestroying.clear();
+            currentFrame++;
+        }
+        
         QueueSystem.deviceShutdown(hgDevice);
         
         bufferManager.destroy();
@@ -180,15 +192,17 @@ public class Hg3DGpuDevice implements C3DGpuDevice {
     
     @Override
     public GpuTexture createTexture(@Nullable Supplier<String> label, int usage, TextureFormat format, int width, int height, int depthOrLayers, int mipLevels) {
+        @Nullable
+        final var labelStr = label != null ? label.get() : null;
         assert mipLevels <= Integer.numberOfTrailingZeros(Math.max(width, height)) + 1;
-        final var texture = new Hg3DGpuTexture(this, usage, "TODO: replace me", format, width, height, depthOrLayers, mipLevels);
+        final var texture = new Hg3DGpuTexture(this, usage, labelStr != null ? labelStr : "Unknown Texture", format, width, height, depthOrLayers, mipLevels);
         createCommandEncoder().setupTexture(texture);
         return texture;
     }
     
     @Override
     public GpuTexture createTexture(@Nullable String label, int usage, TextureFormat format, int width, int height, int depthOrLayers, int mipLevels) {
-        final var texture = new Hg3DGpuTexture(this, usage, "TODO: replace me", format, width, height, depthOrLayers, mipLevels);
+        final var texture = new Hg3DGpuTexture(this, usage, label != null ? label : "Unknown Texture", format, width, height, depthOrLayers, mipLevels);
         createCommandEncoder().setupTexture(texture);
         return texture;
     }
@@ -205,7 +219,7 @@ public class Hg3DGpuDevice implements C3DGpuDevice {
     
     @Override
     public GpuBuffer createBuffer(@Nullable Supplier<String> label, int usage, long size) {
-        return bufferManager.create(usage, size, 32, null);
+        return bufferManager.create(label, usage, size, 32, null);
     }
     
     @Override
@@ -218,10 +232,10 @@ public class Hg3DGpuDevice implements C3DGpuDevice {
             } else if (labelStr.startsWith("Immediate vertex buffer")) {
                 // this is an immediate buffer, it'll be used _exactly once_
                 // to prevent unneeded memcpys, im going to pull bullshit for uploading it
-                return bufferManager.createImmediate(usage, data.remaining(), data);
+                return bufferManager.createImmediate(label, usage, data.remaining(), data);
             }
         }
-        return bufferManager.create(usage, data.remaining(), 32, data);
+        return bufferManager.create(label, usage, data.remaining(), 32, data);
     }
     
     @Override

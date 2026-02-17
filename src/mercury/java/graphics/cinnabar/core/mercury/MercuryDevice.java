@@ -18,7 +18,7 @@ import java.util.List;
 
 import static graphics.cinnabar.core.mercury.Mercury.MEMORY_STACK;
 import static org.lwjgl.util.vma.Vma.*;
-import static org.lwjgl.vulkan.EXTDebugMarker.VK_EXT_DEBUG_MARKER_EXTENSION_NAME;
+import static org.lwjgl.vulkan.EXTDebugUtils.VK_EXT_DEBUG_UTILS_EXTENSION_NAME;
 import static org.lwjgl.vulkan.EXTDebugUtils.vkDestroyDebugUtilsMessengerEXT;
 import static org.lwjgl.vulkan.VK12.*;
 
@@ -390,7 +390,21 @@ public class MercuryDevice implements HgDevice {
         }
     }
     
-    public boolean debugMarkerEnabled() {
-        return enabledDeviceExtensions.contains(VK_EXT_DEBUG_MARKER_EXTENSION_NAME);
+    public boolean debugUtilsEnabled() {
+        return enabledLayersAndInstanceExtensions.contains(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
+    }
+    
+    @Override
+    public HgDevice setName(String label) {
+        if (debugUtilsEnabled()) {
+            try (final var stack = memoryStack().push()) {
+                final var nameInfo = VkDebugUtilsObjectNameInfoEXT.calloc(stack).sType$Default();
+                nameInfo.pObjectName(stack.UTF8(label));
+                nameInfo.objectHandle(vkDevice.address());
+                nameInfo.objectType(VK_OBJECT_TYPE_DEVICE);
+                EXTDebugUtils.vkSetDebugUtilsObjectNameEXT(vkDevice, nameInfo);
+            }
+        }
+        return this;
     }
 }

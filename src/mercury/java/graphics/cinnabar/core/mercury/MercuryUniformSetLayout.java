@@ -1,6 +1,7 @@
 package graphics.cinnabar.core.mercury;
 
 import graphics.cinnabar.api.hg.HgUniformSet;
+import it.unimi.dsi.fastutil.longs.LongIntImmutablePair;
 import it.unimi.dsi.fastutil.objects.ReferenceImmutableList;
 import org.lwjgl.vulkan.VkDescriptorSetLayoutBinding;
 import org.lwjgl.vulkan.VkDescriptorSetLayoutCreateInfo;
@@ -10,7 +11,7 @@ import java.util.List;
 import static graphics.cinnabar.api.exceptions.VkException.checkVkCode;
 import static org.lwjgl.vulkan.VK10.*;
 
-public class MercuryUniformSetLayout extends MercuryObject implements HgUniformSet.Layout {
+public class MercuryUniformSetLayout extends MercuryObject<HgUniformSet.Layout> implements HgUniformSet.Layout {
     public final long handle;
     private final List<Binding> bindings;
     
@@ -59,5 +60,10 @@ public class MercuryUniformSetLayout extends MercuryObject implements HgUniformS
     @Override
     public MercuryUniformSetPool createPool(HgUniformSet.Pool.CreateInfo createInfo) {
         return new MercuryUniformSetPool(this, createInfo);
+    }
+    
+    @Override
+    protected LongIntImmutablePair handleAndType() {
+        return new LongIntImmutablePair(handle, VK_OBJECT_TYPE_DESCRIPTOR_SET_LAYOUT);
     }
 }

@@ -2,12 +2,12 @@ package graphics.cinnabar.core.mercury;
 
 import graphics.cinnabar.api.hg.HgBuffer;
 import graphics.cinnabar.api.hg.enums.HgFormat;
+import it.unimi.dsi.fastutil.longs.LongIntImmutablePair;
 import org.lwjgl.vulkan.VkBufferViewCreateInfo;
 
-import static org.lwjgl.vulkan.VK10.vkCreateBufferView;
-import static org.lwjgl.vulkan.VK10.vkDestroyBufferView;
+import static org.lwjgl.vulkan.VK10.*;
 
-public class MercuryBufferView extends MercuryObject implements HgBuffer.View {
+public class MercuryBufferView extends MercuryObject<HgBuffer.View> implements HgBuffer.View {
     private final long handle;
     
     public MercuryBufferView(MercuryBuffer buffer, HgFormat format, long offset, long size) {
@@ -31,5 +31,10 @@ public class MercuryBufferView extends MercuryObject implements HgBuffer.View {
     
     public long vkBufferView() {
         return handle;
+    }
+    
+    @Override
+    protected LongIntImmutablePair handleAndType() {
+        return new LongIntImmutablePair(handle, VK_OBJECT_TYPE_BUFFER_VIEW);
     }
 }

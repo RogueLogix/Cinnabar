@@ -1,6 +1,7 @@
 package graphics.cinnabar.core.mercury;
 
 import graphics.cinnabar.api.hg.HgRenderPass;
+import it.unimi.dsi.fastutil.longs.LongIntImmutablePair;
 import org.lwjgl.vulkan.VkAttachmentDescription2;
 import org.lwjgl.vulkan.VkAttachmentReference2;
 import org.lwjgl.vulkan.VkRenderPassCreateInfo2;
@@ -10,7 +11,7 @@ import static graphics.cinnabar.api.exceptions.VkException.checkVkCode;
 import static org.lwjgl.vulkan.VK10.*;
 import static org.lwjgl.vulkan.VK12.vkCreateRenderPass2;
 
-public class MercuryRenderPass extends MercuryObject implements HgRenderPass {
+public class MercuryRenderPass extends MercuryObject<HgRenderPass> implements HgRenderPass {
     
     private final long handle;
     private final int colorAttachmentCount;
@@ -86,5 +87,10 @@ public class MercuryRenderPass extends MercuryObject implements HgRenderPass {
     @Override
     public int colorAttachmentCount() {
         return colorAttachmentCount;
+    }
+    
+    @Override
+    protected LongIntImmutablePair handleAndType() {
+        return new LongIntImmutablePair(handle, VK_OBJECT_TYPE_RENDER_PASS);
     }
 }

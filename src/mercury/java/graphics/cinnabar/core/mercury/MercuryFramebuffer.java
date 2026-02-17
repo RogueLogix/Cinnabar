@@ -1,12 +1,12 @@
 package graphics.cinnabar.core.mercury;
 
 import graphics.cinnabar.api.hg.HgFramebuffer;
+import it.unimi.dsi.fastutil.longs.LongIntImmutablePair;
 import org.lwjgl.vulkan.VkFramebufferCreateInfo;
 
-import static org.lwjgl.vulkan.VK10.vkCreateFramebuffer;
-import static org.lwjgl.vulkan.VK10.vkDestroyFramebuffer;
+import static org.lwjgl.vulkan.VK10.*;
 
-public class MercuryFramebuffer extends MercuryObject implements HgFramebuffer {
+public class MercuryFramebuffer extends MercuryObject<HgFramebuffer> implements HgFramebuffer {
     private final long handle;
     private final int width;
     private final int height;
@@ -56,5 +56,10 @@ public class MercuryFramebuffer extends MercuryObject implements HgFramebuffer {
     @Override
     public int height() {
         return height;
+    }
+    
+    @Override
+    protected LongIntImmutablePair handleAndType() {
+        return new LongIntImmutablePair(handle, VK_OBJECT_TYPE_FRAMEBUFFER);
     }
 }

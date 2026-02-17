@@ -13,7 +13,7 @@ import org.joml.Vector4fc;
 import java.util.List;
 
 @ApiStatus.NonExtendable
-public interface HgGraphicsPipeline extends HgObject {
+public interface HgGraphicsPipeline extends HgObject<HgGraphicsPipeline> {
     
     @Constant
     @ThreadSafety.Many
@@ -28,7 +28,7 @@ public interface HgGraphicsPipeline extends HgObject {
         TRIANGLE_FAN,
     }
     
-    interface ShaderSet extends HgObject {
+    interface ShaderSet extends HgObject<ShaderSet> {
         
         @Constant
         @Nullable
@@ -90,7 +90,7 @@ public interface HgGraphicsPipeline extends HgObject {
     }
     
     @ApiStatus.NonExtendable
-    interface Layout extends HgObject {
+    interface Layout extends HgObject<Layout> {
         
         @Constant
         @ThreadSafety.Many

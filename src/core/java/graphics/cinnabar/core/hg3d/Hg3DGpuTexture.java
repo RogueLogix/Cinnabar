@@ -17,6 +17,7 @@ public class Hg3DGpuTexture extends GpuTexture implements Hg3DObject {
         this.device = device;
         final var flags = (usage & GpuTexture.USAGE_CUBEMAP_COMPATIBLE) != 0 ? VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT : 0;
         image = device.hgDevice().createImage(HgImage.Type.TYPE_2D, Hg3DConst.format(format), width, height, 1, depthOrLayers, mipLevels, Hg3DConst.textureUsageBits(usage, format.hasColorAspect()), flags, false);
+        image.setName(label);
     }
     
     @Override

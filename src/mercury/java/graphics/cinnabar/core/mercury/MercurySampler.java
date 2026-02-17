@@ -2,12 +2,13 @@ package graphics.cinnabar.core.mercury;
 
 import graphics.cinnabar.api.hg.HgSampler;
 import graphics.cinnabar.api.hg.enums.HgCompareOp;
+import it.unimi.dsi.fastutil.longs.LongIntImmutablePair;
 import org.lwjgl.vulkan.VkSamplerCreateInfo;
 
 import static graphics.cinnabar.api.exceptions.VkException.checkVkCode;
 import static org.lwjgl.vulkan.VK10.*;
 
-public class MercurySampler extends MercuryObject implements HgSampler {
+public class MercurySampler extends MercuryObject<HgSampler> implements HgSampler {
     
     private final long handle;
     
@@ -47,5 +48,10 @@ public class MercurySampler extends MercuryObject implements HgSampler {
     
     public long vkSampler() {
         return handle;
+    }
+    
+    @Override
+    protected LongIntImmutablePair handleAndType() {
+        return new LongIntImmutablePair(handle, VK_OBJECT_TYPE_SAMPLER);
     }
 }

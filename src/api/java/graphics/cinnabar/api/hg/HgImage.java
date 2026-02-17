@@ -6,7 +6,7 @@ import org.joml.Vector3i;
 import org.joml.Vector3ic;
 
 @ApiStatus.NonExtendable
-public interface HgImage extends HgObject {
+public interface HgImage extends HgObject<HgImage> {
     
     Type type();
     
@@ -51,7 +51,7 @@ public interface HgImage extends HgObject {
     }
     
     @ApiStatus.NonExtendable
-    interface View extends HgObject {
+    interface View extends HgObject<View> {
         HgImage image();
         
         Type type();

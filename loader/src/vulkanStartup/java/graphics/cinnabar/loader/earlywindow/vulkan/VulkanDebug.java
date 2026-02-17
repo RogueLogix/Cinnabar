@@ -12,7 +12,7 @@ import java.io.PrintWriter;
 import java.io.StringWriter;
 
 import static org.lwjgl.vulkan.EXTDebugUtils.*;
-import static org.lwjgl.vulkan.VK10.VK_FALSE;
+import static org.lwjgl.vulkan.VK10.VK_TRUE;
 
 public class VulkanDebug extends VkDebugUtilsMessengerCallbackEXT {
     private static final Logger LOGGER = LogUtils.getLogger();
@@ -87,7 +87,7 @@ public class VulkanDebug extends VkDebugUtilsMessengerCallbackEXT {
             // force a segfault, aka crash the JVM immediately
             MemoryUtil.memSet(0L, 0, 1L);
         }
-        return VK_FALSE;
+        return VK_TRUE;
     }
     
     public enum MessageSeverity {

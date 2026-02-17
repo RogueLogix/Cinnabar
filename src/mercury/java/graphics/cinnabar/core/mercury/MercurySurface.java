@@ -2,11 +2,13 @@ package graphics.cinnabar.core.mercury;
 
 import graphics.cinnabar.api.hg.HgSurface;
 import graphics.cinnabar.loader.earlywindow.GLFWClassloadHelper;
+import it.unimi.dsi.fastutil.longs.LongIntImmutablePair;
 import org.jetbrains.annotations.Nullable;
 
+import static org.lwjgl.vulkan.KHRSurface.VK_OBJECT_TYPE_SURFACE_KHR;
 import static org.lwjgl.vulkan.KHRSurface.vkDestroySurfaceKHR;
 
-public class MercurySurface extends MercuryObject implements HgSurface {
+public class MercurySurface extends MercuryObject<HgSurface> implements HgSurface {
     private final long glfwWindow;
     private final long handle;
     
@@ -36,5 +38,10 @@ public class MercurySurface extends MercuryObject implements HgSurface {
     
     public long vkSurface() {
         return handle;
+    }
+    
+    @Override
+    protected LongIntImmutablePair handleAndType() {
+        return new LongIntImmutablePair(handle, VK_OBJECT_TYPE_SURFACE_KHR);
     }
 }

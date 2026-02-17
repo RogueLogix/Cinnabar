@@ -2,6 +2,7 @@ package graphics.cinnabar.core.mercury;
 
 import graphics.cinnabar.api.hg.HgGraphicsPipeline;
 import graphics.cinnabar.api.hg.HgUniformSet;
+import it.unimi.dsi.fastutil.longs.LongIntImmutablePair;
 import it.unimi.dsi.fastutil.objects.ReferenceImmutableList;
 import org.jetbrains.annotations.Nullable;
 import org.lwjgl.vulkan.VkPipelineLayoutCreateInfo;
@@ -12,7 +13,7 @@ import java.util.List;
 import static graphics.cinnabar.api.exceptions.VkException.checkVkCode;
 import static org.lwjgl.vulkan.VK10.*;
 
-public class MercuryGraphicsPipelineLayout extends MercuryObject implements HgGraphicsPipeline.Layout {
+public class MercuryGraphicsPipelineLayout extends MercuryObject<HgGraphicsPipeline.Layout> implements HgGraphicsPipeline.Layout {
     private final long handle;
     private final List<HgUniformSet.Layout> uniformSetLayouts;
     
@@ -56,5 +57,10 @@ public class MercuryGraphicsPipelineLayout extends MercuryObject implements HgGr
     @Nullable
     public HgUniformSet.Layout uniformSetLayout(int setIndex) {
         return uniformSetLayouts.get(setIndex);
+    }
+    
+    @Override
+    protected LongIntImmutablePair handleAndType() {
+        return new LongIntImmutablePair(handle, VK_OBJECT_TYPE_PIPELINE_LAYOUT);
     }
 }

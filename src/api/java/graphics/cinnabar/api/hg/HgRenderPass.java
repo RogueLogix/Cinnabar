@@ -9,7 +9,7 @@ import org.jetbrains.annotations.Nullable;
 import java.util.List;
 
 @ApiStatus.NonExtendable
-public interface HgRenderPass extends HgObject {
+public interface HgRenderPass extends HgObject<HgRenderPass> {
     @Constant
     @ThreadSafety.Many
     int colorAttachmentCount();

@@ -3,6 +3,7 @@ package graphics.cinnabar.core.mercury;
 import graphics.cinnabar.api.hg.HgSurface;
 import graphics.cinnabar.api.util.Destroyable;
 import it.unimi.dsi.fastutil.longs.LongArrayList;
+import it.unimi.dsi.fastutil.longs.LongIntImmutablePair;
 import it.unimi.dsi.fastutil.longs.LongList;
 import it.unimi.dsi.fastutil.longs.LongLists;
 import it.unimi.dsi.fastutil.objects.ReferenceArrayList;
@@ -16,7 +17,7 @@ import static org.lwjgl.vulkan.KHRSurface.*;
 import static org.lwjgl.vulkan.KHRSwapchain.*;
 import static org.lwjgl.vulkan.VK10.*;
 
-public class MercurySwapchain extends MercuryObject implements HgSurface.Swapchain {
+public class MercurySwapchain extends MercuryObject<HgSurface.Swapchain> implements HgSurface.Swapchain {
     
     public static final int[] VSyncPresentModeOrder = new int[]{
             VK_PRESENT_MODE_MAILBOX_KHR, // triple buffering, should add a toggle for this
@@ -265,5 +266,10 @@ public class MercurySwapchain extends MercuryObject implements HgSurface.Swapcha
     public long currentVkImage() {
         assert currentImageIndex != -1;
         return swapchainImages.getLong(currentImageIndex);
+    }
+    
+    @Override
+    protected LongIntImmutablePair handleAndType() {
+        return new LongIntImmutablePair(handle, VK_OBJECT_TYPE_SWAPCHAIN_KHR);
     }
 }

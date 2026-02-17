@@ -1,6 +1,7 @@
 package graphics.cinnabar.core.mercury;
 
 import graphics.cinnabar.api.hg.HgSemaphore;
+import it.unimi.dsi.fastutil.longs.LongIntImmutablePair;
 import org.lwjgl.vulkan.VkSemaphoreCreateInfo;
 import org.lwjgl.vulkan.VkSemaphoreSignalInfo;
 import org.lwjgl.vulkan.VkSemaphoreTypeCreateInfo;
@@ -8,7 +9,7 @@ import org.lwjgl.vulkan.VkSemaphoreWaitInfo;
 
 import static org.lwjgl.vulkan.VK12.*;
 
-public class MercurySemaphore extends MercuryObject implements HgSemaphore {
+public class MercurySemaphore extends MercuryObject<HgSemaphore> implements HgSemaphore {
     
     private final long handle;
     
@@ -67,5 +68,10 @@ public class MercurySemaphore extends MercuryObject implements HgSemaphore {
             signalInfo.value(value);
             vkSignalSemaphore(device.vkDevice(), signalInfo);
         }
+    }
+    
+    @Override
+    protected LongIntImmutablePair handleAndType() {
+        return new LongIntImmutablePair(handle, VK_OBJECT_TYPE_SEMAPHORE);
     }
 }

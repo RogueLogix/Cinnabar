@@ -13,6 +13,7 @@ import org.lwjgl.system.MemoryUtil;
 import org.lwjgl.system.libc.LibCString;
 
 import java.nio.ByteBuffer;
+import java.util.function.Supplier;
 
 import static org.lwjgl.vulkan.VK10.VK_BUFFER_USAGE_TRANSFER_DST_BIT;
 
@@ -21,6 +22,7 @@ public class Hg3DGpuBuffer extends GpuBuffer implements Hg3DObject, Destroyable 
     private final HgBuffer.MemoryRequest requestedMemory;
     private boolean isClosed = false;
     private final Manager manager;
+    private final @Nullable Supplier<String> label;
     
     @Nullable
     private final ByteBuffer sourceData;
@@ -39,10 +41,11 @@ public class Hg3DGpuBuffer extends GpuBuffer implements Hg3DObject, Destroyable 
     private final SpliceableLinkedList.Node<Hg3DGpuBuffer> usageListNode = new SpliceableLinkedList.Node<>(this);
     private long lastUsedFrame = -1;
     
-    private Hg3DGpuBuffer(Manager manager, int usage, long size, @Nullable ByteBuffer sourceData) {
+    private Hg3DGpuBuffer(Manager manager, @Nullable Supplier<String> label, int usage, long size, @Nullable ByteBuffer sourceData) {
         super(usage, size);
         this.device = manager.device;
         this.manager = manager;
+        this.label = label;
         if (sourceData != null) {
             // make a copy, because we own this buffer
             final var newSourceData = MemoryUtil.memAlloc(sourceData.remaining());
@@ -152,7 +155,7 @@ public class Hg3DGpuBuffer extends GpuBuffer implements Hg3DObject, Destroyable 
         
         public Manager(Hg3DGpuDevice device) {
             this.device = device;
-            emergencyEvictionBuffer = device.hgDevice().createBuffer(HgBuffer.MemoryRequest.CPU, MagicMemorySizes.MiB, VK_BUFFER_USAGE_TRANSFER_DST_BIT);
+            emergencyEvictionBuffer = device.hgDevice().createBuffer(HgBuffer.MemoryRequest.CPU, MagicMemorySizes.MiB, VK_BUFFER_USAGE_TRANSFER_DST_BIT).setName("Emergency Eviction Buffer");
             device.hgDevice().setAllocFailedCallback(this::allocFailed);
         }
         
@@ -161,11 +164,11 @@ public class Hg3DGpuBuffer extends GpuBuffer implements Hg3DObject, Destroyable 
             emergencyEvictionBuffer.destroy();
         }
         
-        public Hg3DGpuBuffer create(int usage, long size, int align, @Nullable ByteBuffer data) {
+        public Hg3DGpuBuffer create(@Nullable Supplier<String> label, int usage, long size, int align, @Nullable ByteBuffer data) {
             // if the data can't change, then i can rely on the data currently passed in to be constant for the buffer's entire lifetime
             final var dataCanChange = (usage & (USAGE_COPY_DST | USAGE_MAP_WRITE)) != 0;
             assert dataCanChange || data != null;
-            final var buffer = new Hg3DGpuBuffer(this, usage, size, !dataCanChange ? data : null);
+            final var buffer = new Hg3DGpuBuffer(this, label, usage, size, !dataCanChange ? data : null);
             if (dataCanChange && data != null) {
                 // if data was specified (and its not constant), consider it "evicted data" at first
                 // it'll automatically get promoted when it gets used
@@ -176,10 +179,10 @@ public class Hg3DGpuBuffer extends GpuBuffer implements Hg3DObject, Destroyable 
             return buffer;
         }
         
-        public GpuBuffer createImmediate(int usage, long size, ByteBuffer data) {
+        public Hg3DGpuBuffer createImmediate(@Nullable Supplier<String> label, int usage, long size, ByteBuffer data) {
             final var dataCanChange = (usage & (USAGE_COPY_DST | USAGE_MAP_WRITE)) != 0;
             assert dataCanChange;
-            final var buffer = new Hg3DGpuBuffer(this, usage, size, null);
+            final var buffer = new Hg3DGpuBuffer(this, label, usage, size, null);
             buffer.immediateUpload = data;
             promoteImmediate(buffer);
             assert buffer.immediateUpload == null;
@@ -403,6 +406,7 @@ public class Hg3DGpuBuffer extends GpuBuffer implements Hg3DObject, Destroyable 
                 if (buffer.buffer == null) {
                     buffer.buffer = device.hgDevice().createBuffer(HgBuffer.MemoryRequest.CPU, buffer.size(), Hg3DConst.bufferUsageBits(buffer.usage()));
                 }
+                buffer.buffer.setName(buffer.label);
                 buffer.slice = buffer.buffer.slice();
                 buffer.memoryType = buffer.slice.buffer().memoryType();
             }
@@ -465,6 +469,7 @@ public class Hg3DGpuBuffer extends GpuBuffer implements Hg3DObject, Destroyable 
                 return;
             }
             assert newBuffer.memoryType().gpuLocal;
+            newBuffer.setName(buffer.label);
             buffer.buffer = newBuffer;
             buffer.slice = newBuffer.slice();
             buffer.memoryType = buffer.slice.buffer().memoryType();
@@ -573,6 +578,7 @@ public class Hg3DGpuBuffer extends GpuBuffer implements Hg3DObject, Destroyable 
                     device.destroyEndOfFrame(currentBuffer.buffer);
                     commandBuffer.copyBufferToBuffer(currentBuffer.buffer.slice(), newBuffer.slice());
                     anyCommandRecorded = true;
+                    newBuffer.setName(currentBuffer.label);
                     currentBuffer.buffer = newBuffer;
                     currentBuffer.slice = newBuffer.slice();
                     currentBuffer.memoryType = currentBuffer.slice.buffer().memoryType();

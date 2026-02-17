@@ -7,7 +7,6 @@ import com.mojang.blaze3d.pipeline.RenderPipeline;
 import com.mojang.blaze3d.platform.NativeImage;
 import com.mojang.blaze3d.systems.GpuQuery;
 import com.mojang.blaze3d.systems.RenderPass;
-import com.mojang.blaze3d.systems.RenderPassBackend;
 import com.mojang.blaze3d.textures.GpuSampler;
 import com.mojang.blaze3d.textures.GpuTexture;
 import com.mojang.blaze3d.textures.GpuTextureView;
@@ -57,6 +56,7 @@ public class Hg3DCommandEncoder implements C3DCommandEncoder, Hg3DObject, Destro
     private HgBuffer uploadBuffer;
     private long uploadBufferAllocated = 0;
     private final ReferenceArrayList<HgBuffer> availableUploadBuffers = new ReferenceArrayList<>();
+    private int totalUploadBuffers = 0;
     @Nullable
     private Hg3DRenderPass continuedRenderPass;
     private final HgSemaphore fenceSemaphore;
@@ -67,7 +67,7 @@ public class Hg3DCommandEncoder implements C3DCommandEncoder, Hg3DObject, Destro
     Hg3DCommandEncoder(Hg3DGpuDevice device) {
         this.device = device;
         queue = device.hgDevice().queue(HgQueue.Type.GRAPHICS);
-        commandPool = queue.createCommandPool(true, true);
+        commandPool = queue.createCommandPool(false, true);
         fenceSemaphore = device.hgDevice().createSemaphore(0);
     }
     
@@ -78,6 +78,15 @@ public class Hg3DCommandEncoder implements C3DCommandEncoder, Hg3DObject, Destro
         if (uploadBuffer != null) {
             uploadBuffer.unmap();
             uploadBuffer.destroy();
+            totalUploadBuffers--;
+        }
+        for (final var uploadBuffer : availableUploadBuffers) {
+            uploadBuffer.unmap();
+            uploadBuffer.destroy();
+            totalUploadBuffers--;
+        }
+        if (totalUploadBuffers != 0) {
+            throw new IllegalStateException("Upload buffers leaked");
         }
     }
     
@@ -164,7 +173,7 @@ public class Hg3DCommandEncoder implements C3DCommandEncoder, Hg3DObject, Destro
     
     HgBuffer.Slice uploadBufferSlice(long size) {
         if (size > UPLOAD_BUFFER_SIZE) {
-            final var tempBuffer = device.hgDevice().createBuffer(HgBuffer.MemoryRequest.CPU, size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
+            final var tempBuffer = device.hgDevice().createBuffer(HgBuffer.MemoryRequest.CPU, size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT).setName("Upload Oversize");
             device.destroyEndOfFrameAsync(tempBuffer);
             return tempBuffer.slice();
         }
@@ -176,7 +185,8 @@ public class Hg3DCommandEncoder implements C3DCommandEncoder, Hg3DObject, Destro
                 uploadBuffer = null;
             }
             if (availableUploadBuffers.isEmpty()) {
-                uploadBuffer = device.hgDevice().createBuffer(HgBuffer.MemoryRequest.CPU, UPLOAD_BUFFER_SIZE, VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
+                uploadBuffer = device.hgDevice().createBuffer(HgBuffer.MemoryRequest.CPU, UPLOAD_BUFFER_SIZE, VK_BUFFER_USAGE_TRANSFER_SRC_BIT).setName("Upload Temp");
+                totalUploadBuffers++;
             } else {
                 uploadBuffer = availableUploadBuffers.pop();
             }
@@ -210,6 +220,7 @@ public class Hg3DCommandEncoder implements C3DCommandEncoder, Hg3DObject, Destro
         if (availableUploadBuffers.size() > 3) {
             while (availableUploadBuffers.size() > 2) {
                 availableUploadBuffers.pop().destroy();
+                totalUploadBuffers--;
             }
         }
         if (uploadBuffer == null) {
@@ -833,7 +844,7 @@ public class Hg3DCommandEncoder implements C3DCommandEncoder, Hg3DObject, Destro
                             case INT -> VK_INDEX_TYPE_UINT32;
                         });
                         
-                        final var drawsCPUBuffer = device.hgDevice().createBuffer(HgBuffer.MemoryRequest.CPU, (long) drawCount * VkDrawIndexedIndirectCommand.SIZEOF, VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT);
+                        final var drawsCPUBuffer = device.hgDevice().createBuffer(HgBuffer.MemoryRequest.CPU, (long) drawCount * VkDrawIndexedIndirectCommand.SIZEOF, VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT).setName("Indirect Commands");
                         device.destroyEndOfFrameAsync(drawsCPUBuffer);
                         final var ptr = drawsCPUBuffer.map();
                         MemoryUtil.memCopy(drawCommands.address(0), ptr.pointer(), (long) drawCount * VkDrawIndexedIndirectCommand.SIZEOF);

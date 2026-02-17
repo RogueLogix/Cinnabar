@@ -10,9 +10,7 @@ import java.util.List;
 @SuppressWarnings("UnusedReturnValue")
 @ApiStatus.NonExtendable
 @ThreadSafety.VulkanObjectHandle(note = "must sync with pool")
-public interface HgCommandBuffer extends HgObject {
-
-    HgCommandBuffer setName(String name);
+public interface HgCommandBuffer extends HgObject<HgCommandBuffer> {
 
     HgCommandBuffer begin();
     
@@ -79,7 +77,7 @@ public interface HgCommandBuffer extends HgObject {
     
     HgCommandBuffer drawIndexedIndirect(HgBuffer.Slice commands);
     
-    interface Pool extends HgObject {
+    interface Pool extends HgObject<Pool> {
         
         @ThreadSafety.VulkanObjectHandle
         HgCommandBuffer allocate();

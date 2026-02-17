@@ -4,6 +4,7 @@ import graphics.cinnabar.api.exceptions.VkOutOfDeviceMemory;
 import graphics.cinnabar.api.hg.HgBuffer;
 import graphics.cinnabar.api.hg.HgImage;
 import graphics.cinnabar.api.hg.enums.HgFormat;
+import it.unimi.dsi.fastutil.longs.LongIntImmutablePair;
 import org.lwjgl.util.vma.VmaAllocationCreateInfo;
 import org.lwjgl.vulkan.VkImageCreateInfo;
 import org.lwjgl.vulkan.VkMemoryRequirements;
@@ -12,7 +13,7 @@ import static graphics.cinnabar.api.exceptions.VkException.checkVkCode;
 import static org.lwjgl.util.vma.Vma.*;
 import static org.lwjgl.vulkan.VK10.*;
 
-public class MercuryImage extends MercuryObject implements HgImage {
+public class MercuryImage extends MercuryObject<HgImage> implements HgImage {
     private final HgImage.Type type;
     private final HgFormat format;
     private final int width;
@@ -52,7 +53,7 @@ public class MercuryImage extends MercuryObject implements HgImage {
             // these flags aren't valid for the allocate function, but i can direct the alloc function with this
             allocCreateInfo.usage(hostMemory ? VMA_MEMORY_USAGE_AUTO_PREFER_HOST : VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE);
             final var memoryType = stack.callocInt(1);
-            vmaFindMemoryTypeIndexForImageInfo(device.vmaAllocator(), imageCreateInfo, allocCreateInfo, memoryType);
+            checkVkCode(vmaFindMemoryTypeIndexForImageInfo(device.vmaAllocator(), imageCreateInfo, allocCreateInfo, memoryType));
             allocCreateInfo.memoryTypeBits(1 << memoryType.get(0));
             allocCreateInfo.usage(0);
             
@@ -127,5 +128,10 @@ public class MercuryImage extends MercuryObject implements HgImage {
     @Override
     public View createView(View.Type viewType, HgFormat format, int baseMipLevel, int levelCount, int baseArrayLayer, int layerCount) {
         return new MercuryImageView(this, viewType, format, baseMipLevel, levelCount, baseArrayLayer, layerCount);
+    }
+    
+    @Override
+    protected LongIntImmutablePair handleAndType() {
+        return new LongIntImmutablePair(imageHandle, VK_OBJECT_TYPE_IMAGE);
     }
 }

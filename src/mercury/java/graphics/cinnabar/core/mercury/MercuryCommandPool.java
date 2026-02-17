@@ -2,6 +2,7 @@ package graphics.cinnabar.core.mercury;
 
 import graphics.cinnabar.api.hg.HgCommandBuffer;
 import it.unimi.dsi.fastutil.longs.LongArrayList;
+import it.unimi.dsi.fastutil.longs.LongIntImmutablePair;
 import org.lwjgl.vulkan.VkCommandBuffer;
 import org.lwjgl.vulkan.VkCommandBufferAllocateInfo;
 import org.lwjgl.vulkan.VkCommandPoolCreateInfo;
@@ -9,7 +10,7 @@ import org.lwjgl.vulkan.VkCommandPoolCreateInfo;
 import static graphics.cinnabar.api.exceptions.VkException.checkVkCode;
 import static org.lwjgl.vulkan.VK10.*;
 
-public class MercuryCommandPool extends MercuryObject implements HgCommandBuffer.Pool {
+public class MercuryCommandPool extends MercuryObject<HgCommandBuffer.Pool> implements HgCommandBuffer.Pool {
     private static final int COMMAND_BUFFER_ALLOC_SIZE = 128;
     
     private final boolean commandBufferReset;
@@ -90,5 +91,10 @@ public class MercuryCommandPool extends MercuryObject implements HgCommandBuffer
     @Override
     public void reset() {
         checkVkCode(vkResetCommandPool(device.vkDevice(), poolHandle, 0));
+    }
+    
+    @Override
+    protected LongIntImmutablePair handleAndType() {
+        return new LongIntImmutablePair(poolHandle, VK_OBJECT_TYPE_COMMAND_POOL);
     }
 }

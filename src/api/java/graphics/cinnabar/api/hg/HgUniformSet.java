@@ -10,14 +10,14 @@ import org.jetbrains.annotations.Nullable;
 import java.util.List;
 
 @ApiStatus.NonExtendable
-public interface HgUniformSet extends HgObject {
+public interface HgUniformSet extends HgObject<HgUniformSet> {
     
     @ThreadSafety.Any
     @ThreadSafety.VulkanObjectHandle(note = "Must sync with pool")
     void write(List<Write> writes);
     
     @ApiStatus.NonExtendable
-    interface Layout extends HgObject {
+    interface Layout extends HgObject<Layout> {
         
         @Constant
         @ThreadSafety.Many
@@ -69,7 +69,7 @@ public interface HgUniformSet extends HgObject {
         }
     }
     
-    interface Pool extends HgObject {
+    interface Pool extends HgObject<Pool> {
         @ThreadSafety.Any
         @ThreadSafety.VulkanObjectHandle
         HgUniformSet allocate();

@@ -10,7 +10,7 @@ import org.jetbrains.annotations.Nullable;
 import java.util.List;
 
 @ApiStatus.NonExtendable
-public interface HgDevice extends HgObject {
+public interface HgDevice extends HgObject<HgDevice> {
     
     record CreateInfo() {
     } 

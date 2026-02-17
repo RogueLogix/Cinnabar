@@ -4,6 +4,7 @@ import graphics.cinnabar.api.hg.HgCommandBuffer;
 import graphics.cinnabar.api.hg.HgQueue;
 import graphics.cinnabar.api.hg.HgSemaphore;
 import graphics.cinnabar.api.memory.GrowingMemoryStack;
+import it.unimi.dsi.fastutil.longs.LongIntImmutablePair;
 import it.unimi.dsi.fastutil.objects.ReferenceArrayList;
 import org.lwjgl.vulkan.VkCommandBufferSubmitInfo;
 import org.lwjgl.vulkan.VkQueue;
@@ -13,9 +14,9 @@ import org.lwjgl.vulkan.VkSubmitInfo2;
 import java.util.List;
 
 import static org.lwjgl.vulkan.KHRSynchronization2.vkQueueSubmit2KHR;
-import static org.lwjgl.vulkan.VK10.VK_NULL_HANDLE;
+import static org.lwjgl.vulkan.VK10.*;
 
-public class MercuryQueue extends MercuryObject implements HgQueue {
+public class MercuryQueue extends MercuryObject<HgQueue> implements HgQueue {
     
     private final VkQueue vkQueue;
     private final int queueFamily;
@@ -163,5 +164,10 @@ public class MercuryQueue extends MercuryObject implements HgQueue {
     
     public VkQueue vkQueue() {
         return vkQueue;
+    }
+    
+    @Override
+    protected LongIntImmutablePair handleAndType() {
+        return new LongIntImmutablePair(vkQueue.address(), VK_OBJECT_TYPE_QUEUE);
     }
 }

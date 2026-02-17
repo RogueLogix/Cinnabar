@@ -2,6 +2,7 @@ package graphics.cinnabar.api.exceptions;
 
 import org.jetbrains.annotations.Contract;
 
+import static org.lwjgl.vulkan.EXTDebugReport.VK_ERROR_VALIDATION_FAILED_EXT;
 import static org.lwjgl.vulkan.KHRSwapchain.VK_SUBOPTIMAL_KHR;
 import static org.lwjgl.vulkan.VK10.*;
 import static org.lwjgl.vulkan.VK11.VK_ERROR_INVALID_EXTERNAL_HANDLE;
@@ -20,6 +21,7 @@ public class VkException extends RuntimeException {
             case VK_SUCCESS, VK_NOT_READY, VK_TIMEOUT, VK_EVENT_SET, VK_EVENT_RESET, VK_INCOMPLETE, VK_SUBOPTIMAL_KHR -> {
                 // these are all success codes, so, dont do anything
             }
+            case VK_ERROR_VALIDATION_FAILED_EXT -> throw new VkValidationFailed();
             case VK_ERROR_OUT_OF_HOST_MEMORY -> throw new OutOfMemoryError();
             case VK_ERROR_OUT_OF_DEVICE_MEMORY -> throw new VkOutOfDeviceMemory();
             case VK_ERROR_INITIALIZATION_FAILED -> throw new VkInitializationFailed();

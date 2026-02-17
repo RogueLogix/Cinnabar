@@ -17,7 +17,7 @@ import static org.lwjgl.vulkan.VK10.VK_SUCCESS;
 
 @ApiStatus.NonExtendable
 @ThreadSafety.VulkanObjectHandle
-public interface HgBuffer extends HgObject {
+public interface HgBuffer extends HgObject<HgBuffer> {
     @Constant
     @ThreadSafety.Many
     long size();
@@ -86,7 +86,7 @@ public interface HgBuffer extends HgObject {
         }
     }
     
-    interface View extends HgObject {
+    interface View extends HgObject<View> {
     }
     
     record Slice(HgBuffer buffer, long offset, long size) {

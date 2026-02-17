@@ -2,12 +2,13 @@ package graphics.cinnabar.core.mercury;
 
 import graphics.cinnabar.api.hg.HgImage;
 import graphics.cinnabar.api.hg.enums.HgFormat;
+import it.unimi.dsi.fastutil.longs.LongIntImmutablePair;
 import org.lwjgl.vulkan.VkImageViewCreateInfo;
 
 import static graphics.cinnabar.api.exceptions.VkException.checkVkCode;
 import static org.lwjgl.vulkan.VK10.*;
 
-public class MercuryImageView extends MercuryObject implements HgImage.View {
+public class MercuryImageView extends MercuryObject<HgImage.View> implements HgImage.View {
     
     private final long imageViewHandle;
     private final MercuryImage image;
@@ -89,5 +90,10 @@ public class MercuryImageView extends MercuryObject implements HgImage.View {
     @Override
     public int levelCount() {
         return levelCount;
+    }
+    
+    @Override
+    protected LongIntImmutablePair handleAndType() {
+        return new LongIntImmutablePair(imageViewHandle, VK_OBJECT_TYPE_IMAGE_VIEW);
     }
 }

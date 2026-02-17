@@ -5,6 +5,7 @@ import graphics.cinnabar.api.hg.enums.HgUniformType;
 import it.unimi.dsi.fastutil.ints.Int2IntArrayMap;
 import it.unimi.dsi.fastutil.ints.Int2IntMap;
 import it.unimi.dsi.fastutil.longs.LongArrayList;
+import it.unimi.dsi.fastutil.longs.LongIntImmutablePair;
 import it.unimi.dsi.fastutil.objects.ReferenceArrayList;
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.system.MemoryUtil;
@@ -16,7 +17,7 @@ import java.util.List;
 import static graphics.cinnabar.api.exceptions.VkException.checkVkCode;
 import static org.lwjgl.vulkan.VK10.*;
 
-public class MercuryUniformSetPool extends MercuryObject implements HgUniformSet.Pool {
+public class MercuryUniformSetPool extends MercuryObject<HgUniformSet.Pool> implements HgUniformSet.Pool {
     
     private static final int VK_POOL_SIZE = 128;
     
@@ -110,6 +111,11 @@ public class MercuryUniformSetPool extends MercuryObject implements HgUniformSet
         throw new IllegalStateException();
     }
     
+    @Override
+    protected LongIntImmutablePair handleAndType() {
+        throw new IllegalStateException("Cannot name multiple objects at once");
+    }
+    
     record SetInstance(MercuryUniformSetPool pool, int vkPoolIndex, long set) implements HgUniformSet {
         
         @Override
@@ -121,6 +127,20 @@ public class MercuryUniformSetPool extends MercuryObject implements HgUniformSet
         @Override
         public MercuryDevice device() {
             return pool.device;
+        }
+        
+        @Override
+        public HgUniformSet setName(String label) {
+            if (device().debugUtilsEnabled()) {
+                try (final var stack = memoryStack().push()) {
+                    final var nameInfo = VkDebugUtilsObjectNameInfoEXT.calloc(stack).sType$Default();
+                    nameInfo.pObjectName(stack.UTF8(label));
+                    nameInfo.objectHandle(set);
+                    nameInfo.objectType(VK_OBJECT_TYPE_DESCRIPTOR_SET);
+                    EXTDebugUtils.vkSetDebugUtilsObjectNameEXT(device().vkDevice(), nameInfo);
+                }
+            }
+            return this;
         }
         
         @Override

@@ -4,6 +4,7 @@ import graphics.cinnabar.api.exceptions.NotImplemented;
 import graphics.cinnabar.api.hg.HgBuffer;
 import graphics.cinnabar.api.hg.enums.HgFormat;
 import graphics.cinnabar.api.memory.PointerWrapper;
+import it.unimi.dsi.fastutil.longs.LongIntImmutablePair;
 import org.jetbrains.annotations.Nullable;
 import org.lwjgl.util.vma.VmaAllocationCreateInfo;
 import org.lwjgl.util.vma.VmaAllocationInfo;
@@ -14,7 +15,7 @@ import static graphics.cinnabar.core.mercury.Mercury.RENDERDOC_ATTACHED;
 import static org.lwjgl.util.vma.Vma.*;
 import static org.lwjgl.vulkan.VK10.*;
 
-public class MercuryBuffer extends MercuryObject implements HgBuffer {
+public class MercuryBuffer extends MercuryObject<HgBuffer> implements HgBuffer {
     
     private final MemoryType memoryType;
     private final long size;
@@ -138,5 +139,10 @@ public class MercuryBuffer extends MercuryObject implements HgBuffer {
     @Override
     public View view(HgFormat format, long offset, long size) {
         return new MercuryBufferView(this, format, offset, size);
+    }
+    
+    @Override
+    protected LongIntImmutablePair handleAndType() {
+        return new LongIntImmutablePair(handle, VK_OBJECT_TYPE_BUFFER);
     }
 }

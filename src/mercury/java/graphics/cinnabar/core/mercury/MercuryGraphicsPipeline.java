@@ -1,13 +1,14 @@
 package graphics.cinnabar.core.mercury;
 
 import graphics.cinnabar.api.hg.HgGraphicsPipeline;
+import it.unimi.dsi.fastutil.longs.LongIntImmutablePair;
 import org.jetbrains.annotations.Nullable;
 import org.lwjgl.vulkan.*;
 
 import static graphics.cinnabar.api.exceptions.VkException.checkVkCode;
 import static org.lwjgl.vulkan.VK10.*;
 
-public class MercuryGraphicsPipeline extends MercuryObject implements HgGraphicsPipeline {
+public class MercuryGraphicsPipeline extends MercuryObject<HgGraphicsPipeline> implements HgGraphicsPipeline {
     
     private final long handle;
     private final MercuryGraphicsPipelineLayout layout;
@@ -189,5 +190,10 @@ public class MercuryGraphicsPipeline extends MercuryObject implements HgGraphics
     @Override
     public Layout layout() {
         return layout;
+    }
+    
+    @Override
+    protected LongIntImmutablePair handleAndType() {
+        return new LongIntImmutablePair(handle, VK_OBJECT_TYPE_PIPELINE);
     }
 }

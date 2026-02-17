@@ -241,14 +241,14 @@ public class Hg3DRenderPipeline implements Hg3DObject, CompiledRenderPipeline, D
             #endif
             
             #ifdef CINNABAR_VERTEX_SHADER
-            out flat int arrayIndex;
+            #define CINNABAR_BETWEEN_STAGES out
             #else
-            in flat int arrayIndex;
+            #define CINNABAR_BETWEEN_STAGES in
             #endif
             
             mat4 ModelViewMat;
-            float ChunkVisibility;
-            ivec2 TextureSize;
+            layout(location = 6) CINNABAR_BETWEEN_STAGES flat float ChunkVisibility;
+            layout(location = 7) CINNABAR_BETWEEN_STAGES flat ivec2 TextureSize;
             ivec3 ChunkPosition;
             
             struct CnkSection {
@@ -264,21 +264,23 @@ public class Hg3DRenderPipeline implements Hg3DObject, CompiledRenderPipeline, D
             #endif
             };
             
+            #ifdef CINNABAR_VERTEX_SHADER
             layout(std140) buffer readonly ChunkSection {
                 CnkSection cnkSections[];
             };
+            #endif
             
             void loadCnkSection() {
                 #ifdef CINNABAR_VERTEX_SHADER
                 // even with multidraw, base_instance can be used to index into it
                 // but this also works if im not doing multidraw
-                arrayIndex = gl_BaseInstance;
-                #endif
+                int arrayIndex = gl_BaseInstance;
                 CnkSection section = cnkSections[arrayIndex];
                 ModelViewMat = section.ModelViewMat;
                 ChunkVisibility = section.ChunkVisibility;
                 TextureSize = section.TextureSize;
                 ChunkPosition = section.ChunkPosition;
+                #endif
             }
             
             // overwrite the main func

@@ -6,7 +6,7 @@ import org.jetbrains.annotations.Nullable;
 import java.util.List;
 
 @ApiStatus.NonExtendable
-public interface HgFramebuffer extends HgObject {
+public interface HgFramebuffer extends HgObject<HgFramebuffer> {
     
     int width();
     

@@ -4,6 +4,7 @@ import graphics.cinnabar.api.exceptions.NotImplemented;
 import graphics.cinnabar.api.hg.*;
 import graphics.cinnabar.api.memory.GrowingMemoryStack;
 import it.unimi.dsi.fastutil.ints.IntList;
+import it.unimi.dsi.fastutil.longs.LongIntImmutablePair;
 import org.jetbrains.annotations.Nullable;
 import org.lwjgl.vulkan.*;
 
@@ -14,7 +15,7 @@ import static org.lwjgl.vulkan.KHRSwapchain.VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
 import static org.lwjgl.vulkan.KHRSynchronization2.vkCmdPipelineBarrier2KHR;
 import static org.lwjgl.vulkan.VK12.*;
 
-public class MercuryCommandBuffer extends MercuryObject implements HgCommandBuffer {
+public class MercuryCommandBuffer extends MercuryObject<HgCommandBuffer> implements HgCommandBuffer {
     private static final VkCommandBufferBeginInfo beginInfo = VkCommandBufferBeginInfo.calloc().sType$Default();
     
     private final VkCommandBuffer commandBuffer;
@@ -40,17 +41,8 @@ public class MercuryCommandBuffer extends MercuryObject implements HgCommandBuff
     }
     
     @Override
-    public HgCommandBuffer setName(String name) {
-        if (device.debugMarkerEnabled()) {
-            try (final var stack = memoryStack.push()) {
-                final var nameInfo = VkDebugMarkerObjectNameInfoEXT.calloc(stack).sType$Default();
-                nameInfo.pObjectName(stack.UTF8(name));
-                nameInfo.object(commandBuffer.address());
-                nameInfo.objectType(VK_OBJECT_TYPE_COMMAND_BUFFER);
-                EXTDebugMarker.vkDebugMarkerSetObjectNameEXT(device.vkDevice(), nameInfo);
-            }
-        }
-        return this;
+    protected LongIntImmutablePair handleAndType() {
+        return new LongIntImmutablePair(commandBuffer.address(), VK_OBJECT_TYPE_COMMAND_BUFFER);
     }
     
     @Override
@@ -71,15 +63,16 @@ public class MercuryCommandBuffer extends MercuryObject implements HgCommandBuff
     
     @Override
     public HgCommandBuffer pushDebugGroup(String name) {
-        if (device.debugMarkerEnabled()) {
+        if (device.debugUtilsEnabled()) {
             try (final var stack = memoryStack.push()) {
-                final var markerInfo = VkDebugMarkerMarkerInfoEXT.calloc(stack).sType$Default();
-                markerInfo.pMarkerName(stack.UTF8(name));
-                markerInfo.color(0, 1);
-                markerInfo.color(1, 1);
-                markerInfo.color(2, 1);
-                markerInfo.color(3, 1);
-                EXTDebugMarker.vkCmdDebugMarkerBeginEXT(commandBuffer, markerInfo);
+                final var labelInfo = VkDebugUtilsLabelEXT.calloc(stack).sType$Default();
+                labelInfo.pLabelName(stack.UTF8(name));
+                final int nameHash = name.hashCode();
+                labelInfo.color(0, ((nameHash >> 24) & 0xFF) / 255.0f);
+                labelInfo.color(1, ((nameHash >> 16) & 0xFF) / 255.0f);
+                labelInfo.color(2, ((nameHash >> 8) & 0xFF) / 255.0f);
+                labelInfo.color(3, 1);
+                EXTDebugUtils.vkCmdBeginDebugUtilsLabelEXT(commandBuffer, labelInfo);
             }
         }
         return this;
@@ -87,8 +80,8 @@ public class MercuryCommandBuffer extends MercuryObject implements HgCommandBuff
     
     @Override
     public HgCommandBuffer popDebugGroup() {
-        if (device.debugMarkerEnabled()) {
-            EXTDebugMarker.vkCmdDebugMarkerEndEXT(commandBuffer);
+        if (device.debugUtilsEnabled()) {
+            EXTDebugUtils.vkCmdEndDebugUtilsLabelEXT(commandBuffer);
         }
         return this;
     }

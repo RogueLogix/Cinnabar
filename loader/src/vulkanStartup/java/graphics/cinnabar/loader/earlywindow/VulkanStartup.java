@@ -30,8 +30,6 @@ import java.util.List;
 import java.util.function.Supplier;
 
 import static graphics.cinnabar.loader.earlywindow.GLFWClassloadHelper.glfwExtGetPhysicalDevicePresentationSupport;
-import static org.lwjgl.vulkan.EXTDebugMarker.VK_EXT_DEBUG_MARKER_EXTENSION_NAME;
-import static org.lwjgl.vulkan.EXTDebugReport.VK_EXT_DEBUG_REPORT_EXTENSION_NAME;
 import static org.lwjgl.vulkan.EXTDebugUtils.*;
 import static org.lwjgl.vulkan.KHRPortabilitySubset.VK_KHR_PORTABILITY_SUBSET_EXTENSION_NAME;
 import static org.lwjgl.vulkan.KHRSwapchain.VK_KHR_SWAPCHAIN_EXTENSION_NAME;
@@ -59,14 +57,10 @@ import org.slf4j.Logger;
 
 import java.util.Collections;
 import java.util.List;
-import java.util.function.Supplier;
 
 import static graphics.cinnabar.loader.earlywindow.GLFWClassloadHelper.glfwExtGetPhysicalDevicePresentationSupport;
-import static org.lwjgl.vulkan.EXTDebugMarker.VK_EXT_DEBUG_MARKER_EXTENSION_NAME;
-import static org.lwjgl.vulkan.EXTDebugReport.VK_EXT_DEBUG_REPORT_EXTENSION_NAME;
 import static org.lwjgl.vulkan.EXTDebugUtils.*;
-import static org.lwjgl.vulkan.EXTValidationFeatures.VK_VALIDATION_FEATURE_ENABLE_BEST_PRACTICES_EXT;
-import static org.lwjgl.vulkan.EXTValidationFeatures.VK_VALIDATION_FEATURE_ENABLE_SYNCHRONIZATION_VALIDATION_EXT;
+import static org.lwjgl.vulkan.EXTValidationFeatures.*;
 import static org.lwjgl.vulkan.KHRPortabilitySubset.VK_KHR_PORTABILITY_SUBSET_EXTENSION_NAME;
 import static org.lwjgl.vulkan.KHRSwapchain.VK_KHR_SWAPCHAIN_EXTENSION_NAME;
 import static org.lwjgl.vulkan.KHRSynchronization2.VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME;
@@ -101,7 +95,7 @@ public class VulkanStartup {
     }
     
     private static final List<String> optionalInstanceExtensions = List.of(
-            VK_EXT_DEBUG_REPORT_EXTENSION_NAME
+            VK_EXT_DEBUG_UTILS_EXTENSION_NAME
     );
     
     private static final List<String> requiredDeviceExtensions = List.of(
@@ -110,7 +104,6 @@ public class VulkanStartup {
     );
     
     private static final List<Pair<String, List<String>>> optionalDeviceExtensions = List.of(
-            new ObjectObjectImmutablePair<>(VK_EXT_DEBUG_MARKER_EXTENSION_NAME, List.of(VK_EXT_DEBUG_REPORT_EXTENSION_NAME)),
             new ObjectObjectImmutablePair<>(VK_KHR_PORTABILITY_SUBSET_EXTENSION_NAME, List.of())
     );
     
@@ -162,7 +155,7 @@ public class VulkanStartup {
                 // snapshot version, zero is fine
                 appVersion = 0;
             } else {
-                if(mcVersionChunks.length == 2){
+                if (mcVersionChunks.length == 2) {
                     // something like 26.1, rather than 26.1.0
                     mcVersionChunks = new String[]{mcVersionChunks[0], mcVersionChunks[1], "0"};
                 }
@@ -211,54 +204,50 @@ public class VulkanStartup {
             final var extensionProperties = VkExtensionProperties.calloc(extensionCount.get(0), stack);
             vkEnumerateInstanceExtensionProperties((String) null, extensionCount, extensionProperties);
             
-            if (validationLayers) {
-                LOGGER.info("Vulkan validation layers requested");
-                boolean hasKHRValidation = false;
-                for (int i = 0; i < layerProperties.capacity(); i++) {
-                    layerProperties.position(i);
-                    if (layerProperties.layerNameString().equals("VK_LAYER_KHRONOS_validation")) {
-                        hasKHRValidation = true;
-                        break;
-                    }
+            // validation layer init is always attempted, but only stateless is enabled if they aren't requested
+            boolean hasKHRValidation = false;
+            for (int i = 0; i < layerProperties.capacity(); i++) {
+                layerProperties.position(i);
+                if (layerProperties.layerNameString().equals("VK_LAYER_KHRONOS_validation")) {
+                    hasKHRValidation = true;
+                    break;
                 }
-                boolean hasEXTDebug = false;
-                for (int i = 0; i < extensionProperties.capacity(); i++) {
-                    extensionProperties.position(i);
-                    if (extensionProperties.extensionNameString().equals(VK_EXT_DEBUG_UTILS_EXTENSION_NAME)) {
-                        hasEXTDebug = true;
-                        break;
-                    }
+            }
+            boolean hasEXTDebug = false;
+            for (int i = 0; i < extensionProperties.capacity(); i++) {
+                extensionProperties.position(i);
+                if (extensionProperties.extensionNameString().equals(VK_EXT_DEBUG_UTILS_EXTENSION_NAME)) {
+                    hasEXTDebug = true;
+                    break;
                 }
-                if (!hasKHRValidation) {
-                    LOGGER.error("Unable to initialize validation layers, are they installed?");
-                    validationLayers = false;
-                } else if (!hasEXTDebug) {
-                    LOGGER.error("Unable to initialize validation layers, VK_EXT_debug_utils not present");
-                    validationLayers = false;
-                } else {
-                    #if NEO
-                    if (FMLLoader.getCurrent().isProduction()) {
-                    #elif FABRIC
-                    if (!FabricLoader.getInstance().isDevelopmentEnvironment()) {
-                    #endif
-                        TinyFileDialogs.tinyfd_messageBox("Minecraft: Cinnabar", """
-                                Vulkan validation layers enabled
-                                Enabling this options significantly hurts performance
-                                """, "ok", "warn", false);
-                    }
-                    LOGGER.warn("Vulkan validation layers enabled, performance may suffer!");
-                    
-                    enabledLayerNames.add("VK_LAYER_KHRONOS_validation");
-                    enabledInstanceExtensions.add(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
-                    
-                    if (debugCreateInfo != null) {
-                        createInfo.pNext(debugCreateInfo);
-                    }
-                    
-                    final var validationFeatures = VkValidationFeaturesEXT.calloc(stack).sType$Default();
+            }
+            if (!hasKHRValidation) {
+                LOGGER.error("Unable to initialize validation layers, are they installed?");
+                validationLayers = false;
+            } else if (!hasEXTDebug) {
+                LOGGER.error("Unable to initialize validation layers, VK_EXT_debug_utils not present");
+                validationLayers = false;
+            } else {
+                enabledLayerNames.add("VK_LAYER_KHRONOS_validation");
+                enabledInstanceExtensions.add(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
+                
+                if (debugCreateInfo != null) {
+                    createInfo.pNext(debugCreateInfo);
+                }
+                
+                final var validationFeatures = VkValidationFeaturesEXT.calloc(stack).sType$Default();
+                if (validationLayers) {
                     validationFeatures.pEnabledValidationFeatures(stack.ints(VK_VALIDATION_FEATURE_ENABLE_SYNCHRONIZATION_VALIDATION_EXT, VK_VALIDATION_FEATURE_ENABLE_BEST_PRACTICES_EXT));
-                    createInfo.pNext(validationFeatures);
+                } else {
+                    validationFeatures.pDisabledValidationFeatures(stack.ints(
+                            VK_VALIDATION_FEATURE_DISABLE_SHADERS_EXT,
+                            VK_VALIDATION_FEATURE_DISABLE_THREAD_SAFETY_EXT,
+                            VK_VALIDATION_FEATURE_DISABLE_OBJECT_LIFETIMES_EXT,
+                            VK_VALIDATION_FEATURE_DISABLE_CORE_CHECKS_EXT,
+                            VK_VALIDATION_FEATURE_DISABLE_UNIQUE_HANDLES_EXT,
+                            VK_VALIDATION_FEATURE_DISABLE_SHADER_VALIDATION_CACHE_EXT));
                 }
+                createInfo.pNext(validationFeatures);
             }
             if (enableMesaOverlay && System.getenv().get("ENABLE_VULKAN_RENDERDOC_CAPTURE") == null) {
                 for (int i = 0; i < layerCount; i++) {

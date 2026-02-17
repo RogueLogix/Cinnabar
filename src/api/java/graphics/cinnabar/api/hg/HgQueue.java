@@ -8,7 +8,7 @@ import java.util.List;
 import java.util.RandomAccess;
 
 @ApiStatus.NonExtendable
-public interface HgQueue extends HgObject {
+public interface HgQueue extends HgObject<HgQueue> {
     
     @ThreadSafety.Many
     Submission submit();

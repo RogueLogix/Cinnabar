@@ -8,6 +8,7 @@ import graphics.cinnabar.lib.ThreadGlobals;
 import it.unimi.dsi.fastutil.ints.Int2ReferenceArrayMap;
 import it.unimi.dsi.fastutil.ints.IntIntImmutablePair;
 import it.unimi.dsi.fastutil.ints.IntReferenceImmutablePair;
+import it.unimi.dsi.fastutil.longs.LongIntImmutablePair;
 import it.unimi.dsi.fastutil.longs.LongReferenceImmutablePair;
 import it.unimi.dsi.fastutil.objects.*;
 import org.jetbrains.annotations.Nullable;
@@ -27,7 +28,7 @@ import static org.lwjgl.util.shaderc.Shaderc.*;
 import static org.lwjgl.util.spvc.Spvc.*;
 import static org.lwjgl.vulkan.VK10.*;
 
-public class MercuryShaderSet extends MercuryObject implements HgGraphicsPipeline.ShaderSet {
+public class MercuryShaderSet extends MercuryObject<HgGraphicsPipeline.ShaderSet> implements HgGraphicsPipeline.ShaderSet {
     
     private final VkPipelineShaderStageCreateInfo.Buffer shaderStages;
     private final ByteBuffer vertexEntryUTF8;
@@ -436,5 +437,10 @@ public class MercuryShaderSet extends MercuryObject implements HgGraphicsPipelin
     @Override
     public long pushConstantsSize() {
         return pushConstantsSize;
+    }
+    
+    @Override
+    protected LongIntImmutablePair handleAndType() {
+        throw new IllegalStateException("Cannot name multiple vk objects");
     }
 }
