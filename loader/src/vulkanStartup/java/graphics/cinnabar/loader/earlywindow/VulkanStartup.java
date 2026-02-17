@@ -183,16 +183,6 @@ public class VulkanStartup {
             
             final var createInfo = VkInstanceCreateInfo.calloc(stack).sType$Default();
             createInfo.pApplicationInfo(appInfo);
-            #if NEO
-            if (FMLLoader.getCurrent().isProduction() && validationLayers) {
-            #elif FABRIC
-            if (!FabricLoader.getInstance().isDevelopmentEnvironment() && validationLayers) {
-            #endif
-                TinyFileDialogs.tinyfd_messageBox("Minecraft: Cinnabar", """
-                        Debug mode enabled
-                        Enabling this option significantly hurts performance, and may result in crashes due to debug checks
-                        """, "ok", "warn", false);
-            }
             final var layerCountPtr = stack.ints(0);
             vkEnumerateInstanceLayerProperties(layerCountPtr, null);
             final var layerCount = layerCountPtr.get(0);
@@ -466,93 +456,40 @@ public class VulkanStartup {
                 }
                 
                 final var currentDeviceType = deviceProperties.deviceType();
-                if (manualDeviceSelection && forcedDeviceIndex == -1) {
-                    
-                    final var deviceName = deviceProperties.deviceNameString();
-                    final var deviceTypeStr = switch (deviceProperties.deviceType()) {
-                        case VK_PHYSICAL_DEVICE_TYPE_OTHER -> "Unknown";
-                        case VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU -> "Integrated GPU";
-                        case VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU -> "Discrete GPU";
-                        case VK_PHYSICAL_DEVICE_TYPE_VIRTUAL_GPU -> "Virtual GPU";
-                        case VK_PHYSICAL_DEVICE_TYPE_CPU -> "CPU (Software)";
-                        default ->
-                                throw new IllegalStateException("Unexpected value: " + deviceProperties.deviceType());
-                    };
-                    final var APIVersionEncoded = deviceProperties.apiVersion();
-                    final var driverVersionEncoded = deviceProperties.driverVersion();
-                    
-                    final var baseMessageStr = """
-                            Manual Vulkan device selection
-                            
-                            Device Index: %d/%d
-                            Device name: %s
-                            Device type: %s
-                            Has dedicated compute queue: %b
-                            Has dedicated transfer queue: %b
-                            API version: %d.%d.%d
-                            Driver version: %d.%d.%d
-                            
-                            Select this device?
-                            """;
-                    final var formattedMessageStr = baseMessageStr.formatted(
-                            i + 1, physicalDeviceCount,
-                            deviceName,
-                            deviceTypeStr,
-                            hasDedicatedComputeQueue,
-                            hasDedicatedTransferQueue,
-                            VK_VERSION_MAJOR(APIVersionEncoded), VK_VERSION_MINOR(APIVersionEncoded), VK_VERSION_PATCH(APIVersionEncoded),
-                            VK_VERSION_MAJOR(driverVersionEncoded), VK_VERSION_MINOR(driverVersionEncoded), VK_VERSION_PATCH(driverVersionEncoded));
-                    final var result = TinyFileDialogs.tinyfd_messageBox("Minecraft: Cinnabar", formattedMessageStr, "yesno", "info", true);
-                    if (result) {
-                        LOGGER.info("Device {} selected by user", deviceName);
-                        selectedPhysicalDevice = physicalDevice;
-                        break;
-                    }
-                    LOGGER.info("Device {} rejected by user", deviceName);
-                    if (i == physicalDeviceCount - 1) {
-                        LOGGER.info("All vulkan devices rejected by user");
-                        TinyFileDialogs.tinyfd_messageBox("Minecraft: Cinnabar", """
-                                Manual Vulkan device selection
-                                
-                                All vulkan devices rejected, exiting.
-                                """, "ok", "info", true);
-                        System.exit(1);
-                    }
-                } else {
-                    if (currentDeviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU) {
-                        // if its discrete, its selected
-                        selectedPhysicalDevice = physicalDevice;
-                        break;
-                    }
-                    // this physical device will work (probably), but might be suboptimal (ie: actually the CPU)
-                    // if the currently selected device is better (ie: discrete vs integrated), don't use this one
-                    if (selectedPhysicalDevice != null) {
-                        vkGetPhysicalDeviceProperties2(selectedPhysicalDevice, selectedPhysicalDeviceProperties);
-                        final var selectedDeviceType = selectedPhysicalDeviceProperties.properties().deviceType();
-                        // TODO: min image transfer granularity matters, VKonD3D12 doesnt like what MC does
-                        //       but the actual device is first, so, this fixes it
-                        //       properly check for that
-                        if (currentDeviceType == selectedDeviceType) {
-                            // if the type is identical, prefer the device reported first
-                            continue;
-                        }
-                        if (currentDeviceType == VK_PHYSICAL_DEVICE_TYPE_OTHER) {
-                            // if we have any other device selected, skip other devices
-                            continue;
-                        }
-                        if (currentDeviceType == VK_PHYSICAL_DEVICE_TYPE_CPU) {
-                            // if we have any other device selected, skip CPU devices
-                            continue;
-                        }
-                        if (selectedDeviceType == VK_PHYSICAL_DEVICE_TYPE_VIRTUAL_GPU) {
-                            if (currentDeviceType == VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU) {
-                                // prefer vGPUs over iGPUs
-                                continue;
-                            }
-                        }
-                    }
+                
+                if (currentDeviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU) {
+                    // if its discrete, its selected
                     selectedPhysicalDevice = physicalDevice;
+                    break;
                 }
+                // this physical device will work (probably), but might be suboptimal (ie: actually the CPU)
+                // if the currently selected device is better (ie: discrete vs integrated), don't use this one
+                if (selectedPhysicalDevice != null) {
+                    vkGetPhysicalDeviceProperties2(selectedPhysicalDevice, selectedPhysicalDeviceProperties);
+                    final var selectedDeviceType = selectedPhysicalDeviceProperties.properties().deviceType();
+                    // TODO: min image transfer granularity matters, VKonD3D12 doesnt like what MC does
+                    //       but the actual device is first, so, this fixes it
+                    //       properly check for that
+                    if (currentDeviceType == selectedDeviceType) {
+                        // if the type is identical, prefer the device reported first
+                        continue;
+                    }
+                    if (currentDeviceType == VK_PHYSICAL_DEVICE_TYPE_OTHER) {
+                        // if we have any other device selected, skip other devices
+                        continue;
+                    }
+                    if (currentDeviceType == VK_PHYSICAL_DEVICE_TYPE_CPU) {
+                        // if we have any other device selected, skip CPU devices
+                        continue;
+                    }
+                    if (selectedDeviceType == VK_PHYSICAL_DEVICE_TYPE_VIRTUAL_GPU) {
+                        if (currentDeviceType == VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU) {
+                            // prefer vGPUs over iGPUs
+                            continue;
+                        }
+                    }
+                }
+                selectedPhysicalDevice = physicalDevice;
             }
             if (selectedPhysicalDevice == null) {
                 throw new IllegalStateException("Failed to select VkPhysicalDevice");

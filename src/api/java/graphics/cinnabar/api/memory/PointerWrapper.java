@@ -21,7 +21,7 @@ import static graphics.cinnabar.api.memory.LeakDetection.*;
 public record PointerWrapper(long pointer, long size) implements Comparable<PointerWrapper> {
     
     private static final boolean JOML_UNSAFE_AVAILABLE;
-    private static final Unsafe THE_UNSAFE;
+    private static final Unsafe THE_UNSAFE = getUnsafeInstance();
     
     static {
         boolean available = false;
@@ -36,14 +36,39 @@ public record PointerWrapper(long pointer, long size) implements Comparable<Poin
             CINNABAR_API_LOG.info(e.toString());
         }
         JOML_UNSAFE_AVAILABLE = available;
-        
-        try {
-            final var memUtilUnsafeField = MemoryUtil.class.getDeclaredField("UNSAFE");
-            memUtilUnsafeField.setAccessible(true);
-            THE_UNSAFE = (Unsafe) memUtilUnsafeField.get(null);
-        } catch (NoSuchFieldException | IllegalAccessException e) {
-            throw new IllegalStateException(e);
+    }
+    
+    // copied from LWJGL's MemoryUtil
+    private static sun.misc.Unsafe getUnsafeInstance() {
+        java.lang.reflect.Field[] fields = sun.misc.Unsafe.class.getDeclaredFields();
+
+        /*
+        Different runtimes use different names for the Unsafe singleton,
+        so we cannot use .getDeclaredField and we scan instead. For example:
+
+        Oracle: theUnsafe
+        PERC : m_unsafe_instance
+        Android: THE_ONE
+        */
+        for (java.lang.reflect.Field field : fields) {
+            if (!field.getType().equals(sun.misc.Unsafe.class)) {
+                continue;
+            }
+            
+            int modifiers = field.getModifiers();
+            if (!(java.lang.reflect.Modifier.isStatic(modifiers) && java.lang.reflect.Modifier.isFinal(modifiers))) {
+                continue;
+            }
+            
+            try {
+                field.setAccessible(true);
+                return (sun.misc.Unsafe)field.get(null);
+            } catch (Exception ignored) {
+            }
+            break;
         }
+        
+        throw new UnsupportedOperationException("LWJGL requires sun.misc.Unsafe to be available.");
     }
     
     private static final long BYTE_ARRAY_BASE_OFFSET = THE_UNSAFE.arrayBaseOffset(byte[].class);
