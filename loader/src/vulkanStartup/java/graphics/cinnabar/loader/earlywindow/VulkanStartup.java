@@ -51,7 +51,6 @@ import org.jetbrains.annotations.Nullable;
 import org.lwjgl.system.Configuration;
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.system.MemoryUtil;
-import org.lwjgl.util.tinyfd.TinyFileDialogs;
 import org.lwjgl.vulkan.*;
 import org.slf4j.Logger;
 
@@ -60,7 +59,8 @@ import java.util.List;
 
 import static graphics.cinnabar.loader.earlywindow.GLFWClassloadHelper.glfwExtGetPhysicalDevicePresentationSupport;
 import static org.lwjgl.vulkan.EXTDebugUtils.*;
-import static org.lwjgl.vulkan.EXTValidationFeatures.*;
+import static org.lwjgl.vulkan.EXTLayerSettings.VK_EXT_LAYER_SETTINGS_EXTENSION_NAME;
+import static org.lwjgl.vulkan.EXTLayerSettings.VK_LAYER_SETTING_TYPE_BOOL32_EXT;
 import static org.lwjgl.vulkan.KHRPortabilitySubset.VK_KHR_PORTABILITY_SUBSET_EXTENSION_NAME;
 import static org.lwjgl.vulkan.KHRSwapchain.VK_KHR_SWAPCHAIN_EXTENSION_NAME;
 import static org.lwjgl.vulkan.KHRSynchronization2.VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME;
@@ -94,8 +94,11 @@ public class VulkanStartup {
         }
     }
     
+    private static final String VALIDATION_LAYER_NAME = "VK_LAYER_KHRONOS_validation";
+    
     private static final List<String> optionalInstanceExtensions = List.of(
-            VK_EXT_DEBUG_UTILS_EXTENSION_NAME
+            VK_EXT_DEBUG_UTILS_EXTENSION_NAME,
+            VK_EXT_LAYER_SETTINGS_EXTENSION_NAME
     );
     
     private static final List<String> requiredDeviceExtensions = List.of(
@@ -198,7 +201,7 @@ public class VulkanStartup {
             boolean hasKHRValidation = false;
             for (int i = 0; i < layerProperties.capacity(); i++) {
                 layerProperties.position(i);
-                if (layerProperties.layerNameString().equals("VK_LAYER_KHRONOS_validation")) {
+                if (layerProperties.layerNameString().equals(VALIDATION_LAYER_NAME)) {
                     hasKHRValidation = true;
                     break;
                 }
@@ -225,19 +228,35 @@ public class VulkanStartup {
                     createInfo.pNext(debugCreateInfo);
                 }
                 
-                final var validationFeatures = VkValidationFeaturesEXT.calloc(stack).sType$Default();
+                final var layerNameStr = stack.UTF8(VALIDATION_LAYER_NAME);
+                final var TRUE = stack.calloc(4).putInt(0, VK_TRUE);
+                final var FALSE = stack.calloc(4).putInt(0, VK_FALSE);
+                final var settings = VkLayerSettingEXT.calloc(32);
                 if (validationLayers) {
-                    validationFeatures.pEnabledValidationFeatures(stack.ints(VK_VALIDATION_FEATURE_ENABLE_SYNCHRONIZATION_VALIDATION_EXT, VK_VALIDATION_FEATURE_ENABLE_BEST_PRACTICES_EXT));
+                    settings.get().set(layerNameStr, stack.UTF8("validate_sync"), VK_LAYER_SETTING_TYPE_BOOL32_EXT, 1, TRUE);
+                    settings.get().set(layerNameStr, stack.UTF8("printf_enable"), VK_LAYER_SETTING_TYPE_BOOL32_EXT, 1, TRUE);
+                    settings.get().set(layerNameStr, stack.UTF8("gpuav_enable"), VK_LAYER_SETTING_TYPE_BOOL32_EXT, 1, TRUE);
+//                    settings.get().set(layerNameStr, stack.UTF8("gpuav_safe_mode"), VK_LAYER_SETTING_TYPE_BOOL32_EXT, 1, TRUE);
+                    settings.get().set(layerNameStr, stack.UTF8("gpuav_safe_mode"), VK_LAYER_SETTING_TYPE_BOOL32_EXT, 1, TRUE);
+                    settings.get().set(layerNameStr, stack.UTF8("enable_message_limit"), VK_LAYER_SETTING_TYPE_BOOL32_EXT, 1, FALSE);
                 } else {
-                    validationFeatures.pDisabledValidationFeatures(stack.ints(
-                            VK_VALIDATION_FEATURE_DISABLE_SHADERS_EXT,
-                            VK_VALIDATION_FEATURE_DISABLE_THREAD_SAFETY_EXT,
-                            VK_VALIDATION_FEATURE_DISABLE_OBJECT_LIFETIMES_EXT,
-                            VK_VALIDATION_FEATURE_DISABLE_CORE_CHECKS_EXT,
-                            VK_VALIDATION_FEATURE_DISABLE_UNIQUE_HANDLES_EXT,
-                            VK_VALIDATION_FEATURE_DISABLE_SHADER_VALIDATION_CACHE_EXT));
+                    settings.get().set(layerNameStr, stack.UTF8("fine_grained_locking"), VK_LAYER_SETTING_TYPE_BOOL32_EXT, 1, FALSE);
+                    settings.get().set(layerNameStr, stack.UTF8("validate_core"), VK_LAYER_SETTING_TYPE_BOOL32_EXT, 1, FALSE);
+                    settings.get().set(layerNameStr, stack.UTF8("check_image_layout"), VK_LAYER_SETTING_TYPE_BOOL32_EXT, 1, FALSE);
+                    settings.get().set(layerNameStr, stack.UTF8("check_command_buffer"), VK_LAYER_SETTING_TYPE_BOOL32_EXT, 1, FALSE);
+                    settings.get().set(layerNameStr, stack.UTF8("check_object_in_use"), VK_LAYER_SETTING_TYPE_BOOL32_EXT, 1, FALSE);
+                    settings.get().set(layerNameStr, stack.UTF8("check_query"), VK_LAYER_SETTING_TYPE_BOOL32_EXT, 1, FALSE);
+                    settings.get().set(layerNameStr, stack.UTF8("check_shaders"), VK_LAYER_SETTING_TYPE_BOOL32_EXT, 1, FALSE);
+                    settings.get().set(layerNameStr, stack.UTF8("unique_handles"), VK_LAYER_SETTING_TYPE_BOOL32_EXT, 1, FALSE);
+                    settings.get().set(layerNameStr, stack.UTF8("object_lifetime"), VK_LAYER_SETTING_TYPE_BOOL32_EXT, 1, FALSE);
+                    settings.get().set(layerNameStr, stack.UTF8("stateless_param"), VK_LAYER_SETTING_TYPE_BOOL32_EXT, 1, TRUE);
+                    settings.get().set(layerNameStr, stack.UTF8("thread_safety"), VK_LAYER_SETTING_TYPE_BOOL32_EXT, 1, FALSE);
+                    settings.get().set(layerNameStr, stack.UTF8("syncval_submit_time_validation"), VK_LAYER_SETTING_TYPE_BOOL32_EXT, 1, FALSE);
                 }
-                createInfo.pNext(validationFeatures);
+                settings.flip();
+                final var layerSettings = VkLayerSettingsCreateInfoEXT.calloc(stack).sType$Default();
+                layerSettings.pSettings(settings);
+                createInfo.pNext(layerSettings);
             }
             if (enableMesaOverlay && System.getenv().get("ENABLE_VULKAN_RENDERDOC_CAPTURE") == null) {
                 for (int i = 0; i < layerCount; i++) {

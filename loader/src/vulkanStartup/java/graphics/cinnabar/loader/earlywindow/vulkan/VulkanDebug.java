@@ -79,13 +79,13 @@ public class VulkanDebug extends VkDebugUtilsMessengerCallbackEXT {
         final var messageString = callbackData.pMessageString();
         LOGGER.warn("{}: {}", prefix, messageString);
         // vkDestroyDevice may print a lot of messages, and the stack is not helpful
-        if (printStackTrace && !messageString.contains("vkDestroyDevice") && !messageString.contains("Attempting to enable")) {
+        if (printStackTrace && !messageString.contains("vkDestroyDevice") && !messageString.contains("vkCreateDevice") && !messageString.contains("Attempting to enable")) {
             StringWriter sw = new StringWriter();
             PrintWriter pw = new PrintWriter(sw);
             new Exception().printStackTrace(pw);
             LOGGER.warn(sw.toString());
             // force a segfault, aka crash the JVM immediately
-            MemoryUtil.memSet(0L, 0, 1L);
+//            MemoryUtil.memSet(0L, 0, 1L);
         }
         return VK_TRUE;
     }
