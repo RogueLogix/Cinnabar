@@ -462,4 +462,8 @@ public class Hg3DGpuDevice implements C3DGpuDevice {
     public boolean isZZeroToOne() {
         return true;
     }
+
+    public boolean supportsReverseZ() {
+        return Hg3D.USE_REVERSE_Z;
+    }
 }

@@ -127,9 +127,9 @@ public class Hg3DRenderPipeline implements Hg3DObject, CompiledRenderPipeline, D
             depthTest = new HgGraphicsPipeline.DepthTest(switch (pipeline.getDepthTestFunction()) {
                 case NO_DEPTH_TEST -> HgCompareOp.ALWAYS;
                 case EQUAL_DEPTH_TEST -> HgCompareOp.EQUAL;
-                case LEQUAL_DEPTH_TEST -> HgCompareOp.LESS_OR_EQUAL;
-                case LESS_DEPTH_TEST -> HgCompareOp.LESS;
-                case GREATER_DEPTH_TEST -> HgCompareOp.GREATER;
+                case LEQUAL_DEPTH_TEST -> Hg3D.USE_REVERSE_Z ? HgCompareOp.GREATER_OR_EQUAL : HgCompareOp.LESS_OR_EQUAL;
+                case LESS_DEPTH_TEST -> Hg3D.USE_REVERSE_Z ? HgCompareOp.GREATER : HgCompareOp.LESS;
+                case GREATER_DEPTH_TEST -> Hg3D.USE_REVERSE_Z ? HgCompareOp.LESS : HgCompareOp.GREATER;
             }, pipeline.isWriteDepth());
         } else {
             depthTest = null;

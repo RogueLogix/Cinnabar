@@ -279,7 +279,7 @@ public class Hg3DCommandEncoder implements C3DCommandEncoder, Hg3DObject, Destro
         final var cb = mainCommandBuffer();
         cb.barrier();
         cb.clearColorImage(((Hg3DGpuTexture) colorTexture).image().resourceRange(), clearColor);
-        cb.clearDepthStencilImage(((Hg3DGpuTexture) depthTexture).image().resourceRange(), clearDepth, -1);
+        cb.clearDepthStencilImage(((Hg3DGpuTexture) depthTexture).image().resourceRange(), Hg3D.USE_REVERSE_Z ? 1.0 - clearDepth : clearDepth, Hg3D.USE_REVERSE_Z ? 1 : -1);
     }
     
     @Override
@@ -300,7 +300,7 @@ public class Hg3DCommandEncoder implements C3DCommandEncoder, Hg3DObject, Destro
         assert depthTexture instanceof Hg3DGpuTexture;
         final var cb = mainCommandBuffer();
         cb.barrier();
-        cb.clearDepthStencilImage(((Hg3DGpuTexture) depthTexture).image().resourceRange(), clearDepth, -1);
+        cb.clearDepthStencilImage(((Hg3DGpuTexture) depthTexture).image().resourceRange(), Hg3D.USE_REVERSE_Z ? 1.0 - clearDepth : clearDepth, Hg3D.USE_REVERSE_Z ? 1 : -1);
     }
     
     // Neo

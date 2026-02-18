@@ -8,6 +8,7 @@ import com.mojang.blaze3d.systems.CommandEncoderBackend;
 import com.mojang.blaze3d.systems.GpuDeviceBackend;
 import com.mojang.blaze3d.textures.*;
 import com.mojang.jtracy.TracyClient;
+import graphics.cinnabar.core.hg3d.Hg3D;
 import org.jspecify.annotations.Nullable;
 
 import java.nio.ByteBuffer;
@@ -172,5 +173,10 @@ public class ProfilingGpuDevice implements GpuDeviceBackend {
     @Override
     public boolean isZZeroToOne() {
         return realDevice.isZZeroToOne();
+    }
+
+    // FIXME - Somehow get realDevice.supportsReverseZ()Z
+    public boolean supportsReverseZ() {
+        return Hg3D.USE_REVERSE_Z;
     }
 }
