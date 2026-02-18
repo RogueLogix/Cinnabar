@@ -35,6 +35,14 @@ public class Hg3DGpuTextureView extends GpuTextureView implements Hg3DObject {
         closed = true;
         texture.device().destroyEndOfFrameAsync(imageView);
         texture.removeView();
+        framebuffers.forEach((k, v) -> {
+            v.forEach((k1, v1) -> {
+                if (v1 == null) {
+                    return;
+                }
+                texture.device().destroyEndOfFrameAsync(v1);
+            });
+        });
     }
     
     @Override

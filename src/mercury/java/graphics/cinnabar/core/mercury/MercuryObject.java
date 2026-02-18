@@ -28,7 +28,7 @@ public abstract class MercuryObject<T extends HgObject<T>> implements HgObject<T
     protected abstract LongIntImmutablePair handleAndType();
     
     @Override
-    public final T setName(String label) {
+    public T setName(String label) {
         if (device.debugUtilsEnabled()) {
             try (final var stack = memoryStack().push()) {
                 final var nameInfo = VkDebugUtilsObjectNameInfoEXT.calloc(stack).sType$Default();

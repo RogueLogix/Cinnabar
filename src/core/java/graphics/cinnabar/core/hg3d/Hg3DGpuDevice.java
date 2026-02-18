@@ -141,6 +141,7 @@ public class Hg3DGpuDevice implements C3DGpuDevice {
         
         QueueSystem.deviceShutdown(hgDevice);
         
+        clearPipelineCache();
         bufferManager.destroy();
         commandEncoder.destroy();
         swapchain.destroy();

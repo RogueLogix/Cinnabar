@@ -93,10 +93,10 @@ public class Hg3DRenderPipeline implements Hg3DObject, CompiledRenderPipeline, D
         final var versionRemovedFragmentSource = fixedUpFragmentGLSL.replace("#version", cinnabarStandardDefines + "\n#define CINNABAR_FRAGMENT_SHADER //");
         
         shaderSet = hgDevice.createShaderSet(HgGraphicsPipeline.ShaderSet.CreateInfo.gl(versionRemovedVertexSource, versionRemovedFragmentSource));
-        uniformSetLayout = hgDevice.createUniformSetLayout(Objects.requireNonNull(shaderSet.uniformSetLayoutCreateInfo(0)));
-        uniformPool = uniformSetLayout.createPool(new HgUniformSet.Pool.CreateInfo());
+        uniformSetLayout = hgDevice.createUniformSetLayout(Objects.requireNonNull(shaderSet.uniformSetLayoutCreateInfo(0))).setName(pipeline.getLocation().toString());
+        uniformPool = uniformSetLayout.createPool(new HgUniformSet.Pool.CreateInfo()).setName(pipeline.getLocation().toString());
         
-        pipelineLayout = hgDevice.createPipelineLayout(new HgGraphicsPipeline.Layout.CreateInfo(List.of(uniformSetLayout), 0));
+        pipelineLayout = hgDevice.createPipelineLayout(new HgGraphicsPipeline.Layout.CreateInfo(List.of(uniformSetLayout), 0)).setName(pipeline.getLocation().toString());
         
         final ImmutableMap<String, VertexFormatElement> vertexFormatElements;
         {
@@ -188,6 +188,7 @@ public class Hg3DRenderPipeline implements Hg3DObject, CompiledRenderPipeline, D
         pipelineLayout.destroy();
         uniformSetLayout.destroy();
         shaderSet.destroy();
+        uniformPool.destroy();
     }
     
     @Override
@@ -202,7 +203,7 @@ public class Hg3DRenderPipeline implements Hg3DObject, CompiledRenderPipeline, D
     }
     
     private HgGraphicsPipeline createPipeline(HgRenderPass renderPass) {
-        return device.hgDevice().createPipeline(new HgGraphicsPipeline.CreateInfo(renderPass, shaderSet, pipelineLayout, pipelineState));
+        return device.hgDevice().createPipeline(new HgGraphicsPipeline.CreateInfo(renderPass, shaderSet, pipelineLayout, pipelineState)).setName(info.getLocation().toString());
     }
     
     public HgGraphicsPipeline getPipeline(HgRenderPass renderPass) {

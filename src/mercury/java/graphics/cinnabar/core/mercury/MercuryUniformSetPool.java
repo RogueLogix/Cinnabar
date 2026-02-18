@@ -7,7 +7,7 @@ import it.unimi.dsi.fastutil.ints.Int2IntMap;
 import it.unimi.dsi.fastutil.longs.LongArrayList;
 import it.unimi.dsi.fastutil.longs.LongIntImmutablePair;
 import it.unimi.dsi.fastutil.objects.ReferenceArrayList;
-import org.lwjgl.system.MemoryStack;
+import org.jetbrains.annotations.Nullable;
 import org.lwjgl.system.MemoryUtil;
 import org.lwjgl.vulkan.*;
 
@@ -21,6 +21,8 @@ public class MercuryUniformSetPool extends MercuryObject<HgUniformSet.Pool> impl
     
     private static final int VK_POOL_SIZE = 128;
     
+    @Nullable
+    private String baseName;
     private final LongArrayList pools = new LongArrayList();
     private final ReferenceArrayList<LongArrayList> availableSets = new ReferenceArrayList<>();
     private final VkDescriptorSetAllocateInfo setAllocInfo = VkDescriptorSetAllocateInfo.calloc().sType$Default();
@@ -80,6 +82,15 @@ public class MercuryUniformSetPool extends MercuryObject<HgUniformSet.Pool> impl
     private void allocateNewPool() {
         checkVkCode(vkCreateDescriptorPool(device.vkDevice(), poolCreateInfo, null, returnPtr));
         pools.add(returnPtr.get(0));
+        if (device.debugUtilsEnabled()) {
+            try (final var stack = memoryStack().push()) {
+                final var nameInfo = VkDebugUtilsObjectNameInfoEXT.calloc(stack).sType$Default();
+                nameInfo.objectType(VK_OBJECT_TYPE_DESCRIPTOR_POOL);
+                nameInfo.objectHandle(pools.getLast());
+                nameInfo.pObjectName(stack.UTF8(baseName + " " + pools.size()));
+                EXTDebugUtils.vkSetDebugUtilsObjectNameEXT(device.vkDevice(), nameInfo);
+            }
+        }
         setAllocInfo.descriptorPool(pools.getLast());
         checkVkCode(vkAllocateDescriptorSets(device.vkDevice(), setAllocInfo, returnPtr));
         freeSetCount += VK_POOL_SIZE;
@@ -114,6 +125,23 @@ public class MercuryUniformSetPool extends MercuryObject<HgUniformSet.Pool> impl
     @Override
     protected LongIntImmutablePair handleAndType() {
         throw new IllegalStateException("Cannot name multiple objects at once");
+    }
+    
+    @Override
+    public HgUniformSet.Pool setName(String label) {
+        if (device.debugUtilsEnabled()) {
+            baseName = label;
+            try (final var stack = memoryStack().push()) {
+                final var nameInfo = VkDebugUtilsObjectNameInfoEXT.calloc(stack).sType$Default();
+                nameInfo.objectType(VK_OBJECT_TYPE_DESCRIPTOR_POOL);
+                for (int i = 0; i < pools.size(); i++) {
+                    nameInfo.objectHandle(pools.getLong(i));
+                    nameInfo.pObjectName(stack.UTF8(label + " " + i));
+                    EXTDebugUtils.vkSetDebugUtilsObjectNameEXT(device.vkDevice(), nameInfo);
+                }
+            }
+        }
+        return this;
     }
     
     record SetInstance(MercuryUniformSetPool pool, int vkPoolIndex, long set) implements HgUniformSet {
