@@ -32,7 +32,7 @@ public class Hg3DGpuSampler extends GpuSampler implements Hg3DObject {
         this.maxAnisotropy = maxAnisotropy;
         this.maxLod = maxLod;
         final var hgDevice = device.hgDevice();
-        sampler = hgDevice.createSampler(new HgSampler.CreateInfo(minFilter == FilterMode.LINEAR, magFilter == FilterMode.LINEAR, addressMode(addressModeU), addressMode(addressModeV), VK_SAMPLER_ADDRESS_MODE_REPEAT, maxAnisotropy, maxLod.orElse(VK_LOD_CLAMP_NONE) >= VK_LOD_CLAMP_NONE));
+        sampler = hgDevice.createSampler(new HgSampler.CreateInfo(minFilter == FilterMode.LINEAR, magFilter == FilterMode.LINEAR, addressMode(addressModeU), addressMode(addressModeV), VK_SAMPLER_ADDRESS_MODE_REPEAT, maxAnisotropy, (float)maxLod.orElse(VK_LOD_CLAMP_NONE)));
     }
     
     @Override
