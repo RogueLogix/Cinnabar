@@ -131,7 +131,7 @@ public class MercuryCommandBuffer extends MercuryObject<HgCommandBuffer> impleme
                 imageBarriers.image(image.vkImage());
                 final var subresourceRange = imageBarriers.subresourceRange();
                 subresourceRange.aspectMask(image.format().aspects());
-                subresourceRange.baseArrayLayer(0);
+                subresourceRange.baseMipLevel(0);
                 subresourceRange.levelCount(image.levelCount());
                 subresourceRange.baseArrayLayer(0);
                 subresourceRange.layerCount(image.layerCount());
