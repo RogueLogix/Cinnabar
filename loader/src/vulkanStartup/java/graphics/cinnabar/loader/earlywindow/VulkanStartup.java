@@ -795,7 +795,7 @@ public class VulkanStartup {
             final var pointerPointer = stack.mallocPointer(1);
             final var deviceCreateCode = vkCreateDevice(vkPhysicalDevice, deviceCreateInfo, null, pointerPointer);
             if (deviceCreateCode != VK_SUCCESS) {
-                throw new RuntimeException("Failed to create Vulkan device");
+                throw new RuntimeException("Failed to create Vulkan device " + deviceCreateCode);
             }
             LOGGER.info("VkDevice created");
             
