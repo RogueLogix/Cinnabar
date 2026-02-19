@@ -102,7 +102,7 @@ public class Hg3DCommandEncoder implements C3DCommandEncoder, Hg3DObject, Destro
         continuedRenderPass = null;
     }
     
-    HgCommandBuffer allocateCommandBuffer() {
+    public HgCommandBuffer allocateCommandBuffer() {
         return commandPool.allocate().begin();
     }
     
@@ -547,6 +547,11 @@ public class Hg3DCommandEncoder implements C3DCommandEncoder, Hg3DObject, Destro
             commandBuffer.endRenderPass();
             commandBuffer.barrier();
             commandBuffer.popDebugGroup();
+        }
+        
+        @Override
+        public HgCommandBuffer commandBuffer() {
+            return commandBuffer;
         }
         
         @Override
