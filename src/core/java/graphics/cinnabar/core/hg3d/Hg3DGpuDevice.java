@@ -418,7 +418,7 @@ public class Hg3DGpuDevice implements C3DGpuDevice {
                 }
                 recreateSwapchain();
                 window.eventHandler.resizeDisplay();
-                swapchain.acquire();
+                swapchainInvalid = !swapchain.acquire();
                 return;
             }
             
