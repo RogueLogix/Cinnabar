@@ -237,7 +237,6 @@ public class VulkanStartup {
                     settings.get().set(layerNameStr, stack.UTF8("printf_enable"), VK_LAYER_SETTING_TYPE_BOOL32_EXT, 1, TRUE);
                     settings.get().set(layerNameStr, stack.UTF8("gpuav_enable"), VK_LAYER_SETTING_TYPE_BOOL32_EXT, 1, TRUE);
 //                    settings.get().set(layerNameStr, stack.UTF8("gpuav_safe_mode"), VK_LAYER_SETTING_TYPE_BOOL32_EXT, 1, TRUE);
-                    settings.get().set(layerNameStr, stack.UTF8("gpuav_safe_mode"), VK_LAYER_SETTING_TYPE_BOOL32_EXT, 1, TRUE);
                     settings.get().set(layerNameStr, stack.UTF8("enable_message_limit"), VK_LAYER_SETTING_TYPE_BOOL32_EXT, 1, FALSE);
                 } else {
                     settings.get().set(layerNameStr, stack.UTF8("fine_grained_locking"), VK_LAYER_SETTING_TYPE_BOOL32_EXT, 1, FALSE);
