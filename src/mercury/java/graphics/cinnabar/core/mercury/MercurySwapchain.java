@@ -75,7 +75,7 @@ public class MercurySwapchain extends MercuryObject<HgSurface.Swapchain> impleme
                 final var height = new int[1];
                 GLFW.glfwGetFramebufferSize(surface.glfwWindow(), width, height);
                 extent.width(width[0]);
-                extent.height(height[1]);
+                extent.height(height[0]);
             }
             this.width = extent.width();
             this.height = extent.height();
