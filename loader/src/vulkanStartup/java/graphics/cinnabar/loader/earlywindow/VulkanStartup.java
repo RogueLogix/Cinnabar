@@ -56,14 +56,14 @@ import org.slf4j.Logger;
 
 import java.util.Collections;
 import java.util.List;
+import java.util.function.BiConsumer;
+import java.util.function.Predicate;
 
 import static graphics.cinnabar.loader.earlywindow.GLFWClassloadHelper.glfwExtGetPhysicalDevicePresentationSupport;
 import static org.lwjgl.vulkan.EXTDebugUtils.*;
 import static org.lwjgl.vulkan.EXTLayerSettings.VK_EXT_LAYER_SETTINGS_EXTENSION_NAME;
 import static org.lwjgl.vulkan.EXTLayerSettings.VK_LAYER_SETTING_TYPE_BOOL32_EXT;
 import static org.lwjgl.vulkan.KHRPortabilitySubset.VK_KHR_PORTABILITY_SUBSET_EXTENSION_NAME;
-import static org.lwjgl.vulkan.KHRSwapchain.VK_KHR_SWAPCHAIN_EXTENSION_NAME;
-import static org.lwjgl.vulkan.KHRSynchronization2.VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME;
 import static org.lwjgl.vulkan.VK12.*;
 #endif
 
@@ -101,11 +101,6 @@ public class VulkanStartup {
             VK_EXT_LAYER_SETTINGS_EXTENSION_NAME
     );
     
-    private static final List<String> requiredDeviceExtensions = List.of(
-            VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME,
-            VK_KHR_SWAPCHAIN_EXTENSION_NAME
-    );
-    
     private static final List<Pair<String, List<String>>> optionalDeviceExtensions = List.of(
             new ObjectObjectImmutablePair<>(VK_KHR_PORTABILITY_SUBSET_EXTENSION_NAME, List.of())
     );
@@ -141,7 +136,7 @@ public class VulkanStartup {
         return callbacks;
     }
     
-    public static Instance createVkInstance(boolean validationLayers, boolean enableMesaOverlay, @Nullable VkDebugUtilsMessengerCreateInfoEXT debugCreateInfo) {
+    public static Instance createVkInstance(boolean validationLayers, @Nullable VkDebugUtilsMessengerCreateInfoEXT debugCreateInfo) {
         
         #if FABRIC
         VulkanStartup.Config.mcVersionString = SharedConstants.getCurrentVersion().name();
@@ -257,16 +252,6 @@ public class VulkanStartup {
                 layerSettings.pSettings(settings);
                 createInfo.pNext(layerSettings);
             }
-            if (enableMesaOverlay && System.getenv().get("ENABLE_VULKAN_RENDERDOC_CAPTURE") == null) {
-                for (int i = 0; i < layerCount; i++) {
-                    layerProperties.position(i);
-                    // overlay requested, renderdoc isn't attached, and we have the mesa overlay, enable it
-                    if (layerProperties.layerNameString().equals("VK_LAYER_MESA_overlay")) {
-                        enabledLayerNames.add("VK_LAYER_MESA_overlay");
-                        break;
-                    }
-                }
-            }
             
             for (int i = 0; i < optionalInstanceExtensions.size(); i++) {
                 final var extensionName = optionalInstanceExtensions.get(i);
@@ -337,7 +322,7 @@ public class VulkanStartup {
         }
     }
     
-    public static VkPhysicalDevice selectPhysicalDevice(VkInstance vkInstance, boolean manualDeviceSelection, int forcedDeviceIndex, List<String> enabledLayersAndInstanceExtensions) {
+    public static VkPhysicalDevice selectPhysicalDevice(VkInstance vkInstance, BiConsumer<MemoryStack, VkPhysicalDeviceFeatures2> featureChainBuilder, Predicate<VkPhysicalDeviceFeatures2> featureChainChecker, int forcedDeviceIndex, List<String> enabledLayersAndInstanceExtensions, List<String> requiredDeviceExtensions) {
         try (var stack = MemoryStack.stackPush()) {
             final var physicalDeviceCountPtr = stack.callocInt(1);
             vkEnumeratePhysicalDevices(vkInstance, physicalDeviceCountPtr, null);
@@ -349,15 +334,6 @@ public class VulkanStartup {
             final var selectedPhysicalDeviceProperties = VkPhysicalDeviceProperties2.calloc(stack).sType$Default();
             final var properties2 = VkPhysicalDeviceProperties2.calloc(stack).sType$Default();
             final var deviceProperties = properties2.properties();
-            
-            final var physicalDeviceFeatures = VkPhysicalDeviceFeatures2.calloc(stack).sType$Default();
-            final var physicalDeviceFeatures10 = physicalDeviceFeatures.features();
-            final var physicalDeviceFeatures11 = VkPhysicalDeviceVulkan11Features.calloc(stack).sType$Default();
-            final var physicalDeviceFeatures12 = VkPhysicalDeviceVulkan12Features.calloc(stack).sType$Default();
-            final var sync2Features = VkPhysicalDeviceSynchronization2FeaturesKHR.calloc(stack).sType$Default();
-            physicalDeviceFeatures.pNext(physicalDeviceFeatures11);
-            physicalDeviceFeatures.pNext(physicalDeviceFeatures12);
-            physicalDeviceFeatures.pNext(sync2Features);
             
             @Nullable
             VkPhysicalDevice selectedPhysicalDevice = null;
@@ -467,10 +443,14 @@ public class VulkanStartup {
                     continue;
                 }
                 
-                vkGetPhysicalDeviceFeatures2(physicalDevice, physicalDeviceFeatures);
-                if (!hasAllRequiredFeatures(physicalDeviceFeatures10, physicalDeviceFeatures11, physicalDeviceFeatures12, sync2Features)) {
-                    LOGGER.info("Skipping device, missing required features");
-                    continue;
+                try (var _ = stack.push()) {
+                    final var featuresChain = VkPhysicalDeviceFeatures2.calloc(stack).sType$Default();
+                    featureChainBuilder.accept(stack, featuresChain);
+                    vkGetPhysicalDeviceFeatures2(physicalDevice, featuresChain);
+                    if (!featureChainChecker.test(featuresChain)) {
+                        LOGGER.info("Skipping device, missing required features");
+                        continue;
+                    }
                 }
                 
                 final var currentDeviceType = deviceProperties.deviceType();
@@ -523,54 +503,7 @@ public class VulkanStartup {
         }
     }
     
-    private static void logMissingFeature(String featureName) {
-        LOGGER.info("Skipping device, missing required feature {}", featureName);
-    }
-    
-    private static boolean hasAllRequiredFeatures(
-            VkPhysicalDeviceFeatures physicalDeviceFeatures10,
-            VkPhysicalDeviceVulkan11Features physicalDeviceFeatures11,
-            VkPhysicalDeviceVulkan12Features physicalDeviceFeatures12,
-            VkPhysicalDeviceSynchronization2FeaturesKHR sync2Features
-    ) {
-        boolean hasAllFeatures = true;
-        
-        if (!physicalDeviceFeatures10.drawIndirectFirstInstance()) {
-            logMissingFeature("drawIndirectFirstInstance");
-            hasAllFeatures = false;
-        }
-        if (!physicalDeviceFeatures10.fillModeNonSolid()) {
-            logMissingFeature("fillModeNonSolid");
-            hasAllFeatures = false;
-        }
-        if (!physicalDeviceFeatures10.multiDrawIndirect()) {
-            logMissingFeature("multiDrawIndirect");
-            hasAllFeatures = false;
-        }
-        if (!physicalDeviceFeatures10.samplerAnisotropy()) {
-            logMissingFeature("samplerAnisotropy");
-            hasAllFeatures = false;
-        }
-        
-        if (!physicalDeviceFeatures11.shaderDrawParameters()) {
-            logMissingFeature("shaderDrawParameters");
-            hasAllFeatures = false;
-        }
-        
-        if (!physicalDeviceFeatures12.timelineSemaphore()) {
-            logMissingFeature("timelineSemaphore");
-            hasAllFeatures = false;
-        }
-        
-        if (!sync2Features.synchronization2()) {
-            logMissingFeature("synchronization2");
-            hasAllFeatures = false;
-        }
-        
-        return hasAllFeatures;
-    }
-    
-    public static Device createLogicalDeviceAndQueues(VkInstance vkInstance, VkPhysicalDevice vkPhysicalDevice, List<String> enabledLayersAndInstanceExtensions) {
+    public static Device createLogicalDeviceAndQueues(VkInstance vkInstance, VkPhysicalDevice vkPhysicalDevice, List<String> enabledLayersAndInstanceExtensions, VkPhysicalDeviceFeatures2 enabledFeatures, List<String> requiredDeviceExtensions) {
         try (var stack = MemoryStack.stackPush()) {
             
             int graphicsQueueFamily = -1;
@@ -685,28 +618,10 @@ public class VulkanStartup {
             }
             queueCreateInfos.position(0);
             
-            final var physicalDeviceFeatures10 = VkPhysicalDeviceFeatures.calloc(stack);
-            final var physicalDeviceFeatures11 = VkPhysicalDeviceVulkan11Features.calloc(stack).sType$Default();
-            final var physicalDeviceFeatures12 = VkPhysicalDeviceVulkan12Features.calloc(stack).sType$Default();
-            final var sync2Features = VkPhysicalDeviceSynchronization2FeaturesKHR.calloc(stack).sType$Default();
-            
-            physicalDeviceFeatures10.multiDrawIndirect(true);
-            physicalDeviceFeatures10.drawIndirectFirstInstance(true);
-            physicalDeviceFeatures10.fillModeNonSolid(true);
-            physicalDeviceFeatures10.samplerAnisotropy(true);
-            
-            physicalDeviceFeatures11.shaderDrawParameters(true);
-            
-            physicalDeviceFeatures12.timelineSemaphore(true);
-            
-            sync2Features.synchronization2(true);
-            
             final var deviceCreateInfo = VkDeviceCreateInfo.calloc(stack).sType$Default();
             deviceCreateInfo.pQueueCreateInfos(queueCreateInfos);
-            deviceCreateInfo.pEnabledFeatures(physicalDeviceFeatures10);
-            deviceCreateInfo.pNext(physicalDeviceFeatures11);
-            deviceCreateInfo.pNext(physicalDeviceFeatures12);
-            deviceCreateInfo.pNext(sync2Features);
+            deviceCreateInfo.pEnabledFeatures(enabledFeatures.features());
+            deviceCreateInfo.pNext(enabledFeatures.pNext());
             
             final var extensionCountPtr = stack.callocInt(1);
             int totalExtensionProperties = 0;

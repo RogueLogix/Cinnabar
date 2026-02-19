@@ -15,14 +15,23 @@ import org.lwjgl.util.vma.VmaVulkanFunctions;
 import org.lwjgl.vulkan.*;
 
 import java.util.List;
+import java.util.function.BiConsumer;
+import java.util.function.Predicate;
 
 import static graphics.cinnabar.core.mercury.Mercury.MEMORY_STACK;
 import static org.lwjgl.util.vma.Vma.*;
 import static org.lwjgl.vulkan.EXTDebugUtils.VK_EXT_DEBUG_UTILS_EXTENSION_NAME;
 import static org.lwjgl.vulkan.EXTDebugUtils.vkDestroyDebugUtilsMessengerEXT;
+import static org.lwjgl.vulkan.KHRSwapchain.VK_KHR_SWAPCHAIN_EXTENSION_NAME;
+import static org.lwjgl.vulkan.KHRSynchronization2.VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME;
 import static org.lwjgl.vulkan.VK12.*;
 
 public class MercuryDevice implements HgDevice {
+    
+    private static final List<String> requiredDeviceExtensions = List.of(
+            VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME,
+            VK_KHR_SWAPCHAIN_EXTENSION_NAME
+    );
     
     public final MercuryQueue graphicsQueue;
     public final MercuryQueue computeQueue;
@@ -44,18 +53,42 @@ public class MercuryDevice implements HgDevice {
     @Nullable
     private AllocFailedCallback allocFailedCallback;
     
-    public MercuryDevice() {
+    public MercuryDevice(HgDevice.CreateInfo createInfo) {
         // TODO: the vulkan instance can be statically created
         try (final var stack = memoryStack().push()) {
             final var debugCreateInfo = VulkanDebug.getCreateInfo(stack, new VulkanDebug.MessageSeverity[]{VulkanDebug.MessageSeverity.ERROR, VulkanDebug.MessageSeverity.WARNING, VulkanDebug.MessageSeverity.INFO}, new VulkanDebug.MessageType[]{VulkanDebug.MessageType.GENERAL, VulkanDebug.MessageType.VALIDATION});
-            final var instanceAndDebugCallback = VulkanStartup.createVkInstance(Mercury.VULKAN_VALIDATION, false, debugCreateInfo);
+            final var instanceAndDebugCallback = VulkanStartup.createVkInstance(Mercury.VULKAN_VALIDATION, debugCreateInfo);
             vkInstance = instanceAndDebugCallback.instance();
             debugCallback = instanceAndDebugCallback.debugCallback();
             enabledLayersAndInstanceExtensions = instanceAndDebugCallback.enabledInsanceExtensions();
         }
         
+        final var featureChainBuilders = createInfo.featureChainBuilders().clone();
+        final var featureCheckers = createInfo.featureCheckers().clone();
+        final var featureEnablers = createInfo.featureEnablers().clone();
+        final var extensions = createInfo.requiredDeviceExtensions().clone();
+        extensions.addAll(requiredDeviceExtensions);
+        
+        featureChainBuilders.add(MercuryDeviceStartup::allocFeatureChain);
+        featureCheckers.add(MercuryDeviceStartup::hasAllRequiredFeatures);
+        featureEnablers.add(MercuryDeviceStartup::enableRequiredFeatures);
+        
+        final BiConsumer<MemoryStack, VkPhysicalDeviceFeatures2> featureChainBuilder = (stack, featureChain) -> {
+            for (final var chainBuilder : featureChainBuilders) {
+                chainBuilder.accept(stack, featureChain);
+            }
+        };
+        final Predicate<VkPhysicalDeviceFeatures2> featureChecker = features2 -> {
+            for (final var checker : featureCheckers) {
+                if (!checker.test(features2)) {
+                    return false;
+                }
+            }
+            return true;
+        };
+        
         try {
-            vkPhysicalDevice = VulkanStartup.selectPhysicalDevice(vkInstance, false, -1, enabledLayersAndInstanceExtensions);
+            vkPhysicalDevice = VulkanStartup.selectPhysicalDevice(vkInstance, featureChainBuilder, featureChecker, -1, enabledLayersAndInstanceExtensions, extensions);
         } catch (Exception e) {
             if (debugCallback != -1) {
                 vkDestroyDebugUtilsMessengerEXT(vkInstance, debugCallback, null);
@@ -65,8 +98,18 @@ public class MercuryDevice implements HgDevice {
         }
         
         final VulkanStartup.Device deviceAndQueues;
-        try {
-            deviceAndQueues = VulkanStartup.createLogicalDeviceAndQueues(vkInstance, vkPhysicalDevice, enabledLayersAndInstanceExtensions);
+        try (final var stack = MemoryStack.stackPush()) {
+            
+            final var deviceFeatures2 = VkPhysicalDeviceFeatures2.calloc(stack).sType$Default();
+            featureChainBuilder.accept(stack, deviceFeatures2);
+            vkGetPhysicalDeviceFeatures2(vkPhysicalDevice, deviceFeatures2);
+            final var enabledFeatures = VkPhysicalDeviceFeatures2.calloc(stack).sType$Default();
+            featureChainBuilder.accept(stack, enabledFeatures);
+            for (final var enabler : featureEnablers) {
+                enabler.accept(deviceFeatures2, enabledFeatures);
+            }
+            
+            deviceAndQueues = VulkanStartup.createLogicalDeviceAndQueues(vkInstance, vkPhysicalDevice, enabledLayersAndInstanceExtensions, enabledFeatures, extensions);
         } catch (Exception e) {
             if (debugCallback != -1) {
                 vkDestroyDebugUtilsMessengerEXT(vkInstance, debugCallback, null);

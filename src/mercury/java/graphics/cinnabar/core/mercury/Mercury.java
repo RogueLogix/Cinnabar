@@ -24,7 +24,7 @@ public class Mercury {
     
     @UsedFromReflection
     public static HgDevice createDevice(HgDevice.CreateInfo createInfo) {
-        return new MercuryDevice();
+        return new MercuryDevice(createInfo);
     }
     
     public static class Config {

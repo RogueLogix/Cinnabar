@@ -7,16 +7,26 @@ import com.mojang.blaze3d.shaders.ShaderSource;
 import com.mojang.blaze3d.systems.*;
 import com.mojang.jtracy.TracyClient;
 import graphics.cinnabar.api.annotations.API;
+import graphics.cinnabar.api.hg.HgDevice;
 import graphics.cinnabar.core.profiling.ProfilingGpuDevice;
 import it.unimi.dsi.fastutil.objects.ReferenceArrayList;
+import org.lwjgl.system.MemoryStack;
+import org.lwjgl.vulkan.VkPhysicalDeviceFeatures2;
 
+import java.util.function.BiConsumer;
 import java.util.function.Function;
+import java.util.function.Predicate;
 
 import static org.lwjgl.glfw.GLFW.*;
 
 public class Hg3DBackend implements GpuBackend {
     
     private static final ReferenceArrayList<Function<GpuDeviceBackend, GpuDeviceBackend>> deviceWrappers = new ReferenceArrayList<>();
+    
+    static final ReferenceArrayList<BiConsumer<MemoryStack, VkPhysicalDeviceFeatures2>> featureChainBuilders = new ReferenceArrayList<>();
+    static final ReferenceArrayList<Predicate<VkPhysicalDeviceFeatures2>> featureCheckers = new ReferenceArrayList<>();
+    static final ReferenceArrayList<BiConsumer<VkPhysicalDeviceFeatures2, VkPhysicalDeviceFeatures2>> featureEnablers = new ReferenceArrayList<>();
+    static final ReferenceArrayList<String> requiredExtensions = new ReferenceArrayList<>();
     
     @Override
     public String getName() {
@@ -47,8 +57,9 @@ public class Hg3DBackend implements GpuBackend {
             #endif
             {
                 try {
-                    device = new Hg3DGpuDevice(defaultShaderSource, debugOptions);
+                    device = new Hg3DGpuDevice(defaultShaderSource, debugOptions, new HgDevice.CreateInfo(featureChainBuilders, featureCheckers, featureEnablers, requiredExtensions));
                 } catch (IllegalStateException e) {
+                    e.printStackTrace();
                     throw new BackendCreationException("Vulkan not supported");
                 }
                 glfwDefaultWindowHints();
@@ -70,5 +81,16 @@ public class Hg3DBackend implements GpuBackend {
     @API
     public static void injectGpuDeviceBackendWrapper(Function<GpuDeviceBackend, GpuDeviceBackend> wrapper) {
         deviceWrappers.add(wrapper);
+    }
+    
+    @API
+    public static void injectVKFeatureRequirements(BiConsumer<MemoryStack, VkPhysicalDeviceFeatures2> chainBuilder, Predicate<VkPhysicalDeviceFeatures2> featureChecker, BiConsumer<VkPhysicalDeviceFeatures2, VkPhysicalDeviceFeatures2> featureEnabler) {
+        featureChainBuilders.add(chainBuilder);
+        featureCheckers.add(featureChecker);
+        featureEnablers.add(featureEnabler);
+    }
+    
+    public static void requireExtension(String extension) {
+        requiredExtensions.add(extension);
     }
 }

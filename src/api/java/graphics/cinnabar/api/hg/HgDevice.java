@@ -4,16 +4,21 @@ import graphics.cinnabar.api.annotations.Constant;
 import graphics.cinnabar.api.annotations.ThreadSafety;
 import graphics.cinnabar.api.hg.enums.HgFormat;
 import it.unimi.dsi.fastutil.longs.LongLongImmutablePair;
+import it.unimi.dsi.fastutil.objects.ReferenceArrayList;
 import org.jetbrains.annotations.ApiStatus;
 import org.jetbrains.annotations.Nullable;
+import org.lwjgl.system.MemoryStack;
+import org.lwjgl.vulkan.VkPhysicalDeviceFeatures2;
 
 import java.util.List;
+import java.util.function.BiConsumer;
+import java.util.function.Predicate;
 
 @ApiStatus.NonExtendable
 public interface HgDevice extends HgObject<HgDevice> {
     
-    record CreateInfo() {
-    } 
+    record CreateInfo(ReferenceArrayList<BiConsumer<MemoryStack, VkPhysicalDeviceFeatures2>> featureChainBuilders, ReferenceArrayList<Predicate<VkPhysicalDeviceFeatures2>> featureCheckers, ReferenceArrayList<BiConsumer<VkPhysicalDeviceFeatures2, VkPhysicalDeviceFeatures2>> featureEnablers, ReferenceArrayList<String> requiredDeviceExtensions) {
+    }
     
     @Override
     default HgDevice device() {

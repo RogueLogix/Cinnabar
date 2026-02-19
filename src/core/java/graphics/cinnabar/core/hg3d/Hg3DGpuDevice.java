@@ -95,7 +95,7 @@ public class Hg3DGpuDevice implements C3DGpuDevice {
     private ReferenceArrayList<Destroyable> activelyDestroying = new ReferenceArrayList<>();
     private final Hg3DGpuBuffer.Manager bufferManager;
     
-    public Hg3DGpuDevice(ShaderSource shaderSourceProvider, GpuDebugOptions debugOptions) {
+    public Hg3DGpuDevice(ShaderSource shaderSourceProvider, GpuDebugOptions debugOptions, HgDevice.CreateInfo createInfo) {
         CinnabarLibBootstrapper.bootstrap();
         this.shaderSourceProvider = shaderSourceProvider;
         
@@ -104,7 +104,7 @@ public class Hg3DGpuDevice implements C3DGpuDevice {
         NeoForge.EVENT_BUS.post(new ConfigureGpuDeviceEvent(deviceProperties(), enabledFeatures()));
         #endif
         
-        hgDevice = Hg.createDevice(new HgDevice.CreateInfo());
+        hgDevice = Hg.createDevice(createInfo);
         commandEncoder = new Hg3DCommandEncoder(this);
         bufferManager = new Hg3DGpuBuffer.Manager(this);
         interFrameSemaphore = hgDevice.createSemaphore(0);
