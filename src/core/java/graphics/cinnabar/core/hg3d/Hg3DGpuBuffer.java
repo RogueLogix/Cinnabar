@@ -416,6 +416,13 @@ public class Hg3DGpuBuffer extends GpuBuffer implements Hg3DObject, Destroyable 
             if (buffer.evictedData != 0 || buffer.sourceData != null || buffer.immediateUpload != null) {
                 final var toUploadAddr = buffer.immediateUpload != null ? MemoryUtil.memAddress(buffer.immediateUpload) : buffer.evictedData == 0 ? MemoryUtil.memAddress(buffer.sourceData) : buffer.evictedData;
                 final var toUploadSize = buffer.immediateUpload != null ? buffer.immediateUpload.remaining() : buffer.evictedData == 0 ? buffer.sourceData.remaining() : buffer.evictedDataSize;
+                if (toUploadSize == 0) {
+                    throw new IllegalStateException(
+                            buffer.immediateUpload + ", " + (buffer.immediateUpload != null ? buffer.immediateUpload.remaining() : -1) + ", " +
+                            buffer.sourceData + ", " + (buffer.sourceData != null ? buffer.sourceData.remaining() : -1) + ", " +
+                            buffer.evictedData + ", " + (buffer.evictedDataSize)
+                    );
+                }
                 if (buffer.slice.buffer().memoryType().mappable) {
                     // mappable, direct copy
                     final var bufferPtr = buffer.slice.map();
@@ -461,7 +468,8 @@ public class Hg3DGpuBuffer extends GpuBuffer implements Hg3DObject, Destroyable 
             assert buffer.slice != null;
             final var oldSlice = buffer.slice;
             
-            @Nullable final var newBuffer = device.hgDevice().tryCreateBuffer(HgBuffer.MemoryRequest.GPU, buffer.size(), Hg3DConst.bufferUsageBits(buffer.usage()));
+            @Nullable
+            final var newBuffer = device.hgDevice().tryCreateBuffer(HgBuffer.MemoryRequest.GPU, buffer.size(), Hg3DConst.bufferUsageBits(buffer.usage()));
             if (newBuffer == null) {
                 // alloc failed, this is ok, the auto-demote process should make room next frame
                 // skip any other device promotions this frame though, we are out of room
@@ -487,7 +495,8 @@ public class Hg3DGpuBuffer extends GpuBuffer implements Hg3DObject, Destroyable 
         
         private void autoDemote() {
             {
-                @Nullable final var first = liveBuffers.peekFirst();
+                @Nullable
+                final var first = liveBuffers.peekFirst();
                 if (first != null && first.data.isInFlight()) {
                     // everything live is in-flight, can't purge anything from VK
                     return;
@@ -567,7 +576,8 @@ public class Hg3DGpuBuffer extends GpuBuffer implements Hg3DObject, Destroyable 
                         continue;
                     }
                     
-                    @Nullable final var newBuffer = device.hgDevice().tryCreateBuffer(HgBuffer.MemoryRequest.CPU, currentBuffer.size(), Hg3DConst.bufferUsageBits(currentBuffer.usage()));
+                    @Nullable
+                    final var newBuffer = device.hgDevice().tryCreateBuffer(HgBuffer.MemoryRequest.CPU, currentBuffer.size(), Hg3DConst.bufferUsageBits(currentBuffer.usage()));
                     if (newBuffer == null) {
                         // alloc failed, next demotion cycle(s) should free enough to demote this buffer
                         break;
