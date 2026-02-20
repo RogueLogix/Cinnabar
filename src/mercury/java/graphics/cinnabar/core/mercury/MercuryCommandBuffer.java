@@ -156,6 +156,9 @@ public class MercuryCommandBuffer extends MercuryObject<HgCommandBuffer> impleme
             bufferCopies.srcOffset(src.offset());
             bufferCopies.dstOffset(dst.offset());
             bufferCopies.size(Math.min(src.size(), dst.size()));
+            if (bufferCopies.size() == 0) {
+                throw new IllegalArgumentException(src.size() + ", " + dst.size());
+            }
             
             bufferCopies.position(0);
             
