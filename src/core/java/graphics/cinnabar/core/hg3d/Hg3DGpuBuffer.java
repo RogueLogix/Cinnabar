@@ -378,6 +378,7 @@ public class Hg3DGpuBuffer extends GpuBuffer implements Hg3DObject, Destroyable 
                 currentEmergencyBufferOffset = 0;
                 for (@Nullable var currentBuffer = shufflingBuffers.peekFirst(); currentBuffer != null; ) {
                     currentBuffer.data.evictedData = MemoryUtil.nmemAlloc(currentBuffer.data.size());
+                    currentBuffer.data.evictedDataSize = currentBuffer.data.size();
                     MemoryUtil.memCopy(ptr.pointer() + currentEmergencyBufferOffset, currentBuffer.data.evictedData, currentBuffer.data.size());
                     currentEmergencyBufferOffset += currentBuffer.data.size();
                     
