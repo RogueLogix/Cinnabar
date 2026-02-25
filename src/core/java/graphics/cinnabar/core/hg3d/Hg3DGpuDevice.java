@@ -188,7 +188,7 @@ public class Hg3DGpuDevice implements C3DGpuDevice {
     
     @Override
     public GpuSampler createSampler(AddressMode addressModeU, AddressMode addressModeV, FilterMode minFilter, FilterMode magFilter, int maxAnisotropy, OptionalDouble maxLod) {
-        return new Hg3DGpuSampler(this, addressModeU, addressModeU, minFilter, magFilter, maxAnisotropy, maxLod);
+        return new Hg3DGpuSampler(this, addressModeU, addressModeV, minFilter, magFilter, maxAnisotropy, maxLod);
     }
     
     @Override
