@@ -32,7 +32,7 @@ public class MercurySampler extends MercuryObject<HgSampler> implements HgSample
             vkCreateInfo.compareEnable(createInfo.compareOp() != HgCompareOp.ALWAYS);
             vkCreateInfo.compareOp(createInfo.compareOp().ordinal());
             vkCreateInfo.minLod(0);
-            vkCreateInfo.maxLod(Math.max(0.25f, createInfo.mip()));
+            vkCreateInfo.maxLod(Math.max(createInfo.mip());
             vkCreateInfo.borderColor(VK_BORDER_COLOR_INT_TRANSPARENT_BLACK);
             vkCreateInfo.unnormalizedCoordinates(false);
             final var longPtr = stack.longs(0);
