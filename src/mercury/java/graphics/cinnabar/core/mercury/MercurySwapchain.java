@@ -40,8 +40,9 @@ public class MercurySwapchain extends MercuryObject<HgSurface.Swapchain> impleme
     
     private boolean swapchainInvalid = false;
     private int currentImageIndex = -1;
+    private boolean readyForPresent = false;
     
-    public MercurySwapchain(MercurySurface surface, boolean vsync, @Nullable MercurySwapchain previous) {
+    public MercurySwapchain(MercurySurface surface, boolean vsync) {
         super(surface.device);
         
         try (final var stack = memoryStack().push()) {
@@ -133,16 +134,9 @@ public class MercurySwapchain extends MercuryObject<HgSurface.Swapchain> impleme
             createInfo.compositeAlpha(VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR);
             createInfo.presentMode(presentMode);
             createInfo.clipped(true);
-            if (previous != null) {
-                createInfo.oldSwapchain(previous.handle);
-            }
             
             checkVkCode(vkCreateSwapchainKHR(device.vkDevice(), createInfo, null, longPtr));
             handle = longPtr.get(0);
-            
-            if (previous != null) {
-                previous.destroy();
-            }
             
             vkGetSwapchainImagesKHR(device.vkDevice(), handle, intPtr, null);
             final int swapchainImageCount = intPtr.get(0);
@@ -164,7 +158,7 @@ public class MercurySwapchain extends MercuryObject<HgSurface.Swapchain> impleme
             fence = longPtr.get(0);
             
             if (DEBUG_LOGGING) {
-                MERCURY_LOG.debug("Swapchain {} created; mode: {}, width: {}, height: {}, imageCount: {}, semaphoreCount: {}, previous: {}", hashCode(), presentMode, width, height, swapchainImages.size(), freeSemaphores.size(), previous == null ? null : previous.hashCode());
+                MERCURY_LOG.debug("Swapchain {} created; mode: {}, width: {}, height: {}, imageCount: {}, semaphoreCount: {}", hashCode(), presentMode, width, height, swapchainImages.size(), freeSemaphores.size());
             }
         }
     }
@@ -195,7 +189,10 @@ public class MercurySwapchain extends MercuryObject<HgSurface.Swapchain> impleme
         if (swapchainInvalid) {
             throw new IllegalStateException();
         }
-        assert currentImageIndex == -1;
+        if (currentImageIndex != -1) {
+            // fake a successful acquire, we already have an image
+            return true;
+        }
         try (final var stack = memoryStack().push()) {
             final var frameIndexPtr = stack.mallocInt(1);
             frameIndexPtr.put(0, -1);
@@ -229,6 +226,10 @@ public class MercurySwapchain extends MercuryObject<HgSurface.Swapchain> impleme
         if (swapchainInvalid) {
             throw new IllegalStateException();
         }
+        if (!readyForPresent) {
+            // not ready for present, just ignore
+            return true;
+        }
         assert currentImageIndex != -1;
         if (TRACE_LOGGING) {
             MERCURY_LOG.debug("Swapchain {} present; frameIndex: {}, semaphore: {}", hashCode(), currentImageIndex, activeSemaphores.get(currentImageIndex));
@@ -253,6 +254,7 @@ public class MercurySwapchain extends MercuryObject<HgSurface.Swapchain> impleme
                     MERCURY_LOG.debug("Swapchain {} invalidated;", hashCode());
                 }
             }
+            readyForPresent = false;
             return !swapchainInvalid;
         }
     }
@@ -261,6 +263,11 @@ public class MercurySwapchain extends MercuryObject<HgSurface.Swapchain> impleme
     public MercurySemaphore currentSemaphore() {
         assert currentImageIndex != -1;
         return activeSemaphores.get(currentImageIndex);
+    }
+    
+    @Override
+    public void readyForPresent() {
+        readyForPresent = true;
     }
     
     public long currentVkImage() {

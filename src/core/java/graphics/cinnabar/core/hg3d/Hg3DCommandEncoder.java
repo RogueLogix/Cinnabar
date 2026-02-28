@@ -449,6 +449,8 @@ public class Hg3DCommandEncoder implements C3DCommandEncoder, Hg3DObject, Destro
         queueItems.add(HgQueue.Item.execute(commandBuffer));
         queueItems.add(HgQueue.Item.signal(semaphore, 0, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT_KHR));
         commandBuffersThisFlush.add(commandBuffer);
+        
+        swapchain.readyForPresent();
     }
     
     @Override

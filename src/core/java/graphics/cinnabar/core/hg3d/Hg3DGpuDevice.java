@@ -383,7 +383,7 @@ public class Hg3DGpuDevice implements C3DGpuDevice {
     
     public void attachWindow(long window) {
         surface = hgDevice.createSurface(window);
-        swapchain = surface.createSwapchain(isVsync, null);
+        swapchain = surface.createSwapchain(isVsync);
         swapchain.acquire();
     }
     
@@ -454,7 +454,10 @@ public class Hg3DGpuDevice implements C3DGpuDevice {
     
     private void recreateSwapchain() {
         assert surface != null;
-        swapchain = surface.createSwapchain(isVsync, swapchain);
+        if (swapchain != null) {
+            swapchain.destroy();
+        }
+        swapchain = surface.createSwapchain(isVsync);
         swapchainInvalid = false;
     }
     

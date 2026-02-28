@@ -28,8 +28,8 @@ public class MercurySurface extends MercuryObject<HgSurface> implements HgSurfac
     }
     
     @Override
-    public Swapchain createSwapchain(boolean vsync, @Nullable Swapchain previous) {
-        return new MercurySwapchain(this, vsync, (MercurySwapchain) previous);
+    public Swapchain createSwapchain(boolean vsync) {
+        return new MercurySwapchain(this, vsync);
     }
     
     public final long glfwWindow() {

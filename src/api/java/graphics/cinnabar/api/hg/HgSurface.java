@@ -8,7 +8,7 @@ import org.jetbrains.annotations.Nullable;
 @ApiStatus.NonExtendable
 public interface HgSurface extends HgObject<HgSurface> {
     @ThreadSafety.MainGraphics(note = "may query GLFW framebuffer size, which must be done on the main thread")
-    Swapchain createSwapchain(boolean vsync, @Nullable Swapchain previous);
+    Swapchain createSwapchain(boolean vsync);
     
     interface Swapchain extends HgObject<Swapchain> {
         
@@ -28,5 +28,8 @@ public interface HgSurface extends HgObject<HgSurface> {
         
         @ThreadSafety.Any
         HgSemaphore currentSemaphore();
+        
+        @ThreadSafety.Any
+        void readyForPresent();
     }
 }
