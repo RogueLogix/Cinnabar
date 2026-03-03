@@ -12,7 +12,6 @@
     "Std140SizeCalculatorMixin",
     "Std140BuilderMixin",
     "FogRendererMixin",
-    "WindowMixin",
     "RenderSystemMixin",
     "ShaderManagerMixin",
     "VertexFormatBuilderMixin"

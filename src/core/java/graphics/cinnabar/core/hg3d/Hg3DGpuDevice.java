@@ -417,7 +417,7 @@ public class Hg3DGpuDevice implements C3DGpuDevice {
                     return;
                 }
                 recreateSwapchain();
-                window.eventHandler.resizeDisplay();
+                window.eventHandler.resizeGui();
                 swapchainInvalid = !swapchain.acquire();
                 return;
             }
@@ -439,7 +439,7 @@ public class Hg3DGpuDevice implements C3DGpuDevice {
             if (shouldRecreateSwapchain) {
                 window.refreshFramebufferSize();
                 recreateSwapchain();
-                window.eventHandler.resizeDisplay();
+                window.eventHandler.resizeGui();
             }
             
             while (!swapchain.acquire()) {
@@ -447,7 +447,7 @@ public class Hg3DGpuDevice implements C3DGpuDevice {
                 // if the swapchain failed to acquire here,
                 window.refreshFramebufferSize();
                 recreateSwapchain();
-                window.eventHandler.resizeDisplay();
+                window.eventHandler.resizeGui();
             }
         }
     }
