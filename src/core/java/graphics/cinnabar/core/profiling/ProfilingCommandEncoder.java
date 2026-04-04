@@ -70,7 +70,16 @@ public class ProfilingCommandEncoder implements CommandEncoderBackend {
             realCommandEncoder.clearDepthTexture(depthTexture, clearDepth);
         }
     }
-    
+
+    #if NEO
+    @Override
+    public void clearStencilTexture(GpuTexture texture, int value) {
+        try (final var ignored = TracyClient.beginZone("CommandEncoder.clearStencilTexture", false)) {
+            realCommandEncoder.clearStencilTexture(texture, value);
+        }
+    }
+    #endif
+
     @Override
     public void writeToBuffer(GpuBufferSlice destination, ByteBuffer data) {
         try (final var ignored = TracyClient.beginZone("CommandEncoder.writeToBuffer", false)) {

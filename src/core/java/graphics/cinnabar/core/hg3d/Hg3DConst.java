@@ -2,6 +2,7 @@ package graphics.cinnabar.core.hg3d;
 
 #if NEO
 import com.mojang.blaze3d.buffers.GpuBuffer;
+import com.mojang.blaze3d.platform.CompareOp;
 import com.mojang.blaze3d.platform.DestFactor;
 import com.mojang.blaze3d.platform.SourceFactor;
 import com.mojang.blaze3d.textures.AddressMode;
@@ -12,7 +13,6 @@ import com.mojang.blaze3d.vertex.VertexFormatElement;
 import graphics.cinnabar.api.hg.HgGraphicsPipeline;
 import graphics.cinnabar.api.hg.enums.HgCompareOp;
 import graphics.cinnabar.api.hg.enums.HgFormat;
-import net.neoforged.neoforge.client.stencil.StencilFunction;
 import net.neoforged.neoforge.client.stencil.StencilOperation;
 
 import java.util.List;
@@ -94,16 +94,16 @@ public class Hg3DConst {
     }
     
 #if NEO
-    public static HgCompareOp stencil(StencilFunction equation) {
+    public static HgCompareOp stencil(CompareOp equation) {
         return switch (equation) {
-            case NEVER -> HgCompareOp.NEVER;
-            case ALWAYS -> HgCompareOp.ALWAYS;
-            case LESS -> HgCompareOp.LESS;
-            case LEQUAL -> HgCompareOp.LESS_OR_EQUAL;
+            case NEVER_PASS -> HgCompareOp.NEVER;
+            case ALWAYS_PASS -> HgCompareOp.ALWAYS;
+            case LESS_THAN -> HgCompareOp.LESS;
+            case LESS_THAN_OR_EQUAL -> HgCompareOp.LESS_OR_EQUAL;
             case EQUAL -> HgCompareOp.EQUAL;
-            case GEQUAL -> HgCompareOp.GREATER_OR_EQUAL;
-            case GREATER -> HgCompareOp.GREATER;
-            case NOTEQUAL -> HgCompareOp.NOT_EQUAL;
+            case GREATER_THAN_OR_EQUAL -> HgCompareOp.GREATER_OR_EQUAL;
+            case GREATER_THAN -> HgCompareOp.GREATER;
+            case NOT_EQUAL -> HgCompareOp.NOT_EQUAL;
         };
     }
     
@@ -120,7 +120,7 @@ public class Hg3DConst {
         };
     }
 #endif
-    
+
     public static HgFormat format(TextureFormat textureFormat) {
         return switch (textureFormat) {
             case RGBA8 -> HgFormat.RGBA8_UNORM;

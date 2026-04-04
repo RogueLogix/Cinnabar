@@ -70,7 +70,16 @@ public class ProfilingRenderPass implements RenderPassBackend {
             realRenderPass.setUniform(name, value);
         }
     }
-    
+
+    #if NEO
+    @Override
+    public void setViewport(int x, int y, int width, int height) {
+        try (final var ignored = TracyClient.beginZone("RenderPass.setViewport", false)) {
+            realRenderPass.setViewport(x, y, width, height);
+        }
+    }
+    #endif
+
     @Override
     public void enableScissor(int x, int y, int width, int height) {
         try (final var ignored = TracyClient.beginZone("RenderPass.enableScissor", false)) {

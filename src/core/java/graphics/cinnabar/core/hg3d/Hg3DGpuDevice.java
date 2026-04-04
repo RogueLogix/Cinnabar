@@ -7,13 +7,15 @@ import com.mojang.blaze3d.pipeline.CompiledRenderPipeline;
 import com.mojang.blaze3d.pipeline.RenderPipeline;
 import com.mojang.blaze3d.shaders.GpuDebugOptions;
 import com.mojang.blaze3d.shaders.ShaderSource;
-import com.mojang.blaze3d.systems.GpuDevice;
 import com.mojang.blaze3d.textures.*;
+import com.mojang.jtracy.TracyClient;
+import graphics.cinnabar.api.c3d.C3DGpuDevice;
 import graphics.cinnabar.api.hg.*;
 import graphics.cinnabar.api.hg.enums.HgFormat;
 import graphics.cinnabar.api.util.Destroyable;
 import graphics.cinnabar.core.util.MagicNumbers;
 import graphics.cinnabar.lib.CinnabarLibBootstrapper;
+import graphics.cinnabar.lib.threading.QueueSystem;
 import graphics.cinnabar.lib.threading.WorkQueue;
 import it.unimi.dsi.fastutil.ints.Int2ReferenceMap;
 import it.unimi.dsi.fastutil.ints.Int2ReferenceOpenHashMap;
@@ -21,10 +23,6 @@ import it.unimi.dsi.fastutil.objects.Reference2ReferenceOpenHashMap;
 import it.unimi.dsi.fastutil.objects.ReferenceArrayList;
 import net.minecraft.client.Minecraft;
 import net.neoforged.fml.loading.FMLLoader;
-import net.neoforged.neoforge.client.blaze3d.GpuDeviceFeatures;
-import net.neoforged.neoforge.client.blaze3d.GpuDeviceProperties;
-import net.neoforged.neoforge.client.event.ConfigureGpuDeviceEvent;
-import net.neoforged.neoforge.common.NeoForge;
 import org.jetbrains.annotations.Nullable;
 
 import java.nio.ByteBuffer;
@@ -99,10 +97,10 @@ public class Hg3DGpuDevice implements C3DGpuDevice {
         CinnabarLibBootstrapper.bootstrap();
         this.shaderSourceProvider = shaderSourceProvider;
         
-        #if NEO
-        // no configurable features currently, result ignored
-        NeoForge.EVENT_BUS.post(new ConfigureGpuDeviceEvent(deviceProperties(), enabledFeatures()));
-        #endif
+//        #if NEO
+//        // no configurable features currently, result ignored
+//        NeoForge.EVENT_BUS.post(new ConfigureGpuDeviceEvent(deviceProperties(), enabledFeatures()));
+//        #endif
         
         hgDevice = Hg.createDevice(createInfo);
         commandEncoder = new Hg3DCommandEncoder(this);
@@ -309,33 +307,6 @@ public class Hg3DGpuDevice implements C3DGpuDevice {
     public int getMaxSupportedAnisotropy() {
         return (int) hgDevice.properties().maxAnisotropy();
     }
-    
-    #if NEO
-    @Override
-    public GpuDeviceProperties deviceProperties() {
-        return new GpuDeviceProperties() {
-            @Override
-            public String backendName() {
-                return "Cinnabar";
-            }
-            
-            @Override
-            public String apiName() {
-                return "Hg";
-            }
-        };
-    }
-    
-    @Override
-    public GpuDeviceFeatures enabledFeatures() {
-        return new GpuDeviceFeatures() {
-            @Override
-            public boolean logicOp() {
-                return false;
-            }
-        };
-    }
-    #endif
     
     public void destroyEndOfFrame(Destroyable destroyable) {
         pendingDestroys.get((int) (currentFrame % MagicNumbers.MaximumFramesInFlight)).add(destroyable);

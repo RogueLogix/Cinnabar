@@ -27,10 +27,13 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.function.BiConsumer;
+import java.util.function.Predicate;
 
 import static org.lwjgl.glfw.GLFW.*;
 import static org.lwjgl.vulkan.KHRSurface.vkDestroySurfaceKHR;
 import static org.lwjgl.vulkan.KHRSwapchain.VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+import static org.lwjgl.vulkan.KHRSwapchain.VK_KHR_SWAPCHAIN_EXTENSION_NAME;
 import static org.lwjgl.vulkan.VK10.*;
 
 public class CinnabarEarlyWindowProvider implements ImmediateWindowProvider {
@@ -76,7 +79,7 @@ public class CinnabarEarlyWindowProvider implements ImmediateWindowProvider {
             System.exit(1);
         }
         final var value = FMLConfig.getConfigValue(FMLConfig.ConfigValue.EARLY_WINDOW_PROVIDER);
-        if (value.equals("fmlearlywindow") && VulkanStartup.isSupported()) {
+        if (value.equals("fmlearlywindow")/* && VulkanStartup.isSupported() */) {
             LOGGER.trace("Injecting CinnabarEarlyWindow into FML config for early window provider");
             try {
                 // overwrite it being fmlearlywindow, but only in memory
@@ -173,9 +176,16 @@ public class CinnabarEarlyWindowProvider implements ImmediateWindowProvider {
         try (final var stack = MemoryStack.stackPush()) {
             
             final var debugCreateInfo = VulkanDebug.getCreateInfo(stack, new VulkanDebug.MessageSeverity[]{VulkanDebug.MessageSeverity.ERROR, VulkanDebug.MessageSeverity.WARNING, VulkanDebug.MessageSeverity.INFO}, new VulkanDebug.MessageType[]{VulkanDebug.MessageType.GENERAL, VulkanDebug.MessageType.VALIDATION});
-            instance = VulkanStartup.createVkInstance(!FMLLoader.getCurrent().isProduction(), false, debugCreateInfo);
-            device = VulkanStartup.createLogicalDeviceAndQueues(instance.instance(), VulkanStartup.selectPhysicalDevice(instance.instance(), false, -1, instance.enabledInsanceExtensions()), instance.enabledInsanceExtensions());
-            
+            instance = VulkanStartup.createVkInstance(!FMLLoader.getCurrent().isProduction(), debugCreateInfo);
+            final BiConsumer<MemoryStack, VkPhysicalDeviceFeatures2> featureChainBuilder = (__, ___) -> {
+            };
+            final Predicate<VkPhysicalDeviceFeatures2> featureChainChecker = _ -> true;
+            final var requiredDeviceExtensions = List.of(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
+            final var physicalDevice = VulkanStartup.selectPhysicalDevice(instance.instance(), featureChainBuilder, featureChainChecker, -1, instance.enabledInsanceExtensions(), requiredDeviceExtensions);
+            final var enabledFeatures = VkPhysicalDeviceFeatures2.calloc(stack).sType$Default();
+            featureChainBuilder.accept(stack, enabledFeatures);
+            device = VulkanStartup.createLogicalDeviceAndQueues(instance.instance(), physicalDevice, instance.enabledInsanceExtensions(), enabledFeatures, requiredDeviceExtensions);
+
             try (final var __ = stack.push()) {
                 final var surfacePtr = stack.longs(0);
                 GLFWClassloadHelper.glfwExtCreateWindowSurface(instance.instance(), window, null, surfacePtr);
