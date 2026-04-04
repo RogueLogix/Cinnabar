@@ -233,7 +233,7 @@ dependencies {
     runtimeOnly(sourceSets.mclib.output)
     runtimeOnly(sourceSets.mercury.output)
 
-    annotationProcessor 'systems.manifold:manifold-preprocessor:2025.1.26'
+    annotationProcessor 'systems.manifold:manifold-preprocessor:2026.1.6'
 }
 
 processResources {
